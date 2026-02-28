@@ -51,12 +51,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# s6-overlay v3 installation
+# s6-overlay v3 installation (multi-arch)
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp/
-RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
-    && tar -C / -Jxpf /tmp/s6-overlay-x86_64.tar.xz \
-    && rm -f /tmp/s6-overlay-*.tar.xz
+RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm -f /tmp/s6-overlay-noarch.tar.xz
+# Map Docker TARGETARCH to s6-overlay arch names
+RUN case "${TARGETARCH}" in \
+        amd64) S6_ARCH="x86_64" ;; \
+        arm64) S6_ARCH="aarch64" ;; \
+        *) echo "Unsupported arch: ${TARGETARCH}" && exit 1 ;; \
+    esac \
+    && curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" -o /tmp/s6-overlay-arch.tar.xz \
+    && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
+    && rm -f /tmp/s6-overlay-arch.tar.xz
 
 # Create vmail system user (UID/GID 5000) for Dovecot virtual mailboxes
 RUN groupadd -g 5000 vmail \
