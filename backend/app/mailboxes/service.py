@@ -355,12 +355,18 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
     imap = aioimaplib.IMAP4(host=settings.imap_host, port=settings.imap_port)
     await imap.wait_hello_from_server()
 
+    # Regex to extract folder name from IMAP LIST response line.
+    # Format: (\Flags) "delimiter" "folder_name"  OR  (\Flags) "delimiter" folder_name
+    _list_re = re.compile(r'\([^)]*\)\s+"[^"]*"\s+"?([^"]+)"?')
+
     try:
         await imap.login(master_login, settings.imap_master_password)
 
-        # List all folders
-        _status_resp, folder_data = await imap.list('""', "*")
+        # List all folders — aioimaplib sends args raw, so we must quote them
+        status_resp, folder_data = await imap.list('""', '"*"')
         folders: list[FolderInfo] = []
+
+        logger.debug("IMAP LIST for %s: status=%s, lines=%d", address, status_resp, len(folder_data) if folder_data else 0)
 
         if folder_data:
             for raw_line in folder_data:
@@ -368,19 +374,24 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                     decoded = raw_line.decode("utf-8", errors="replace")
                 else:
                     decoded = str(raw_line)
+
+                if not decoded.strip():
+                    continue
+
                 # Parse folder name from LIST response
-                # Format: (\flags) "delimiter" "folder_name"
-                parts = decoded.rsplit('"', 2)
-                if len(parts) >= 2:
-                    folder_name = parts[-2].strip('" ')
-                else:
-                    folder_name = decoded.split()[-1].strip('"')
+                match = _list_re.search(decoded)
+                if not match:
+                    logger.debug("Skipping non-folder LIST line: %s", decoded)
+                    continue
+                folder_name = match.group(1).strip()
 
                 if not folder_name:
                     continue
 
                 try:
-                    _st_resp, st_data = await imap.status(folder_name, "(MESSAGES UNSEEN)")
+                    _st_resp, st_data = await imap.status(
+                        f'"{folder_name}"', "(MESSAGES UNSEEN)"
+                    )
                     messages = 0
                     unseen = 0
                     if st_data:
@@ -401,11 +412,12 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                         )
                     )
                 except Exception:
-                    logger.debug("Could not get STATUS for folder '%s'", folder_name)
+                    logger.debug("Could not get STATUS for folder '%s'", folder_name, exc_info=True)
 
         if not folders:
             folders.append(FolderInfo(name="INBOX", message_count=0, unseen_count=0))
 
+        logger.debug("Folder stats for %s: %s", address, [(f.name, f.message_count, f.unseen_count) for f in folders])
         return folders
     finally:
         with contextlib.suppress(Exception):

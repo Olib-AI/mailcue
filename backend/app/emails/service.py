@@ -191,6 +191,7 @@ async def get_email(
         detail = await parse_email_async(raw_bytes, uid=uid, mailbox=mailbox)
 
         # Determine is_read from FLAGS
+        already_read = False
         for line in data:
             text = (
                 bytes(line).decode("utf-8", errors="replace")
@@ -198,8 +199,14 @@ async def get_email(
                 else str(line)
             )
             if "\\Seen" in text:
-                detail.is_read = True
+                already_read = True
                 break
+
+        # Mark as read (set \Seen flag) when opening an email
+        if not already_read:
+            with contextlib.suppress(Exception):
+                await imap.uid("store", uid, "+FLAGS", "(\\Seen)")
+        detail.is_read = True
 
         # GPG verification / decryption
         if db is not None:
@@ -325,6 +332,24 @@ async def send_email(
 
     message_id: str = msg["Message-ID"]
 
+    # Save a copy to the Sent folder via IMAP APPEND
+    try:
+        imap = await _imap_connect(request.from_address)
+        try:
+            # Ensure Sent folder exists
+            with contextlib.suppress(Exception):
+                await imap.create("Sent")
+            await imap.append(
+                message_bytes=raw_bytes,
+                mailbox="Sent",
+                flags="(\\Seen)",
+                date=None,
+            )
+        finally:
+            await _imap_disconnect(imap)
+    except Exception:
+        logger.warning("Could not save sent email to Sent folder for %s", request.from_address)
+
     await event_bus.publish(
         "email.sent",
         {
@@ -427,12 +452,25 @@ async def bulk_inject(request: BulkInjectRequest) -> BulkInjectResponse:
 
 
 async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
-    """Delete an email by setting \\Deleted flag and expunging."""
+    """Move an email to Trash, or permanently delete if already in Trash."""
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
-        await imap.uid("store", uid, "+FLAGS", "(\\Deleted)")
-        await imap.expunge()
+
+        if folder.lower() == "trash":
+            # Already in Trash — permanently delete
+            await imap.uid("store", uid, "+FLAGS", "(\\Deleted)")
+            await imap.expunge()
+            logger.info("Email permanently deleted: %s/Trash uid=%s", mailbox, uid)
+        else:
+            # Move to Trash (COPY then DELETE from source)
+            # Ensure Trash folder exists
+            with contextlib.suppress(Exception):
+                await imap.create("Trash")
+            await imap.uid("copy", uid, "Trash")
+            await imap.uid("store", uid, "+FLAGS", "(\\Deleted)")
+            await imap.expunge()
+            logger.info("Email moved to Trash: %s/%s uid=%s", mailbox, folder, uid)
 
         await event_bus.publish(
             "email.deleted",
@@ -441,8 +479,6 @@ async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
                 "uid": uid,
             },
         )
-
-        logger.info("Email deleted: %s/%s uid=%s", mailbox, folder, uid)
     finally:
         await _imap_disconnect(imap)
 

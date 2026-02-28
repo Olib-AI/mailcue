@@ -58,7 +58,7 @@ async def list_all_mailboxes(
             mb_resp.email_count = sum(f.message_count for f in folders)
             mb_resp.unread_count = sum(f.unseen_count for f in folders)
         except Exception:
-            pass  # leave as 0
+            logger.warning("Failed to fetch IMAP stats for %s", m.address, exc_info=True)
         responses.append(mb_resp)
     return MailboxListResponse(mailboxes=responses, total=len(responses))
 
@@ -158,10 +158,11 @@ async def get_mailbox_email(
     uid: str,
     folder: str = Query("INBOX"),
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by UID from a specific mailbox."""
     decoded = unquote(mailbox_address)
-    return await get_email(mailbox=decoded, uid=uid, folder=folder)
+    return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
 
 
 @router.delete("/{mailbox_address}/emails/{uid}", status_code=status.HTTP_204_NO_CONTENT)

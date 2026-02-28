@@ -46,7 +46,7 @@ function EmailDetailSkeleton() {
 }
 
 function EmailDetail() {
-  const { selectedMailbox, selectedEmailUid, setSelectedEmailUid } =
+  const { selectedMailbox, selectedEmailUid, setSelectedEmailUid, selectedFolder } =
     useUIStore();
   const { data: email, isLoading, isError, error, refetch } = useEmail(
     selectedMailbox,
@@ -58,10 +58,10 @@ function EmailDetail() {
   const handleDelete = useCallback(() => {
     if (!selectedMailbox || selectedEmailUid === null) return;
     deleteEmail.mutate(
-      { mailbox: selectedMailbox, uid: selectedEmailUid },
+      { mailbox: selectedMailbox, uid: selectedEmailUid, folder: selectedFolder },
       {
         onSuccess: () => {
-          toast.success("Email deleted");
+          toast.success(selectedFolder.toLowerCase() === "trash" ? "Email permanently deleted" : "Email moved to Trash");
           setSelectedEmailUid(null);
         },
         onError: (err) => {
@@ -205,7 +205,7 @@ function EmailDetail() {
         <Separator className="mb-4" />
 
         {/* Content Tabs */}
-        <Tabs defaultValue={email.html_body ? "html" : "text"}>
+        <Tabs key={email.uid} defaultValue={email.html_body ? "html" : "text"}>
           <TabsList>
             {email.html_body && <TabsTrigger value="html">HTML</TabsTrigger>}
             {email.text_body && (

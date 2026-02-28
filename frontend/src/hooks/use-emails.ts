@@ -52,12 +52,30 @@ export function useEmails(
 }
 
 export function useEmail(mailbox: string | null, uid: string | null) {
+  const queryClient = useQueryClient();
+
   return useQuery({
     queryKey: emailKeys.detail(mailbox ?? "", uid ?? ""),
-    queryFn: () =>
-      api.get<EmailDetail>(
+    queryFn: async () => {
+      const detail = await api.get<EmailDetail>(
         `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails/${encodeURIComponent(uid ?? "")}`
-      ),
+      );
+      // Backend marks email as read (\Seen) on fetch — update the list cache
+      // so the unread indicator disappears immediately without a full refetch.
+      queryClient.setQueriesData<EmailListResponse>(
+        { queryKey: emailKeys.lists() },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            emails: old.emails.map((e) =>
+              e.uid === uid ? { ...e, is_read: true } : e
+            ),
+          };
+        }
+      );
+      return detail;
+    },
     enabled: !!mailbox && uid !== null,
     staleTime: 60_000,
   });
@@ -94,10 +112,12 @@ export function useDeleteEmail() {
     mutationFn: ({
       mailbox,
       uid,
+      folder = "INBOX",
     }: {
       mailbox: string;
       uid: string;
-    }) => api.delete<void>(`/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}`),
+      folder?: string;
+    }) => api.delete<void>(`/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}?folder=${encodeURIComponent(folder)}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
     },
