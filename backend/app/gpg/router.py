@@ -1,0 +1,112 @@
+"""GPG key management API endpoints."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.models import User
+from app.database import get_db
+from app.dependencies import get_current_user
+from app.gpg import service as gpg_service
+from app.gpg.schemas import (
+    GenerateKeyRequest,
+    GpgKeyExportResponse,
+    GpgKeyListResponse,
+    GpgKeyResponse,
+    ImportKeyRequest,
+)
+
+router = APIRouter(prefix="/gpg", tags=["GPG"])
+
+
+@router.post("/keys/generate", response_model=GpgKeyResponse, status_code=201)
+async def generate_key(
+    request: GenerateKeyRequest,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyResponse:
+    """Generate a new GPG keypair for a mailbox address."""
+    try:
+        return await gpg_service.generate_key(request, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.get("/keys", response_model=GpgKeyListResponse)
+async def list_keys(
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyListResponse:
+    """List all active GPG keys."""
+    return await gpg_service.list_keys(db)
+
+
+@router.get("/keys/{address}", response_model=GpgKeyResponse)
+async def get_key(
+    address: str,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyResponse:
+    """Retrieve a GPG key by mailbox address."""
+    key = await gpg_service.get_key_for_address(address, db)
+    if not key:
+        raise HTTPException(status_code=404, detail=f"No key found for {address}")
+    return key
+
+
+@router.get("/keys/{address}/export", response_model=GpgKeyExportResponse)
+async def export_key(
+    address: str,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyExportResponse:
+    """Export the ASCII-armored public key for a mailbox address."""
+    try:
+        return await gpg_service.export_public_key(address, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.get("/keys/{address}/export/raw")
+async def export_key_raw(
+    address: str,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Download the raw armored PGP public key as a ``.asc`` file."""
+    try:
+        export = await gpg_service.export_public_key(address, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return Response(
+        content=export.public_key,
+        media_type="application/pgp-keys",
+        headers={"Content-Disposition": f'attachment; filename="{address}.asc"'},
+    )
+
+
+@router.post("/keys/import", response_model=GpgKeyResponse, status_code=201)
+async def import_key(
+    request: ImportKeyRequest,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyResponse:
+    """Import an armored PGP public key."""
+    try:
+        return await gpg_service.import_key(request, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.delete("/keys/{address}", status_code=204)
+async def delete_key(
+    address: str,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete all GPG keys for a mailbox address."""
+    try:
+        await gpg_service.delete_key(address, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e

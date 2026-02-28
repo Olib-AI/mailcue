@@ -1,0 +1,8 @@
+#!/bin/sh
+# =============================================================================
+# Dovecot — IMAP / POP3 / LMTP server (foreground)
+# =============================================================================
+exec 2>&1
+
+# -F = foreground mode (do not daemonise)
+exec /usr/sbin/dovecot -F

@@ -1,0 +1,59 @@
+"""Application configuration via pydantic-settings v2.
+
+All settings are read from environment variables prefixed with ``MAILCUE_``.
+A ``.env`` file in the working directory is loaded automatically when present.
+"""
+
+from __future__ import annotations
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Centralised, type-safe application configuration."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="MAILCUE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
+    # ── Application ──────────────────────────────────────────────
+    domain: str = "mailcue.local"
+    secret_key: str = "change-me-in-production"
+    admin_user: str = "admin"
+    admin_password: str = "mailcue"
+    debug: bool = False
+
+    # ── Database ─────────────────────────────────────────────────
+    database_url: str = "sqlite+aiosqlite:///var/lib/mailcue/mailcue.db"
+
+    # ── Mail server ──────────────────────────────────────────────
+    smtp_host: str = "127.0.0.1"
+    smtp_port: int = 25
+    imap_host: str = "127.0.0.1"
+    imap_port: int = 143
+
+    # Dovecot master user — enables API access to every mailbox via
+    # ``user@domain*master_user`` with the master password.
+    imap_master_user: str = "mailcue-master"
+    imap_master_password: str = "master-secret"
+
+    # ── JWT ───────────────────────────────────────────────────────
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+
+    # ── Dovecot / Postfix ────────────────────────────────────────
+    dovecot_users_file: str = "/etc/dovecot/users"
+    mail_storage_path: str = "/var/mail/vhosts"
+
+    # ── GPG ──────────────────────────────────────────────────────
+    gpg_home: str = "/var/lib/mailcue/gpg"
+
+    # ── CORS ─────────────────────────────────────────────────────
+    cors_origins: list[str] = ["*"]
+
+
+settings = Settings()

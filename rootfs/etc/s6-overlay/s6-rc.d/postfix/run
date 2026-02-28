@@ -1,0 +1,13 @@
+#!/bin/sh
+# =============================================================================
+# Postfix — SMTP server (foreground)
+# =============================================================================
+exec 2>&1
+
+# Ensure the Postfix chroot and queue directories exist
+postfix set-permissions 2>/dev/null || true
+
+# Start Postfix in the foreground.
+# postfix start-fg keeps the master process in the foreground so s6 can
+# supervise it and detect crashes.
+exec postfix start-fg

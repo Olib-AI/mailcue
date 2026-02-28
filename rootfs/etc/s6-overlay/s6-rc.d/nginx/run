@@ -1,0 +1,9 @@
+#!/bin/sh
+# =============================================================================
+# Nginx — Reverse proxy and static file server (foreground)
+# =============================================================================
+exec 2>&1
+
+# Nginx must run in the foreground for s6 supervision.
+# The "daemon off" directive is set in nginx.conf; exec ensures PID 1 handoff.
+exec /usr/sbin/nginx -g "daemon off;"

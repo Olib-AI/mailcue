@@ -1,0 +1,50 @@
+# =============================================================================
+# MailCue — docker-compose for local development and single-host deployment
+# =============================================================================
+
+services:
+  mailcue:
+    build: .
+    container_name: mailcue
+    hostname: mail.mailcue.local
+    restart: unless-stopped
+    ports:
+      # Web UI (Nginx reverse proxy)
+      - "8088:80"
+      # SMTP — inbound MTA
+      - "25:25"
+      # SMTP Submission — client submission with STARTTLS + auth
+      - "587:587"
+      # IMAP — STARTTLS
+      - "143:143"
+      # IMAPS — implicit TLS
+      - "993:993"
+      # POP3 — STARTTLS
+      - "110:110"
+      # POP3S — implicit TLS
+      - "995:995"
+    environment:
+      - MAILCUE_DOMAIN=mailcue.local
+      - MAILCUE_ADMIN_USER=admin
+      - MAILCUE_ADMIN_PASSWORD=mailcue
+      # Leave empty to auto-generate at first boot
+      - MAILCUE_SECRET_KEY=
+    volumes:
+      # Persistent mail storage (Maildir)
+      - mailcue-data:/var/mail/vhosts
+      # Persistent SQLite database and application state
+      - mailcue-db:/var/lib/mailcue
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://127.0.0.1:80/api/v1/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mailcue-data:
+  mailcue-db:

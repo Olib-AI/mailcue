@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+.mypy_cache
+.ruff_cache
+.pytest_cache
+htmlcov
+.coverage
+*.egg-info
+backend/.venv
+backend/dist
+
+# Node / frontend build artifacts
+node_modules
+.next
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Documentation and project metadata
+docs/
+.claude/
+CLAUDE.md
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Docker build context noise
+docker-compose.override.yml

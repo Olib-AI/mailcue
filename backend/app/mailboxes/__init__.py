@@ -1,0 +1,1 @@
+"""Mailbox management module."""

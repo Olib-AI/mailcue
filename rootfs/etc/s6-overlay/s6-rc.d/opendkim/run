@@ -1,0 +1,12 @@
+#!/bin/sh
+# =============================================================================
+# OpenDKIM — DKIM signing milter (foreground)
+# =============================================================================
+exec 2>&1
+
+# Ensure the run directory exists
+mkdir -p /var/run/opendkim
+chown opendkim:opendkim /var/run/opendkim
+
+# -f = foreground mode
+exec /usr/sbin/opendkim -f -x /etc/opendkim/opendkim.conf

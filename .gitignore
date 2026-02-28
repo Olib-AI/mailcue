@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+backend/.venv/
+backend/.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage*
+htmlcov/
+*.db
+
+# Node
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Claude
+.claude/
+
+# Docker
+*.tar
+docker-compose.override.yml
+
+# Logs
+*.log

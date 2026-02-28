@@ -1,0 +1,100 @@
+"""Pydantic request / response schemas for the email module."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from pydantic import BaseModel
+
+from app.gpg.schemas import GpgEmailInfo
+
+
+class AttachmentInfo(BaseModel):
+    """Metadata about a single MIME attachment."""
+
+    filename: str
+    content_type: str
+    size: int
+    part_id: str
+
+
+class EmailSummary(BaseModel):
+    """Lightweight representation used in list views."""
+
+    uid: str
+    mailbox: str
+    from_address: str
+    to_addresses: list[str]
+    subject: str
+    date: datetime | None = None
+    has_attachments: bool
+    is_read: bool
+    preview: str
+    message_id: str = ""
+    size: int = 0
+    is_signed: bool = False
+    is_encrypted: bool = False
+
+
+class EmailDetail(EmailSummary):
+    """Full representation including body and headers."""
+
+    html_body: str | None = None
+    text_body: str | None = None
+    cc_addresses: list[str] = []
+    bcc_addresses: list[str] = []
+    raw_headers: dict[str, str] = {}
+    attachments: list[AttachmentInfo] = []
+    gpg: GpgEmailInfo | None = None
+
+
+class EmailListResponse(BaseModel):
+    """Paginated list of email summaries."""
+
+    total: int
+    page: int
+    page_size: int
+    emails: list[EmailSummary]
+    has_more: bool = False
+
+
+class SendEmailRequest(BaseModel):
+    """Send a new email via SMTP."""
+
+    from_address: str
+    to_addresses: list[str]
+    cc_addresses: list[str] = []
+    subject: str
+    body: str = ""
+    body_type: str = "plain"
+    sign: bool = False
+    encrypt: bool = False
+
+
+class InjectEmailRequest(BaseModel):
+    """Inject an email directly into a mailbox via IMAP APPEND."""
+
+    mailbox: str
+    from_address: str
+    to_addresses: list[str]
+    subject: str
+    html_body: str | None = None
+    text_body: str | None = None
+    date: datetime | None = None
+    headers: dict[str, str] = {}
+    sign: bool = False
+    encrypt: bool = False
+
+
+class BulkInjectRequest(BaseModel):
+    """Inject multiple emails at once."""
+
+    emails: list[InjectEmailRequest]
+
+
+class BulkInjectResponse(BaseModel):
+    """Result of a bulk inject operation."""
+
+    injected: int
+    failed: int
+    ids: list[str]

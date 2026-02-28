@@ -1,0 +1,24 @@
+#!/command/with-contenv sh
+# =============================================================================
+# Uvicorn — FastAPI application server
+# =============================================================================
+exec 2>&1
+
+# Read the auto-generated secret key if MAILCUE_SECRET_KEY was not set
+if [ -z "${MAILCUE_SECRET_KEY}" ] && [ -f /var/lib/mailcue/.secret_key ]; then
+    export MAILCUE_SECRET_KEY
+    MAILCUE_SECRET_KEY=$(cat /var/lib/mailcue/.secret_key)
+fi
+
+# Export DB URL for the backend
+export MAILCUE_DATABASE_URL="sqlite+aiosqlite:///${MAILCUE_DB_PATH:-/var/lib/mailcue/mailcue.db}"
+
+cd /opt/mailcue
+
+exec /opt/mailcue/venv/bin/uvicorn \
+    app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --log-level info \
+    --no-access-log

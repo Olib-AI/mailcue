@@ -1,0 +1,1 @@
+/bin/sh -e /etc/s6-overlay/scripts/init-mailcue.sh
