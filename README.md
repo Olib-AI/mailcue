@@ -6,7 +6,7 @@
   <br /><br />
   <a href="https://github.com/Olib-AI/mailcue/actions"><img src="https://img.shields.io/github/actions/workflow/status/Olib-AI/mailcue/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
   <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License" /></a>
-  <a href="https://hub.docker.com/r/olibai/mailcue"><img src="https://img.shields.io/docker/image-size/olibai/mailcue?style=flat-square&label=image%20size" alt="Docker Image Size" /></a>
+  <a href="https://hub.docker.com/r/olibakram/mailcue"><img src="https://img.shields.io/docker/image-size/olibakram/mailcue?style=flat-square&label=image%20size" alt="Docker Image Size" /></a>
   <a href="https://www.olib.ai"><img src="https://img.shields.io/badge/by-Olib%20AI-6c47ff?style=flat-square" alt="Olib AI" /></a>
 </p>
 
@@ -118,7 +118,7 @@ docker run -d \
   -v mailcue-db:/var/lib/mailcue \
   -e MAILCUE_DOMAIN=mailcue.local \
   -e MAILCUE_ADMIN_PASSWORD=mailcue \
-  olibai/mailcue
+  olibakram/mailcue
 ```
 
 ### Verify It Works
@@ -328,7 +328,7 @@ MailCue is designed for automated testing pipelines:
 # GitHub Actions example
 services:
   mailcue:
-    image: olibai/mailcue
+    image: olibakram/mailcue
     ports:
       - 8088:80
       - 25:25
