@@ -366,7 +366,12 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
         status_resp, folder_data = await imap.list('""', '"*"')
         folders: list[FolderInfo] = []
 
-        logger.debug("IMAP LIST for %s: status=%s, lines=%d", address, status_resp, len(folder_data) if folder_data else 0)
+        logger.debug(
+            "IMAP LIST for %s: status=%s, lines=%d",
+            address,
+            status_resp,
+            len(folder_data) if folder_data else 0,
+        )
 
         if folder_data:
             for raw_line in folder_data:
@@ -389,9 +394,7 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                     continue
 
                 try:
-                    _st_resp, st_data = await imap.status(
-                        f'"{folder_name}"', "(MESSAGES UNSEEN)"
-                    )
+                    _st_resp, st_data = await imap.status(f'"{folder_name}"', "(MESSAGES UNSEEN)")
                     messages = 0
                     unseen = 0
                     if st_data:
@@ -412,12 +415,18 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                         )
                     )
                 except Exception:
-                    logger.debug("Could not get STATUS for folder '%s'", folder_name, exc_info=True)
+                    logger.debug(
+                        "Could not get STATUS for folder '%s'", folder_name, exc_info=True
+                    )
 
         if not folders:
             folders.append(FolderInfo(name="INBOX", message_count=0, unseen_count=0))
 
-        logger.debug("Folder stats for %s: %s", address, [(f.name, f.message_count, f.unseen_count) for f in folders])
+        logger.debug(
+            "Folder stats for %s: %s",
+            address,
+            [(f.name, f.message_count, f.unseen_count) for f in folders],
+        )
         return folders
     finally:
         with contextlib.suppress(Exception):
