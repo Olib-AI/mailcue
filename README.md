@@ -6,7 +6,7 @@
   <br /><br />
   <a href="https://github.com/Olib-AI/mailcue/actions"><img src="https://img.shields.io/github/actions/workflow/status/Olib-AI/mailcue/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
   <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License" /></a>
-  <a href="https://hub.docker.com/r/olibakram/mailcue"><img src="https://img.shields.io/docker/image-size/olibakram/mailcue?style=flat-square&label=image%20size" alt="Docker Image Size" /></a>
+  <a href="https://hub.docker.com/r/olibakram/mailcue"><img src="https://img.shields.io/docker/pulls/olibakram/mailcue?style=flat-square" alt="Docker Pulls" /></a>
   <a href="https://www.olib.ai"><img src="https://img.shields.io/badge/by-Olib%20AI-6c47ff?style=flat-square" alt="Olib AI" /></a>
 </p>
 
