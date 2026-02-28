@@ -10,15 +10,15 @@ from __future__ import annotations
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.config import settings
-from app.database import Base
+from alembic import context
 
 # Import all models so their metadata is registered on ``Base``.
 from app.auth.models import APIKey, User  # noqa: F401
+from app.config import settings
+from app.database import Base
 from app.mailboxes.models import Mailbox  # noqa: F401
 
 config = context.config

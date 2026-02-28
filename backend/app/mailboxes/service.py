@@ -144,10 +144,13 @@ async def create_mailbox(
         ) from exc
 
     # 4. SSE event
-    await event_bus.publish("mailbox.created", {
-        "id": mailbox.id,
-        "address": mailbox.address,
-    })
+    await event_bus.publish(
+        "mailbox.created",
+        {
+            "id": mailbox.id,
+            "address": mailbox.address,
+        },
+    )
 
     logger.info("Mailbox '%s' created.", address)
     return mailbox
@@ -193,10 +196,13 @@ async def delete_mailbox(
             logger.exception("Failed to remove Maildir for %s", address)
 
     # 4. SSE event
-    await event_bus.publish("mailbox.deleted", {
-        "id": mailbox.id,
-        "address": address,
-    })
+    await event_bus.publish(
+        "mailbox.deleted",
+        {
+            "id": mailbox.id,
+            "address": address,
+        },
+    )
 
     logger.info("Mailbox '%s' deleted.", address)
 
@@ -255,7 +261,9 @@ async def _provision_system_mailbox(
     # makes this optional, so failures are non-fatal).
     try:
         postfix_line = f"{address}    {domain}/{local_part}/\n"
-        await asyncio.to_thread(_append_to_file, Path("/etc/postfix/virtual_mailboxes"), postfix_line)
+        await asyncio.to_thread(
+            _append_to_file, Path("/etc/postfix/virtual_mailboxes"), postfix_line
+        )
         await asyncio.to_thread(_run_postmap, "/etc/postfix/virtual_mailboxes")
     except Exception:
         logger.debug("Postfix virtual_mailboxes update skipped (catch-all is active).")
@@ -372,9 +380,7 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                     continue
 
                 try:
-                    _st_resp, st_data = await imap.status(
-                        folder_name, "(MESSAGES UNSEEN)"
-                    )
+                    _st_resp, st_data = await imap.status(folder_name, "(MESSAGES UNSEEN)")
                     messages = 0
                     unseen = 0
                     if st_data:
@@ -387,11 +393,13 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
                         if u_match:
                             unseen = int(u_match.group(1))
 
-                    folders.append(FolderInfo(
-                        name=folder_name,
-                        message_count=messages,
-                        unseen_count=unseen,
-                    ))
+                    folders.append(
+                        FolderInfo(
+                            name=folder_name,
+                            message_count=messages,
+                            unseen_count=unseen,
+                        )
+                    )
                 except Exception:
                     logger.debug("Could not get STATUS for folder '%s'", folder_name)
 

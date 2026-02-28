@@ -67,11 +67,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         stmt = select(Mailbox).where(Mailbox.address == admin_address)
         result = await session.execute(stmt)
         if result.scalar_one_or_none() is None:
-            session.add(Mailbox(
-                address=admin_address,
-                display_name=settings.admin_user,
-                domain=settings.domain,
-            ))
+            session.add(
+                Mailbox(
+                    address=admin_address,
+                    display_name=settings.admin_user,
+                    domain=settings.domain,
+                )
+            )
             await session.commit()
             logger.info("Registered admin mailbox '%s' in database.", admin_address)
 

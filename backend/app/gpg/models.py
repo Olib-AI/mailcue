@@ -30,15 +30,9 @@ class GpgKey(Base):
 
     __tablename__ = "gpg_keys"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_new_uuid
-    )
-    mailbox_address: Mapped[str] = mapped_column(
-        String(255), index=True, nullable=False
-    )
-    fingerprint: Mapped[str] = mapped_column(
-        String(64), unique=True, nullable=False
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    mailbox_address: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     key_id: Mapped[str] = mapped_column(String(16), nullable=False)
     uid_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     uid_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -47,9 +41,7 @@ class GpgKey(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
-    expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     public_key_armor: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

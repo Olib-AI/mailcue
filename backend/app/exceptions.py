@@ -89,9 +89,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Attach custom exception handlers to the FastAPI application."""
 
     @app.exception_handler(MailCueError)
-    async def _mailcue_error_handler(
-        _request: Request, exc: MailCueError
-    ) -> JSONResponse:
+    async def _mailcue_error_handler(_request: Request, exc: MailCueError) -> JSONResponse:
         logger.warning("MailCueError: %s (status=%d)", exc.message, exc.status_code)
         body: dict[str, Any] = {"error": exc.message}
         if exc.detail is not None:
@@ -99,9 +97,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=exc.status_code, content=body)
 
     @app.exception_handler(Exception)
-    async def _unhandled_error_handler(
-        _request: Request, exc: Exception
-    ) -> JSONResponse:
+    async def _unhandled_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         logger.exception("Unhandled exception: %s", exc)
         return JSONResponse(
             status_code=500,

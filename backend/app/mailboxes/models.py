@@ -28,12 +28,8 @@ class Mailbox(Base):
 
     __tablename__ = "mailboxes"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_new_uuid
-    )
-    address: Mapped[str] = mapped_column(
-        String(255), unique=True, index=True, nullable=False
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    address: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     domain: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

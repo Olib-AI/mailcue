@@ -93,7 +93,9 @@ async def list_emails(
 
         _status_line, data = await imap.uid_search(criteria)
         if not data or not data[0]:
-            return EmailListResponse(total=0, page=page, page_size=per_page, emails=[], has_more=False)
+            return EmailListResponse(
+                total=0, page=page, page_size=per_page, emails=[], has_more=False
+            )
 
         raw_uids = data[0] if isinstance(data[0], str) else data[0].decode()
         uid_list = raw_uids.split()
@@ -108,7 +110,13 @@ async def list_emails(
         page_uids = uid_list[start:end]
 
         if not page_uids:
-            return EmailListResponse(total=total, page=page, page_size=per_page, emails=[], has_more=(page * per_page) < total)
+            return EmailListResponse(
+                total=total,
+                page=page,
+                page_size=per_page,
+                emails=[],
+                has_more=(page * per_page) < total,
+            )
 
         # Fetch headers for the page
         uid_set = ",".join(page_uids)
@@ -120,7 +128,7 @@ async def list_emails(
         current_uid = ""
         current_flags = ""
         for line in fetch_data:
-            if isinstance(line, (bytes, bytearray)):
+            if isinstance(line, bytes | bytearray):
                 decoded = bytes(line).decode("utf-8", errors="replace")
             else:
                 decoded = str(line)
@@ -135,7 +143,7 @@ async def list_emails(
                     current_flags = flags_match.group(1)
             elif len(decoded) > 50:
                 # This is likely the header block
-                raw_header = bytes(line) if isinstance(line, (bytes, bytearray)) else line.encode()
+                raw_header = bytes(line) if isinstance(line, bytes | bytearray) else line.encode()
                 is_read = "\\Seen" in current_flags
                 summary = parse_email_summary(
                     raw_header,
@@ -184,7 +192,11 @@ async def get_email(
 
         # Determine is_read from FLAGS
         for line in data:
-            text = bytes(line).decode("utf-8", errors="replace") if isinstance(line, (bytes, bytearray)) else str(line)
+            text = (
+                bytes(line).decode("utf-8", errors="replace")
+                if isinstance(line, bytes | bytearray)
+                else str(line)
+            )
             if "\\Seen" in text:
                 detail.is_read = True
                 break
@@ -195,14 +207,10 @@ async def get_email(
                 gpg_info = await gpg_service.verify_signature(raw_bytes)
                 detail.gpg = gpg_info
             if detail.is_encrypted:
-                decrypted_bytes, gpg_info = await gpg_service.decrypt_message(
-                    raw_bytes, mailbox
-                )
+                decrypted_bytes, gpg_info = await gpg_service.decrypt_message(raw_bytes, mailbox)
                 if gpg_info.decrypted:
                     # Re-parse with decrypted content
-                    detail = await parse_email_async(
-                        decrypted_bytes, uid=uid, mailbox=mailbox
-                    )
+                    detail = await parse_email_async(decrypted_bytes, uid=uid, mailbox=mailbox)
                     detail.is_read = True
                 detail.gpg = gpg_info
 
@@ -317,12 +325,15 @@ async def send_email(
 
     message_id: str = msg["Message-ID"]
 
-    await event_bus.publish("email.sent", {
-        "message_id": message_id,
-        "from": request.from_address,
-        "to": request.to_addresses,
-        "subject": request.subject,
-    })
+    await event_bus.publish(
+        "email.sent",
+        {
+            "message_id": message_id,
+            "from": request.from_address,
+            "to": request.to_addresses,
+            "subject": request.subject,
+        },
+    )
 
     logger.info("Email sent: %s -> %s", request.from_address, request.to_addresses)
     return message_id
@@ -371,19 +382,22 @@ async def inject_email(
         uid_str = "unknown"
         if data:
             for item in data:
-                text = bytes(item).decode() if isinstance(item, (bytes, bytearray)) else str(item)
+                text = bytes(item).decode() if isinstance(item, bytes | bytearray) else str(item)
                 if "APPENDUID" in text.upper():
                     match = re.search(r"APPENDUID\s+\d+\s+(\d+)", text, re.IGNORECASE)
                     if match:
                         uid_str = match.group(1)
                         break
 
-        await event_bus.publish("email.received", {
-            "mailbox": request.mailbox,
-            "uid": uid_str,
-            "from": request.from_address,
-            "subject": request.subject,
-        })
+        await event_bus.publish(
+            "email.received",
+            {
+                "mailbox": request.mailbox,
+                "uid": uid_str,
+                "from": request.from_address,
+                "subject": request.subject,
+            },
+        )
 
         logger.info("Email injected into %s (uid=%s)", request.mailbox, uid_str)
         return uid_str
@@ -420,10 +434,13 @@ async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
         await imap.uid("store", uid, "+FLAGS", "(\\Deleted)")
         await imap.expunge()
 
-        await event_bus.publish("email.deleted", {
-            "mailbox": mailbox,
-            "uid": uid,
-        })
+        await event_bus.publish(
+            "email.deleted",
+            {
+                "mailbox": mailbox,
+                "uid": uid,
+            },
+        )
 
         logger.info("Email deleted: %s/%s uid=%s", mailbox, folder, uid)
     finally:
@@ -495,10 +512,10 @@ def _build_raw_email(request: InjectEmailRequest) -> bytes:
 def _extract_raw_message(data: list[Any]) -> bytes | None:
     """Extract the raw message bytes from an IMAP FETCH response."""
     for item in data:
-        if isinstance(item, (bytes, bytearray)) and len(item) > 100 and bytes(item) != b")":
+        if isinstance(item, bytes | bytearray) and len(item) > 100 and bytes(item) != b")":
             return bytes(item)
         if isinstance(item, tuple):
             for sub_item in item:
-                if isinstance(sub_item, (bytes, bytearray)) and len(sub_item) > 100:
+                if isinstance(sub_item, bytes | bytearray) and len(sub_item) > 100:
                     return bytes(sub_item)
     return None

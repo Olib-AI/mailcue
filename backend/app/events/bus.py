@@ -24,7 +24,9 @@ class EventBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, asyncio.Queue[dict[str, Any]]] = {}
 
-    async def subscribe(self, client_id: str | None = None) -> tuple[str, asyncio.Queue[dict[str, Any]]]:
+    async def subscribe(
+        self, client_id: str | None = None
+    ) -> tuple[str, asyncio.Queue[dict[str, Any]]]:
         """Register a new subscriber and return ``(client_id, queue)``.
 
         If *client_id* is ``None`` a UUID is generated automatically.
@@ -39,7 +41,9 @@ class EventBus:
     def unsubscribe(self, client_id: str) -> None:
         """Remove a subscriber.  Safe to call with an unknown *client_id*."""
         self._subscribers.pop(client_id, None)
-        logger.debug("SSE subscriber disconnected: %s (total=%d)", client_id, len(self._subscribers))
+        logger.debug(
+            "SSE subscriber disconnected: %s (total=%d)", client_id, len(self._subscribers)
+        )
 
     async def publish(self, event_type: str, data: dict[str, Any]) -> None:
         """Broadcast an event to all active subscribers.

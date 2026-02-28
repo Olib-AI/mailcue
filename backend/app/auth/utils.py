@@ -38,15 +38,11 @@ def decode_jwt(token: str) -> dict[str, Any]:
 
 def create_access_token(user_id: str) -> str:
     """Build a short-lived access JWT for *user_id*."""
-    expire = datetime.now(UTC) + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
+    expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
     return encode_jwt({"sub": user_id, "type": "access", "exp": expire})
 
 
 def create_refresh_token(user_id: str) -> str:
     """Build a long-lived refresh JWT for *user_id*."""
-    expire = datetime.now(UTC) + timedelta(
-        days=settings.refresh_token_expire_days
-    )
+    expire = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
     return encode_jwt({"sub": user_id, "type": "refresh", "exp": expire})

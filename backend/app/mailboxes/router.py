@@ -79,7 +79,9 @@ async def create_new_mailbox(
     the corresponding Maildir directory structure.
     """
     mailbox = await create_mailbox(body, db)
-    local_part = mailbox.address.split("@", maxsplit=1)[0] if "@" in mailbox.address else mailbox.address
+    local_part = (
+        mailbox.address.split("@", maxsplit=1)[0] if "@" in mailbox.address else mailbox.address
+    )
     return MailboxResponse(
         id=mailbox.id,
         address=mailbox.address,

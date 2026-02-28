@@ -30,7 +30,6 @@ from app.gpg.schemas import (
     SignatureStatus,
 )
 
-
 # ── GPG instance helper ─────────────────────────────────────────
 
 
@@ -42,9 +41,7 @@ def _get_gpg() -> gnupg.GPG:
 # ── Key management ───────────────────────────────────────────────
 
 
-async def generate_key(
-    request: GenerateKeyRequest, db: AsyncSession
-) -> GpgKeyResponse:
+async def generate_key(request: GenerateKeyRequest, db: AsyncSession) -> GpgKeyResponse:
     """Generate a new GPG keypair and persist metadata to the database."""
     gpg = _get_gpg()
 
@@ -89,7 +86,9 @@ async def generate_key(
         uid_name=request.name,
         uid_email=request.mailbox_address,
         algorithm=key_info.get("algo", request.algorithm) if key_info else request.algorithm,
-        key_length=int(key_info.get("length", request.key_length)) if key_info else request.key_length,
+        key_length=int(key_info.get("length", request.key_length))
+        if key_info
+        else request.key_length,
         is_private=True,
         public_key_armor=str(armor),
     )
@@ -99,9 +98,7 @@ async def generate_key(
     return GpgKeyResponse.model_validate(db_key)
 
 
-async def import_key(
-    request: ImportKeyRequest, db: AsyncSession
-) -> GpgKeyResponse:
+async def import_key(request: ImportKeyRequest, db: AsyncSession) -> GpgKeyResponse:
     """Import an armored PGP key and persist metadata to the database."""
     gpg = _get_gpg()
     result = await asyncio.to_thread(gpg.import_keys, request.armored_key)
@@ -116,9 +113,7 @@ async def import_key(
     key_info = next((k for k in keys if k["fingerprint"] == fingerprint), None)
 
     uid_parts = (
-        _parse_uid(key_info["uids"][0])
-        if key_info and key_info.get("uids")
-        else (None, None)
+        _parse_uid(key_info["uids"][0]) if key_info and key_info.get("uids") else (None, None)
     )
     address = request.mailbox_address or uid_parts[1] or ""
 
@@ -160,9 +155,7 @@ async def list_keys(db: AsyncSession) -> GpgKeyListResponse:
     )
 
 
-async def get_key_for_address(
-    address: str, db: AsyncSession
-) -> GpgKeyResponse | None:
+async def get_key_for_address(address: str, db: AsyncSession) -> GpgKeyResponse | None:
     """Look up an active GPG key for the given email address."""
     result = await db.execute(
         select(GpgKey).where(
@@ -176,9 +169,7 @@ async def get_key_for_address(
     return None
 
 
-async def export_public_key(
-    address: str, db: AsyncSession
-) -> GpgKeyExportResponse:
+async def export_public_key(address: str, db: AsyncSession) -> GpgKeyExportResponse:
     """Export the ASCII-armored public key for an address."""
     result = await db.execute(
         select(GpgKey).where(
@@ -205,9 +196,7 @@ async def export_public_key(
 
 async def delete_key(address: str, db: AsyncSession) -> None:
     """Delete all GPG keys for an address from the keyring and database."""
-    result = await db.execute(
-        select(GpgKey).where(GpgKey.mailbox_address == address)
-    )
+    result = await db.execute(select(GpgKey).where(GpgKey.mailbox_address == address))
     keys = list(result.scalars().all())
     if not keys:
         raise ValueError(f"No key found for {address}")
@@ -228,9 +217,7 @@ async def delete_key(address: str, db: AsyncSession) -> None:
 # ── Cryptographic operations ─────────────────────────────────────
 
 
-async def sign_message(
-    raw_bytes: bytes, sender: str, db: AsyncSession
-) -> bytes:
+async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession) -> bytes:
     """Sign a message using PGP/MIME (RFC 3156 ``multipart/signed``)."""
     key = await get_key_for_address(sender, db)
     if not key or not key.is_private:
@@ -291,9 +278,7 @@ async def sign_message(
     return signed_msg.as_bytes()
 
 
-async def encrypt_message(
-    raw_bytes: bytes, recipients: list[str], db: AsyncSession
-) -> bytes:
+async def encrypt_message(raw_bytes: bytes, recipients: list[str], db: AsyncSession) -> bytes:
     """Encrypt a message using PGP/MIME (RFC 3156 ``multipart/encrypted``)."""
     # Collect recipient fingerprints
     fingerprints: list[str] = []
@@ -351,9 +336,7 @@ async def encrypt_message(
     enc_msg.attach(version_part)
 
     # Part 2: encrypted payload
-    data_part = MIMEApplication(
-        str(encrypted), _subtype="octet-stream", name="encrypted.asc"
-    )
+    data_part = MIMEApplication(str(encrypted), _subtype="octet-stream", name="encrypted.asc")
     data_part.add_header("Content-Description", "OpenPGP encrypted message")
     enc_msg.attach(data_part)
 
@@ -362,8 +345,8 @@ async def encrypt_message(
 
 async def verify_signature(raw_bytes: bytes) -> GpgEmailInfo:
     """Verify a PGP/MIME signed message and return verification metadata."""
-    import tempfile
     import os
+    import tempfile
 
     msg = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
     info = GpgEmailInfo(is_signed=True)
@@ -420,9 +403,7 @@ async def verify_signature(raw_bytes: bytes) -> GpgEmailInfo:
     return info
 
 
-async def decrypt_message(
-    raw_bytes: bytes, recipient: str
-) -> tuple[bytes, GpgEmailInfo]:
+async def decrypt_message(raw_bytes: bytes, recipient: str) -> tuple[bytes, GpgEmailInfo]:
     """Decrypt a PGP/MIME encrypted message and return the plaintext."""
     msg = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
     info = GpgEmailInfo(is_encrypted=True)
@@ -441,7 +422,9 @@ async def decrypt_message(
     enc_payload = encrypted_part.get_payload(decode=True)
     if enc_payload is None:
         raw_payload = encrypted_part.get_payload()
-        encrypted_data = raw_payload.encode() if isinstance(raw_payload, str) else bytes(raw_payload)
+        encrypted_data = (
+            raw_payload.encode() if isinstance(raw_payload, str) else bytes(raw_payload)
+        )
     else:
         encrypted_data = enc_payload
 
@@ -461,9 +444,7 @@ async def decrypt_message(
             if value:
                 original_headers[header] = value
 
-        decrypted_msg = email_stdlib.message_from_bytes(
-            decrypted_bytes, policy=policy.SMTP
-        )
+        decrypted_msg = email_stdlib.message_from_bytes(decrypted_bytes, policy=policy.SMTP)
 
         for header, value in original_headers.items():
             if header not in decrypted_msg:

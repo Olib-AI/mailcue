@@ -24,15 +24,9 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_new_uuid
-    )
-    username: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True, nullable=False
-    )
-    email: Mapped[str] = mapped_column(
-        String(255), unique=True, index=True, nullable=False
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -48,21 +42,15 @@ class APIKey(Base):
 
     __tablename__ = "api_keys"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=_new_uuid
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    prefix: Mapped[str] = mapped_column(
-        String(12), nullable=False, default="", index=True
-    )
+    prefix: Mapped[str] = mapped_column(String(12), nullable=False, default="", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    last_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user: Mapped[User] = relationship("User", back_populates="api_keys")

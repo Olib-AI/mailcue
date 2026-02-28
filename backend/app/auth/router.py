@@ -259,7 +259,9 @@ async def list_api_keys(
     db: AsyncSession = Depends(get_db),
 ) -> list[APIKey]:
     """List all API keys for the current user (without raw key values)."""
-    stmt = select(APIKey).where(APIKey.user_id == current_user.id).order_by(APIKey.created_at.desc())
+    stmt = (
+        select(APIKey).where(APIKey.user_id == current_user.id).order_by(APIKey.created_at.desc())
+    )
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

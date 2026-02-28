@@ -219,19 +219,20 @@ def _extract_body_and_attachments(
         charset = part.get_content_charset() or "utf-8"
         part_counter += 1
 
-        is_attachment = (
-            "attachment" in disposition
-            or (part.get_filename() is not None and "inline" not in disposition)
+        is_attachment = "attachment" in disposition or (
+            part.get_filename() is not None and "inline" not in disposition
         )
 
         if is_attachment:
             filename = _decode_header_str(part.get_filename()) or f"attachment_{part_counter}"
-            attachments.append(AttachmentInfo(
-                filename=filename,
-                content_type=content_type,
-                size=len(payload),
-                part_id=str(part_counter),
-            ))
+            attachments.append(
+                AttachmentInfo(
+                    filename=filename,
+                    content_type=content_type,
+                    size=len(payload),
+                    part_id=str(part_counter),
+                )
+            )
         elif content_type == "text/plain" and text_body is None:
             text_body = _safe_decode(payload, charset)
         elif content_type == "text/html" and html_body is None:
