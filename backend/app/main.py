@@ -14,18 +14,25 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.auth.router import router as auth_router
 from app.auth.service import create_default_admin
 from app.config import settings
 from app.database import AsyncSessionLocal, Base, engine
+from app.domains.models import Domain  # noqa: F401 — imported for table creation
+from app.domains.router import router as domains_router
 from app.emails.router import router as emails_router
 from app.events.router import router as events_router
 from app.exceptions import register_exception_handlers
 from app.gpg.models import GpgKey  # noqa: F401 — imported for table creation
+from app.system.models import ServerSettings, TlsCertificate  # noqa: F401 — imported for table creation
 from app.gpg.router import router as gpg_router
 from app.mailboxes.models import Mailbox
 from app.mailboxes.router import router as mailboxes_router
+from app.rate_limit import limiter
+from app.system.router import router as system_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -49,6 +56,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # ── Startup ──────────────────────────────────────────────────
     logger.info("MailCue API starting up (domain=%s)", settings.domain)
 
+    # Alembic migrations are run by the s6 init script before uvicorn
+    # starts.  ``create_all`` is a safety net that creates any tables
+    # not yet covered by migrations (e.g. new models during development).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ensured.")
@@ -77,6 +87,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await session.commit()
             logger.info("Registered admin mailbox '%s' in database.", admin_address)
 
+    # Restore custom TLS certificates from DB to filesystem (the cert
+    # directory is not volume-mounted, so certs are lost on restart).
+    async with AsyncSessionLocal() as session:
+        from app.system.service import restore_custom_certs
+
+        await restore_custom_certs(session)
+
     yield
 
     # ── Shutdown ─────────────────────────────────────────────────
@@ -96,6 +113,10 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # ── Rate limiting ─────────────────────────────────────────────
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # ── Middleware ────────────────────────────────────────────────
     app.add_middleware(
         CORSMiddleware,
@@ -114,6 +135,8 @@ def create_app() -> FastAPI:
     app.include_router(mailboxes_router, prefix="/api/v1")
     app.include_router(events_router, prefix="/api/v1")
     app.include_router(gpg_router, prefix="/api/v1")
+    app.include_router(domains_router, prefix="/api/v1")
+    app.include_router(system_router, prefix="/api/v1")
 
     # ── Health check ─────────────────────────────────────────────
     @app.get("/api/v1/health", tags=["Health"])

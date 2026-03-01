@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,6 +31,16 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    # ── TOTP / 2FA ────────────────────────────────────────────────
+    totp_secret: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # ── Account lockout ──────────────────────────────────────────
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     api_keys: Mapped[list[APIKey]] = relationship(
         "APIKey", back_populates="user", cascade="all, delete-orphan"

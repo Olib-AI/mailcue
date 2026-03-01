@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # ── Database ─────────────────────────────────────────────────
-    database_url: str = "sqlite+aiosqlite:///var/lib/mailcue/mailcue.db"
+    database_url: str = "sqlite+aiosqlite:////var/lib/mailcue/mailcue.db"
+    database_encryption_key: str = ""
 
     # ── Mail server ──────────────────────────────────────────────
     smtp_host: str = "127.0.0.1"
@@ -51,6 +52,20 @@ class Settings(BaseSettings):
 
     # ── GPG ──────────────────────────────────────────────────────
     gpg_home: str = "/var/lib/mailcue/gpg"
+
+    # ── TOTP / 2FA ────────────────────────────────────────────────
+    totp_issuer: str = "MailCue"
+
+    # ── Account lockout ─────────────────────────────────────────
+    max_failed_login_attempts: int = 5
+    lockout_duration_minutes: int = 15
+
+    # ── Rate limiting ───────────────────────────────────────────
+    login_rate_limit: str = "5/minute"
+    sensitive_rate_limit: str = "10/minute"
+
+    # ── Hostname (used for MX verification) ─────────────────────
+    hostname: str = "mail.mailcue.local"
 
     # ── CORS ─────────────────────────────────────────────────────
     cors_origins: list[str] = ["*"]

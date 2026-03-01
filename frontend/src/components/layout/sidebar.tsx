@@ -4,6 +4,7 @@ import {
   Send,
   FileText,
   Trash2,
+  LayoutGrid,
   Settings,
   Syringe,
   ChevronLeft,
@@ -52,6 +53,7 @@ function Sidebar() {
   const mailboxes = mailboxData?.mailboxes ?? [];
 
   const isAdminPage = location.pathname.startsWith("/admin");
+  const isSettingsPage = location.pathname.startsWith("/settings");
 
   // Auto-select first mailbox if none selected
   if (!selectedMailbox && mailboxes.length > 0 && mailboxes[0]) {
@@ -108,7 +110,7 @@ function Sidebar() {
         <div className="px-2 space-y-0.5">
           {FOLDERS.map((folder) => {
             const Icon = FOLDER_ICONS[folder];
-            const isActive = selectedFolder === folder && !isAdminPage;
+            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage;
             const selectedMb = mailboxes.find(
               (m) => m.address === selectedMailbox
             );
@@ -213,12 +215,12 @@ function Sidebar() {
             onClick={() => void navigate("/admin")}
             className={cn(
               "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors mt-1",
-              isAdminPage && !location.pathname.includes("inject")
+              isAdminPage && !location.search.includes("inject")
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
           >
-            <Settings className="h-4 w-4 shrink-0" />
+            <LayoutGrid className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Mailboxes</span>}
           </button>
           <button
@@ -226,14 +228,26 @@ function Sidebar() {
             onClick={() => void navigate("/admin?tab=inject")}
             className={cn(
               "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              location.pathname.includes("inject") ||
-                (isAdminPage && location.search.includes("inject"))
+              isAdminPage && location.search.includes("inject")
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
           >
             <Syringe className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Inject Email</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/settings")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              isSettingsPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Settings className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>Settings</span>}
           </button>
         </div>
       </ScrollArea>

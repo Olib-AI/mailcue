@@ -15,6 +15,7 @@ from app.gpg.schemas import (
     GpgKeyListResponse,
     GpgKeyResponse,
     ImportKeyRequest,
+    KeyserverPublishResponse,
 )
 
 router = APIRouter(prefix="/gpg", tags=["GPG"])
@@ -84,6 +85,22 @@ async def export_key_raw(
         media_type="application/pgp-keys",
         headers={"Content-Disposition": f'attachment; filename="{address}.asc"'},
     )
+
+
+@router.post(
+    "/keys/{address}/publish",
+    response_model=KeyserverPublishResponse,
+)
+async def publish_key(
+    address: str,
+    _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> KeyserverPublishResponse:
+    """Publish a GPG public key to keys.openpgp.org."""
+    try:
+        return await gpg_service.publish_to_keyserver(address, db)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/keys/import", response_model=GpgKeyResponse, status_code=201)

@@ -44,6 +44,44 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ChangePasswordRequest(BaseModel):
+    """Change the current user's password."""
+
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class TOTPSetupRequest(BaseModel):
+    """Initial TOTP setup -- no code needed, generates secret + QR."""
+
+
+class TOTPConfirmRequest(BaseModel):
+    """Confirm TOTP setup by verifying a code from the authenticator app."""
+
+    code: str
+
+
+class TOTPDisableRequest(BaseModel):
+    """Disable TOTP -- requires password + valid TOTP code for confirmation."""
+
+    password: str
+    code: str
+
+
+class TwoFactorVerifyRequest(BaseModel):
+    """Verify 2FA code during login."""
+
+    code: str
+    temp_token: str
+
+
 # ── Responses ────────────────────────────────────────────────────
 
 
@@ -56,6 +94,7 @@ class UserResponse(BaseModel):
     is_admin: bool
     is_active: bool
     created_at: datetime
+    totp_enabled: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -86,3 +125,18 @@ class APIKeyCreatedResponse(APIKeyResponse):
     """Extends ``APIKeyResponse`` with the raw key -- returned only at creation time."""
 
     key: str
+
+
+class TOTPSetupResponse(BaseModel):
+    """Returned when initiating TOTP setup -- secret, QR code, provisioning URI."""
+
+    secret: str
+    qr_code: str
+    provisioning_uri: str
+
+
+class LoginStepResponse(BaseModel):
+    """Returned when login requires a second factor (TOTP)."""
+
+    requires_2fa: bool = True
+    temp_token: str

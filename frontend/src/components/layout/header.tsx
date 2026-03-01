@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   Search,
   PenSquare,
@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/use-auth";
 function Header() {
   const { theme, setTheme, setComposeOpen } = useUIStore();
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(
     searchParams.get("search") ?? ""
@@ -116,7 +117,7 @@ function Header() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/profile")}>
               <User className="mr-2 h-4 w-4" />
               Profile
             </DropdownMenuItem>

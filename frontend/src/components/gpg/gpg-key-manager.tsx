@@ -13,6 +13,7 @@ import {
   Upload,
   Download,
   Copy,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,8 +37,10 @@ import {
   useImportGpgKey,
   useDeleteGpgKey,
   useExportGpgKey,
+  usePublishGpgKey,
 } from "@/hooks/use-gpg";
 import { useMailboxes } from "@/hooks/use-mailboxes";
+import { useDomains } from "@/hooks/use-domains";
 import { formatEmailDate } from "@/lib/utils";
 
 // --- Generate Key Schema ---
@@ -66,10 +69,12 @@ type ImportKeyValues = z.infer<typeof importKeySchema>;
 function GpgKeyManager() {
   const { data, isLoading, isError, error, refetch } = useGpgKeys();
   const { data: mailboxData } = useMailboxes();
+  const { data: domainData } = useDomains();
   const generateKey = useGenerateGpgKey();
   const importKey = useImportGpgKey();
   const deleteKey = useDeleteGpgKey();
   const exportKey = useExportGpgKey();
+  const publishKey = usePublishGpgKey();
 
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -77,6 +82,20 @@ function GpgKeyManager() {
 
   const mailboxes = mailboxData?.mailboxes ?? [];
   const keys = data?.keys ?? [];
+
+  // Build set of local domains (managed domains + mailbox domains)
+  const localDomains = new Set<string>();
+  for (const d of domainData?.domains ?? []) {
+    localDomains.add(d.name.toLowerCase());
+  }
+  for (const mb of mailboxes) {
+    localDomains.add(mb.domain.toLowerCase());
+  }
+
+  const isLocalDomain = (address: string) => {
+    const domain = address.split("@")[1]?.toLowerCase();
+    return domain ? localDomains.has(domain) : true;
+  };
 
   // --- Generate Form ---
 
@@ -210,6 +229,22 @@ function GpgKeyManager() {
     [exportKey]
   );
 
+  const handlePublish = useCallback(
+    (address: string) => {
+      publishKey.mutate(address, {
+        onSuccess: (result) => {
+          toast.success(result.message);
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to publish key"
+          );
+        },
+      });
+    },
+    [publishKey]
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -312,6 +347,23 @@ function GpgKeyManager() {
                     >
                       <Download className="h-4 w-4" />
                     </Button>
+                    {!isLocalDomain(key.mailbox_address) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => handlePublish(key.mailbox_address)}
+                        disabled={publishKey.isPending}
+                        title="Publish to keys.openpgp.org"
+                        aria-label={`Publish key for ${key.mailbox_address} to keyserver`}
+                      >
+                        {publishKey.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Globe className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"

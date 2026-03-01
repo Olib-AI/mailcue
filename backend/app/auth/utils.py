@@ -46,3 +46,9 @@ def create_refresh_token(user_id: str) -> str:
     """Build a long-lived refresh JWT for *user_id*."""
     expire = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
     return encode_jwt({"sub": user_id, "type": "refresh", "exp": expire})
+
+
+def create_2fa_temp_token(user_id: str) -> str:
+    """Build a short-lived (90 s) JWT for the 2FA verification step."""
+    expire = datetime.now(UTC) + timedelta(seconds=90)
+    return encode_jwt({"sub": user_id, "type": "2fa_temp", "exp": expire})

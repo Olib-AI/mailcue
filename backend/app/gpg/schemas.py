@@ -69,6 +69,14 @@ class GpgKeyExportResponse(BaseModel):
     public_key: str  # armored PGP public key
 
 
+class KeyserverPublishResponse(BaseModel):
+    """Result of publishing a key to keys.openpgp.org."""
+
+    published: bool
+    key_fingerprint: str
+    message: str
+
+
 class GpgEmailInfo(BaseModel):
     """PGP/MIME metadata attached to a parsed email."""
 

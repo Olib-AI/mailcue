@@ -84,3 +84,12 @@ export function useExportGpgKey() {
       ),
   });
 }
+
+export function usePublishGpgKey() {
+  return useMutation({
+    mutationFn: (address: string) =>
+      api.post<{ published: boolean; key_fingerprint: string; message: string }>(
+        `/gpg/keys/${encodeURIComponent(address)}/publish`
+      ),
+  });
+}

@@ -8,6 +8,7 @@ export interface User {
   email: string;
   is_admin: boolean;
   created_at: string;
+  totp_enabled: boolean;
 }
 
 export interface LoginRequest {
@@ -25,6 +26,35 @@ export interface LoginResponse {
 export interface RefreshResponse {
   access_token: string;
   user: User;
+}
+
+// --- Auth Security Types ---
+
+export interface LoginStepResponse {
+  requires_2fa: boolean;
+  temp_token: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface TOTPSetupResponse {
+  secret: string;
+  qr_code: string;
+  provisioning_uri: string;
+}
+
+export interface TwoFactorVerifyRequest {
+  code: string;
+  temp_token: string;
+}
+
+export function isLoginStepResponse(
+  data: LoginResponse | LoginStepResponse
+): data is LoginStepResponse {
+  return "requires_2fa" in data && (data as LoginStepResponse).requires_2fa === true;
 }
 
 // --- Email Types ---
@@ -210,6 +240,125 @@ export interface GpgKeyExportResponse {
   mailbox_address: string;
   fingerprint: string;
   public_key: string;
+}
+
+// --- Domain Types ---
+
+export interface Domain {
+  id: number;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  dkim_selector: string;
+  mx_verified: boolean;
+  spf_verified: boolean;
+  dkim_verified: boolean;
+  dmarc_verified: boolean;
+  last_dns_check: string | null;
+  all_verified: boolean;
+}
+
+export interface DnsRecordInfo {
+  record_type: string;
+  hostname: string;
+  expected_value: string;
+  verified: boolean;
+  current_value: string | null;
+  purpose: string;
+}
+
+export interface DomainDetail extends Domain {
+  dns_records: DnsRecordInfo[];
+  dkim_public_key_txt: string | null;
+}
+
+export interface DomainListResponse {
+  domains: Domain[];
+  total: number;
+}
+
+export interface CreateDomainRequest {
+  name: string;
+  dkim_selector?: string;
+}
+
+export interface DnsCheckResponse {
+  mx_verified: boolean;
+  spf_verified: boolean;
+  dkim_verified: boolean;
+  dmarc_verified: boolean;
+  all_verified: boolean;
+  dns_records: DnsRecordInfo[];
+}
+
+// --- Certificate Types ---
+
+export interface CertificateDN {
+  common_name: string | null;
+  organization: string | null;
+  organizational_unit: string | null;
+  country: string | null;
+  state: string | null;
+  locality: string | null;
+  email: string | null;
+  dn: string;
+}
+
+export interface CertificateDetail {
+  fingerprint_sha256: string;
+  fingerprint_sha1: string;
+  serial_number: string;
+  version: string;
+  signature_algorithm: string;
+  subject: CertificateDN;
+  issuer: CertificateDN;
+  validity: {
+    not_before: string;
+    not_after: string;
+  };
+  san: {
+    dns_names: string[];
+    ip_addresses: string[];
+    emails: string[];
+  };
+  is_ca: boolean;
+  key_usage: string[];
+  extended_key_usage: string[];
+  public_key_algorithm: string;
+  public_key_size: number;
+}
+
+export interface CertificateInfo {
+  server: CertificateDetail;
+  ca: CertificateDetail | null;
+}
+
+// --- Server Settings Types ---
+
+export interface ServerSettings {
+  hostname: string;
+}
+
+export interface UpdateServerSettingsRequest {
+  hostname: string;
+}
+
+// --- TLS Certificate Types ---
+
+export interface TlsCertificateStatus {
+  configured: boolean;
+  common_name: string | null;
+  san_dns_names: string[];
+  not_before: string | null;
+  not_after: string | null;
+  fingerprint_sha256: string | null;
+  uploaded_at: string | null;
+}
+
+export interface UploadTlsCertificateRequest {
+  certificate: string;
+  private_key: string;
+  ca_certificate?: string;
 }
 
 // --- API Error ---

@@ -29,6 +29,8 @@ services:
       - MAILCUE_ADMIN_PASSWORD=mailcue
       # Leave empty to auto-generate at first boot
       - MAILCUE_SECRET_KEY=
+      # SQLCipher encryption key for the SQLite database (optional, leave empty to disable)
+      # - MAILCUE_DATABASE_ENCRYPTION_KEY=your-secret-key-here
     volumes:
       # Persistent mail storage (Maildir)
       - mailcue-data:/var/mail/vhosts

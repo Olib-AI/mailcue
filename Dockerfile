@@ -25,6 +25,7 @@ ENV MAILCUE_DOMAIN=mailcue.local \
     MAILCUE_ADMIN_PASSWORD=mailcue \
     MAILCUE_SECRET_KEY="" \
     MAILCUE_DB_PATH=/var/lib/mailcue/mailcue.db \
+    MAILCUE_DATABASE_ENCRYPTION_KEY="" \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=30000
 
@@ -50,6 +51,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xz-utils \
         gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Build SQLCipher from source — Debian Bookworm's packaged libsqlcipher omits
+# symbols (e.g. sqlite3_create_window_function) that Python's _sqlite3 requires.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libssl-dev tcl \
+    && curl -fsSL https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.6.1.tar.gz \
+        -o /tmp/sqlcipher.tar.gz \
+    && tar -C /tmp -xzf /tmp/sqlcipher.tar.gz \
+    && cd /tmp/sqlcipher-4.6.1 \
+    && ./configure --enable-tempstore=yes --disable-tcl \
+        CFLAGS="-DSQLITE_HAS_CODEC -DSQLCIPHER_CRYPTO_OPENSSL" \
+        LDFLAGS="-lcrypto" \
+    && make -j"$(nproc)" \
+    && make install \
+    && ldconfig \
+    && cd / && rm -rf /tmp/sqlcipher* \
+    && apt-get purge -y build-essential libssl-dev tcl \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Replace libsqlite3 with SQLCipher (ABI-compatible drop-in for AES-256 encryption)
+RUN case "${TARGETARCH}" in \
+        amd64) LIBDIR="/usr/lib/x86_64-linux-gnu" ;; \
+        arm64) LIBDIR="/usr/lib/aarch64-linux-gnu" ;; \
+        *) echo "Unsupported arch: ${TARGETARCH}" && exit 1 ;; \
+    esac \
+    && ln -sf /usr/local/lib/libsqlcipher.so.0 "${LIBDIR}/libsqlite3.so.0"
 
 # s6-overlay v3 installation (multi-arch)
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/

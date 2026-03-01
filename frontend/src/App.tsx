@@ -7,6 +7,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LoginPage } from "@/pages/login";
 import { MailPage } from "@/pages/mail";
 import { AdminPage } from "@/pages/admin";
+import { SettingsPage } from "@/pages/settings";
+import { ProfilePage } from "@/pages/profile";
 import { useAuth } from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
@@ -41,6 +43,8 @@ function App() {
                 <Route path="/" element={<Navigate to="/mail" replace />} />
                 <Route path="/mail" element={<MailPage />} />
                 <Route path="/admin" element={<AdminPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/mail" replace />} />

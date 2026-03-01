@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import email as email_stdlib
+import json
+import logging
+import urllib.request
 from email import policy
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
@@ -27,8 +30,11 @@ from app.gpg.schemas import (
     GpgKeyListResponse,
     GpgKeyResponse,
     ImportKeyRequest,
+    KeyserverPublishResponse,
     SignatureStatus,
 )
+
+logger = logging.getLogger("mailcue.gpg")
 
 # ── GPG instance helper ─────────────────────────────────────────
 
@@ -212,6 +218,94 @@ async def delete_key(address: str, db: AsyncSession) -> None:
         await db.delete(key)
 
     await db.commit()
+
+
+# ── Keyserver publishing ─────────────────────────────────────────
+
+KEYSERVER_UPLOAD_URL = "https://keys.openpgp.org/vks/v1/upload"
+KEYSERVER_VERIFY_URL = "https://keys.openpgp.org/vks/v1/request-verify"
+
+
+def _upload_to_keyserver(armored_key: str) -> dict:
+    """Upload an armored public key to keys.openpgp.org (blocking)."""
+    req = urllib.request.Request(
+        KEYSERVER_UPLOAD_URL,
+        data=armored_key.encode("utf-8"),
+        headers={"Content-Type": "application/pgp-keys"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
+def _request_verify(token: str, addresses: list[str]) -> dict:
+    """Request email verification for published key (blocking)."""
+    body = json.dumps({"token": token, "addresses": addresses}).encode()
+    req = urllib.request.Request(
+        KEYSERVER_VERIFY_URL,
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read())
+
+
+async def publish_to_keyserver(
+    address: str, db: AsyncSession,
+) -> KeyserverPublishResponse:
+    """Publish a GPG public key to keys.openpgp.org.
+
+    Uploads the key and requests email verification so the key becomes
+    discoverable by email address on the keyserver.
+    """
+    export = await export_public_key(address, db)
+
+    # Upload the public key
+    try:
+        upload_result = await asyncio.to_thread(
+            _upload_to_keyserver, export.public_key,
+        )
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to upload key to keys.openpgp.org: {exc}"
+        ) from exc
+
+    token = upload_result.get("token")
+    key_fpr = upload_result.get("key_fpr", export.fingerprint)
+
+    # Request email verification so the key is searchable by address
+    if token:
+        try:
+            await asyncio.to_thread(_request_verify, token, [address])
+            logger.info(
+                "Requested verification for %s on keys.openpgp.org (fpr=%s)",
+                address, key_fpr,
+            )
+        except Exception:
+            logger.warning(
+                "Key uploaded but verification request failed for %s",
+                address, exc_info=True,
+            )
+            return KeyserverPublishResponse(
+                published=True,
+                key_fingerprint=key_fpr,
+                message=(
+                    f"Key uploaded to keys.openpgp.org but verification "
+                    f"request failed. Visit https://keys.openpgp.org to "
+                    f"verify {address} manually."
+                ),
+            )
+
+    return KeyserverPublishResponse(
+        published=True,
+        key_fingerprint=key_fpr,
+        message=(
+            f"Key uploaded to keys.openpgp.org. A verification email "
+            f"has been sent to {address}. Check the inbox and click the "
+            f"link to make the key discoverable by email address."
+        ),
+    )
 
 
 # ── Cryptographic operations ─────────────────────────────────────

@@ -7,11 +7,9 @@ the single source of truth is the ``MAILCUE_DATABASE_URL`` env var.
 
 from __future__ import annotations
 
-import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy import create_engine, event, pool
 
 from alembic import context
 
@@ -19,15 +17,19 @@ from alembic import context
 from app.auth.models import APIKey, User  # noqa: F401
 from app.config import settings
 from app.database import Base
+from app.domains.models import Domain  # noqa: F401
 from app.mailboxes.models import Mailbox  # noqa: F401
+from app.system.models import ServerSettings, TlsCertificate  # noqa: F401
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override the URL from the .ini with the application setting.
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Convert the async URL to a synchronous one for Alembic CLI usage.
+# ``sqlite+aiosqlite:///...`` → ``sqlite:///...``
+db_url = settings.database_url.replace("+aiosqlite", "")
+config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 
@@ -46,32 +48,30 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def do_run_migrations(connection: object) -> None:
-    """Execute migrations using *connection*."""
-    context.configure(
-        connection=connection,  # type: ignore[arg-type]
-        target_metadata=target_metadata,
-        render_as_batch=True,
-    )
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_async_migrations() -> None:
-    """Create an async engine and run migrations within it."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
-
-
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode -- connected to the database."""
-    asyncio.run(run_async_migrations())
+    connectable = create_engine(
+        config.get_main_option("sqlalchemy.url", ""),
+        poolclass=pool.NullPool,
+    )
+
+    if settings.database_encryption_key:
+
+        @event.listens_for(connectable, "connect")
+        def _set_sqlcipher_key(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute(f"PRAGMA key='{settings.database_encryption_key}'")
+            cursor.close()
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+    connectable.dispose()
 
 
 if context.is_offline_mode():
