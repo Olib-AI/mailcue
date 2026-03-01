@@ -25,11 +25,14 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 | **Email Injection** | Bypass SMTP entirely -- insert emails directly into mailboxes via IMAP APPEND for deterministic test setup. |
 | **Bulk Injection** | Seed mailboxes with hundreds of test emails in a single API call. |
 | **DKIM Signing** | Automatic DKIM key generation and signing via OpenDKIM so you can validate DKIM verification logic. |
-| **TLS Everywhere** | Auto-generated self-signed certificates for SMTP STARTTLS, IMAPS (993), POP3S (995). |
-| **GPG / PGP-MIME** | Generate, import, and manage GPG keys per mailbox. Sign, encrypt, verify, and decrypt emails (RFC 3156). |
+| **TLS Everywhere** | Auto-generated self-signed certificates for SMTP STARTTLS, IMAPS (993), POP3S (995). Upload your own certs from the UI. |
+| **GPG / PGP-MIME** | Generate, import, and manage GPG keys per mailbox. Sign, encrypt, verify, and decrypt emails (RFC 3156). Publish public keys to `keys.openpgp.org`. |
 | **Real-time Events** | Server-Sent Events (SSE) stream pushes `email.received`, `email.deleted`, `mailbox.created`, and more. |
-| **API Keys** | Programmatic `X-API-Key` authentication for CI/CD and automation alongside JWT for the web UI. |
-| **Admin Panel** | Create and delete mailboxes, inject test emails, manage GPG keys -- all from the browser. |
+| **Two-Factor Auth** | TOTP-based 2FA with authenticator app support. Setup wizard with QR code in the profile page. |
+| **API Keys** | Programmatic `X-API-Key` authentication for CI/CD and automation alongside JWT for the web UI. Manage keys from the profile page. |
+| **Domain Management** | Add custom email domains with automatic DKIM key generation. DNS verification dashboard for MX, SPF, DKIM, and DMARC records. |
+| **Server Configuration** | Configure server hostname and upload custom TLS certificates from the admin UI. Certs persist across container restarts. |
+| **Admin Panel** | Create and delete mailboxes, inject test emails, manage domains, configure mail server -- all from the browser. |
 | **Single Container** | One `docker run` command. No external databases, no Redis, no message queues. |
 | **Persistent Storage** | SQLite database and Maildir storage survive container restarts via Docker volumes. |
 
@@ -238,10 +241,15 @@ The API is served under `/api/v1` and documented with interactive Swagger UI at 
 
 ```
 POST /api/v1/auth/login          # Username + password -> JWT tokens
+POST /api/v1/auth/login/2fa      # Complete login with TOTP code
 POST /api/v1/auth/refresh         # Refresh token rotation
 POST /api/v1/auth/logout          # Clear refresh cookie
 GET  /api/v1/auth/me              # Current user profile
 POST /api/v1/auth/register        # Create user (admin only)
+PUT  /api/v1/auth/password        # Change password
+POST /api/v1/auth/totp/setup      # Generate TOTP secret + QR code
+POST /api/v1/auth/totp/confirm    # Verify code and enable 2FA
+POST /api/v1/auth/totp/disable    # Disable 2FA
 POST /api/v1/auth/api-keys        # Generate API key
 GET  /api/v1/auth/api-keys        # List API keys
 DELETE /api/v1/auth/api-keys/:id  # Revoke API key
@@ -285,7 +293,18 @@ GET    /api/v1/gpg/keys              # List all keys
 GET    /api/v1/gpg/keys/:address     # Get key by mailbox address
 GET    /api/v1/gpg/keys/:address/export      # Export public key (JSON)
 GET    /api/v1/gpg/keys/:address/export/raw  # Download .asc file
-DELETE /api/v1/gpg/keys/:address     # Delete keys for address
+POST   /api/v1/gpg/keys/:address/publish   # Publish to keys.openpgp.org
+DELETE /api/v1/gpg/keys/:address          # Delete keys for address
+```
+
+### Domains
+
+```
+GET    /api/v1/domains                    # List managed domains (admin only)
+POST   /api/v1/domains                    # Add domain + generate DKIM (admin only)
+GET    /api/v1/domains/:name              # Domain details with DNS records
+DELETE /api/v1/domains/:name              # Remove domain (admin only)
+POST   /api/v1/domains/:name/verify-dns   # Run live DNS verification
 ```
 
 ### System
@@ -293,6 +312,10 @@ DELETE /api/v1/gpg/keys/:address     # Delete keys for address
 ```
 GET  /api/v1/system/certificate           # TLS certificate metadata (no auth)
 GET  /api/v1/system/certificate/download  # Download PEM certificate (no auth)
+GET  /api/v1/system/settings              # Server settings (admin only)
+PUT  /api/v1/system/settings              # Update server settings (admin only)
+GET  /api/v1/system/tls                   # Custom TLS cert status (admin only)
+PUT  /api/v1/system/tls                   # Upload custom TLS cert (admin only)
 ```
 
 ### Events & Health
@@ -306,11 +329,17 @@ GET  /api/v1/health           # Health check endpoint
 
 ## Web UI
 
-The frontend provides three main views:
+The frontend provides five main views:
 
 - **Mail** -- Two-panel email client with mailbox sidebar, folder navigation (Inbox, Sent, Drafts, Trash), email list with search, and rich email detail view with HTML rendering, raw headers, attachment downloads, and GPG verification badges.
 - **Compose** -- Dialog for sending emails via SMTP with a rich text editor (Tiptap), CC support, and optional GPG signing/encryption.
-- **Admin** -- Tabbed panel for mailbox management (create/delete), email injection with custom headers, and GPG key management (generate/import/export/delete).
+- **Profile** -- Account information, password change, TOTP two-factor authentication setup/disable, and API key management (create, list, copy, revoke).
+- **Settings** -- Four tabs:
+  - **GPG Keys** -- Generate (RSA/ECC), import, export, delete GPG keys per mailbox. Publish public keys to `keys.openpgp.org` for non-local domains.
+  - **TLS Certificate** -- View current server and CA certificate details, download CA cert, platform-specific installation instructions.
+  - **Mail Server** -- Configure server hostname and upload custom TLS certificates (server cert, private key, CA chain).
+  - **Domains** -- Add custom email domains with automatic DKIM generation, DNS verification dashboard (MX, SPF, DKIM, DMARC), required DNS records display.
+- **Admin** -- Mailbox management (create/delete with statistics) and email injection with custom headers and HTML/plain text editor.
 
 Real-time updates are delivered via SSE -- new emails appear instantly with toast notifications, and mailbox counts update automatically.
 
@@ -426,11 +455,13 @@ curl -H "X-API-Key: $API_KEY" http://localhost:8088/api/v1/emails?mailbox=admin@
 mailcue/
 ├── backend/
 │   ├── app/
-│   │   ├── auth/          # Authentication (JWT, API keys, user management)
+│   │   ├── auth/          # Authentication (JWT, API keys, TOTP 2FA, user management)
+│   │   ├── domains/       # Domain management and DNS verification
 │   │   ├── emails/        # Email CRUD (IMAP fetch, SMTP send, inject)
 │   │   ├── events/        # SSE event bus and streaming endpoint
-│   │   ├── gpg/           # GPG key management and PGP/MIME operations
+│   │   ├── gpg/           # GPG key management, PGP/MIME, keyserver publishing
 │   │   ├── mailboxes/     # Mailbox CRUD and Dovecot provisioning
+│   │   ├── system/        # Server settings, TLS certificate management
 │   │   ├── config.py      # Pydantic settings (env var configuration)
 │   │   ├── database.py    # Async SQLAlchemy engine and session
 │   │   ├── dependencies.py # FastAPI auth dependencies
