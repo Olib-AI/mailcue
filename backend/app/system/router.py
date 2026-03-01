@@ -47,7 +47,8 @@ def _parse_cert(pem_path: Path) -> x509.Certificate:
 
 
 def _extract_dn_attr(
-    name: x509.Name, oid: x509.oid.ObjectIdentifier,
+    name: x509.Name,
+    oid: x509.oid.ObjectIdentifier,
 ) -> str | None:
     """Extract a single attribute from a distinguished name."""
     attrs = name.get_attributes_for_oid(oid)
@@ -63,13 +64,9 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
     ip_sans: list[str] = []
     email_sans: list[str] = []
     try:
-        san_ext = cert.extensions.get_extension_for_class(
-            x509.SubjectAlternativeName
-        )
+        san_ext = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
         dns_sans = san_ext.value.get_values_for_type(x509.DNSName)
-        ip_sans = [
-            str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)
-        ]
+        ip_sans = [str(ip) for ip in san_ext.value.get_values_for_type(x509.IPAddress)]
         email_sans = san_ext.value.get_values_for_type(x509.RFC822Name)
     except x509.ExtensionNotFound:
         pass
@@ -79,8 +76,12 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
     try:
         ku = cert.extensions.get_extension_for_class(x509.KeyUsage).value
         for attr in (
-            "digital_signature", "key_encipherment", "key_agreement",
-            "key_cert_sign", "crl_sign", "content_commitment",
+            "digital_signature",
+            "key_encipherment",
+            "key_agreement",
+            "key_cert_sign",
+            "crl_sign",
+            "content_commitment",
             "data_encipherment",
         ):
             if getattr(ku, attr, False):
@@ -97,9 +98,7 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
     # Extended key usage
     ext_key_usage: list[str] = []
     try:
-        eku = cert.extensions.get_extension_for_class(
-            x509.ExtendedKeyUsage
-        ).value
+        eku = cert.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
         eku_names = {
             x509.oid.ExtendedKeyUsageOID.SERVER_AUTH: "serverAuth",
             x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH: "clientAuth",
@@ -115,9 +114,7 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
     # Basic constraints
     is_ca = False
     try:
-        bc = cert.extensions.get_extension_for_class(
-            x509.BasicConstraints
-        ).value
+        bc = cert.extensions.get_extension_for_class(x509.BasicConstraints).value
         is_ca = bc.ca
     except x509.ExtensionNotFound:
         pass
@@ -131,13 +128,9 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
         "subject": {
             "common_name": _extract_dn_attr(cert.subject, oid.COMMON_NAME),
             "organization": _extract_dn_attr(cert.subject, oid.ORGANIZATION_NAME),
-            "organizational_unit": _extract_dn_attr(
-                cert.subject, oid.ORGANIZATIONAL_UNIT_NAME
-            ),
+            "organizational_unit": _extract_dn_attr(cert.subject, oid.ORGANIZATIONAL_UNIT_NAME),
             "country": _extract_dn_attr(cert.subject, oid.COUNTRY_NAME),
-            "state": _extract_dn_attr(
-                cert.subject, oid.STATE_OR_PROVINCE_NAME
-            ),
+            "state": _extract_dn_attr(cert.subject, oid.STATE_OR_PROVINCE_NAME),
             "locality": _extract_dn_attr(cert.subject, oid.LOCALITY_NAME),
             "email": _extract_dn_attr(cert.subject, oid.EMAIL_ADDRESS),
             "dn": cert.subject.rfc4514_string(),
@@ -145,24 +138,16 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
         "issuer": {
             "common_name": _extract_dn_attr(cert.issuer, oid.COMMON_NAME),
             "organization": _extract_dn_attr(cert.issuer, oid.ORGANIZATION_NAME),
-            "organizational_unit": _extract_dn_attr(
-                cert.issuer, oid.ORGANIZATIONAL_UNIT_NAME
-            ),
+            "organizational_unit": _extract_dn_attr(cert.issuer, oid.ORGANIZATIONAL_UNIT_NAME),
             "country": _extract_dn_attr(cert.issuer, oid.COUNTRY_NAME),
-            "state": _extract_dn_attr(
-                cert.issuer, oid.STATE_OR_PROVINCE_NAME
-            ),
+            "state": _extract_dn_attr(cert.issuer, oid.STATE_OR_PROVINCE_NAME),
             "locality": _extract_dn_attr(cert.issuer, oid.LOCALITY_NAME),
             "email": _extract_dn_attr(cert.issuer, oid.EMAIL_ADDRESS),
             "dn": cert.issuer.rfc4514_string(),
         },
         "validity": {
-            "not_before": cert.not_valid_before_utc.replace(
-                tzinfo=UTC
-            ).isoformat(),
-            "not_after": cert.not_valid_after_utc.replace(
-                tzinfo=UTC
-            ).isoformat(),
+            "not_before": cert.not_valid_before_utc.replace(tzinfo=UTC).isoformat(),
+            "not_after": cert.not_valid_after_utc.replace(tzinfo=UTC).isoformat(),
         },
         "san": {
             "dns_names": dns_sans,
@@ -209,9 +194,7 @@ async def download_certificate() -> Response:
     return Response(
         content=path.read_bytes(),
         media_type="application/x-pem-file",
-        headers={
-            "Content-Disposition": 'attachment; filename="mailcue-ca.crt"'
-        },
+        headers={"Content-Disposition": 'attachment; filename="mailcue-ca.crt"'},
     )
 
 

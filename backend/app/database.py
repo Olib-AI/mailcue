@@ -36,6 +36,7 @@ if settings.database_encryption_key:
         cursor.execute(f"PRAGMA key='{settings.database_encryption_key}'")
         cursor.close()
 
+
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,

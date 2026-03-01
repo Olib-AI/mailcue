@@ -56,7 +56,8 @@ async def set_server_hostname(hostname: str, db: AsyncSession) -> str:
 
 
 def _validate_cert_key_pair(
-    cert_pem: str, key_pem: str,
+    cert_pem: str,
+    key_pem: str,
 ) -> x509.Certificate:
     """Parse PEM cert & key, verify they match and cert is not expired.
 
@@ -70,7 +71,8 @@ def _validate_cert_key_pair(
 
     try:
         private_key = serialization.load_pem_private_key(
-            key_pem.encode(), password=None,
+            key_pem.encode(),
+            password=None,
         )
     except Exception as exc:
         raise ValueError(f"Invalid private key PEM: {exc}") from exc
@@ -85,16 +87,12 @@ def _validate_cert_key_pair(
         serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     if cert_pub_der != key_pub_der:
-        raise ValueError(
-            "Certificate and private key do not match "
-            "(public keys differ)."
-        )
+        raise ValueError("Certificate and private key do not match (public keys differ).")
 
     now = datetime.now(UTC)
     if cert.not_valid_after_utc.replace(tzinfo=UTC) < now:
         raise ValueError(
-            "Certificate has expired "
-            f"(not_after={cert.not_valid_after_utc.isoformat()})."
+            f"Certificate has expired (not_after={cert.not_valid_after_utc.isoformat()})."
         )
 
     return cert
@@ -124,7 +122,9 @@ def _extract_cert_metadata(cert: x509.Certificate) -> dict:
 
 
 def _write_certs_to_disk_sync(
-    cert_pem: str, key_pem: str, ca_pem: str | None,
+    cert_pem: str,
+    key_pem: str,
+    ca_pem: str | None,
 ) -> None:
     """Write certificate files to /etc/ssl/mailcue/ (synchronous)."""
     CERT_DIR.mkdir(parents=True, exist_ok=True)
@@ -150,7 +150,9 @@ def _write_certs_to_disk_sync(
 
 
 async def _write_certs_to_disk(
-    cert_pem: str, key_pem: str, ca_pem: str | None,
+    cert_pem: str,
+    key_pem: str,
+    ca_pem: str | None,
 ) -> None:
     """Async wrapper — write cert files in a thread."""
     await asyncio.to_thread(_write_certs_to_disk_sync, cert_pem, key_pem, ca_pem)
@@ -169,7 +171,9 @@ async def _reload_tls_services() -> None:
             if proc.returncode != 0:
                 logger.warning(
                     "%s reload failed (rc=%d): %s",
-                    cmd[0], proc.returncode, stderr.decode().strip(),
+                    cmd[0],
+                    proc.returncode,
+                    stderr.decode().strip(),
                 )
         except FileNotFoundError:
             logger.debug("%s not found — skipping reload.", cmd[0])

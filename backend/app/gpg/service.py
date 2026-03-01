@@ -252,7 +252,8 @@ def _request_verify(token: str, addresses: list[str]) -> dict:
 
 
 async def publish_to_keyserver(
-    address: str, db: AsyncSession,
+    address: str,
+    db: AsyncSession,
 ) -> KeyserverPublishResponse:
     """Publish a GPG public key to keys.openpgp.org.
 
@@ -264,12 +265,11 @@ async def publish_to_keyserver(
     # Upload the public key
     try:
         upload_result = await asyncio.to_thread(
-            _upload_to_keyserver, export.public_key,
+            _upload_to_keyserver,
+            export.public_key,
         )
     except Exception as exc:
-        raise ValueError(
-            f"Failed to upload key to keys.openpgp.org: {exc}"
-        ) from exc
+        raise ValueError(f"Failed to upload key to keys.openpgp.org: {exc}") from exc
 
     token = upload_result.get("token")
     key_fpr = upload_result.get("key_fpr", export.fingerprint)
@@ -280,12 +280,14 @@ async def publish_to_keyserver(
             await asyncio.to_thread(_request_verify, token, [address])
             logger.info(
                 "Requested verification for %s on keys.openpgp.org (fpr=%s)",
-                address, key_fpr,
+                address,
+                key_fpr,
             )
         except Exception:
             logger.warning(
                 "Key uploaded but verification request failed for %s",
-                address, exc_info=True,
+                address,
+                exc_info=True,
             )
             return KeyserverPublishResponse(
                 published=True,

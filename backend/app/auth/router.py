@@ -182,7 +182,10 @@ async def login_2fa(
     try:
         secret = decrypt_totp_secret(user.totp_secret)
     except InvalidToken:
-        logger.warning("TOTP secret for user '%s' cannot be decrypted (secret key changed?). Resetting 2FA.", user.username)
+        logger.warning(
+            "TOTP secret for user '%s' cannot be decrypted (secret key changed?). Resetting 2FA.",
+            user.username,
+        )
         user.totp_enabled = False
         user.totp_secret = None
         await db.commit()
@@ -403,7 +406,10 @@ async def totp_disable(
     try:
         secret = decrypt_totp_secret(current_user.totp_secret)
     except InvalidToken:
-        logger.warning("TOTP secret for user '%s' cannot be decrypted. Force-disabling 2FA.", current_user.username)
+        logger.warning(
+            "TOTP secret for user '%s' cannot be decrypted. Force-disabling 2FA.",
+            current_user.username,
+        )
         current_user.totp_enabled = False
         current_user.totp_secret = None
         await db.commit()
