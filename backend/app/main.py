@@ -27,11 +27,14 @@ from app.emails.router import router as emails_router
 from app.events.router import router as events_router
 from app.exceptions import register_exception_handlers
 from app.gpg.models import GpgKey  # noqa: F401 — imported for table creation
-from app.system.models import ServerSettings, TlsCertificate  # noqa: F401 — imported for table creation
 from app.gpg.router import router as gpg_router
 from app.mailboxes.models import Mailbox
 from app.mailboxes.router import router as mailboxes_router
 from app.rate_limit import limiter
+from app.system.models import (  # noqa: F401 — imported for table creation
+    ServerSettings,
+    TlsCertificate,
+)
 from app.system.router import router as system_router
 
 logging.basicConfig(

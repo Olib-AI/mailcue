@@ -343,6 +343,25 @@ export interface UpdateServerSettingsRequest {
   hostname: string;
 }
 
+// --- API Key Types ---
+
+export interface APIKey {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+  is_active: boolean;
+}
+
+export interface APIKeyCreated extends APIKey {
+  key: string;
+}
+
+export interface CreateAPIKeyRequest {
+  name: string;
+}
+
 // --- TLS Certificate Types ---
 
 export interface TlsCertificateStatus {

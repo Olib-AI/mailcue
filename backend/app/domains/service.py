@@ -13,7 +13,6 @@ import dns.resolver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.domains.models import Domain
 from app.domains.schemas import DnsCheckResponse, DnsRecordInfo
 
