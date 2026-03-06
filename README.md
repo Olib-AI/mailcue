@@ -343,6 +343,26 @@ The frontend provides five main views:
 
 Real-time updates are delivered via SSE -- new emails appear instantly with toast notifications, and mailbox counts update automatically.
 
+### Screenshots
+
+**Inbox with rich HTML email preview**
+
+<p align="center">
+  <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
+</p>
+
+**GPG-encrypted email with decrypted content**
+
+<p align="center">
+  <img src="examples/gpg-encrypted-email.png" alt="MailCue displaying a PGP-encrypted email with credentials" width="860" />
+</p>
+
+**Settings — GPG keys, TLS certificates, mail server, and domains**
+
+<p align="center">
+  <img src="examples/settings.png" alt="MailCue settings page with GPG keys, TLS certificate, mail server, and domain management tabs" width="860" />
+</p>
+
 ## Using with Email Clients
 
 MailCue works with any standard email client. Configure your client with:
