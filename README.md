@@ -14,6 +14,16 @@
 
 MailCue is an all-in-one email testing server that packages **Postfix**, **Dovecot**, **OpenDKIM**, a **FastAPI** REST API, and a **React** web UI into a single Docker container managed by **s6-overlay**. Unlike simple SMTP catchers, MailCue provides a fully-featured mail stack -- complete with IMAP/POP3 access, DKIM signing, TLS, GPG encryption, and a modern web interface -- so you can test email workflows exactly as they will behave in production.
 
+<p align="center">
+  <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
+</p>
+<p align="center">
+  <img src="examples/gpg-encrypted-email.png" alt="MailCue displaying a PGP-encrypted email with credentials" width="860" />
+</p>
+<p align="center">
+  <img src="examples/settings.png" alt="MailCue settings page with GPG keys, TLS certificate, mail server, and domain management tabs" width="860" />
+</p>
+
 ## Features
 
 | Category | What you get |
@@ -342,26 +352,6 @@ The frontend provides five main views:
 - **Admin** -- Mailbox management (create/delete with statistics) and email injection with custom headers and HTML/plain text editor.
 
 Real-time updates are delivered via SSE -- new emails appear instantly with toast notifications, and mailbox counts update automatically.
-
-### Screenshots
-
-**Inbox with rich HTML email preview**
-
-<p align="center">
-  <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
-</p>
-
-**GPG-encrypted email with decrypted content**
-
-<p align="center">
-  <img src="examples/gpg-encrypted-email.png" alt="MailCue displaying a PGP-encrypted email with credentials" width="860" />
-</p>
-
-**Settings — GPG keys, TLS certificates, mail server, and domains**
-
-<p align="center">
-  <img src="examples/settings.png" alt="MailCue settings page with GPG keys, TLS certificate, mail server, and domain management tabs" width="860" />
-</p>
 
 ## Using with Email Clients
 
