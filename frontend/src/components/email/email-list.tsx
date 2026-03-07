@@ -1,10 +1,20 @@
+import { useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Inbox, Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import {
+  Inbox,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  Trash2,
+  CheckSquare,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmailItem } from "./email-item";
-import { useEmails } from "@/hooks/use-emails";
+import { useEmails, useBulkDeleteEmails } from "@/hooks/use-emails";
 import { useUIStore } from "@/stores/ui-store";
 
 function EmailListSkeleton() {
@@ -30,8 +40,12 @@ function EmailListSkeleton() {
 function EmailList() {
   const [searchParams] = useSearchParams();
   const search = searchParams.get("search") ?? undefined;
-  const { selectedMailbox, selectedFolder, selectedEmailUid, setSelectedEmailUid } =
-    useUIStore();
+  const {
+    selectedMailbox,
+    selectedFolder,
+    selectedEmailUid,
+    setSelectedEmailUid,
+  } = useUIStore();
 
   const { data, isLoading, isError, error, refetch, isFetching } = useEmails(
     selectedMailbox,
@@ -39,6 +53,70 @@ function EmailList() {
     1,
     search
   );
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
+  const bulkDelete = useBulkDeleteEmails();
+
+  const emails = useMemo(() => data?.emails ?? [], [data?.emails]);
+
+  const handleCheckChange = useCallback((uid: string, checked: boolean) => {
+    setSelectedUids((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(uid);
+      } else {
+        next.delete(uid);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (selectedUids.size === emails.length) {
+      setSelectedUids(new Set());
+    } else {
+      setSelectedUids(new Set(emails.map((e) => e.uid)));
+    }
+  }, [emails, selectedUids.size]);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedUids(new Set());
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    if (!selectedMailbox || selectedUids.size === 0) return;
+    const uids = Array.from(selectedUids);
+    bulkDelete.mutate(
+      { mailbox: selectedMailbox, uids, folder: selectedFolder },
+      {
+        onSuccess: (result) => {
+          toast.success(
+            `${result.deleted} email${result.deleted !== 1 ? "s" : ""} deleted${result.failed > 0 ? `, ${result.failed} failed` : ""}`
+          );
+          // Clear selection for deleted items
+          if (selectedEmailUid && selectedUids.has(selectedEmailUid)) {
+            setSelectedEmailUid(null);
+          }
+          exitSelectionMode();
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to delete emails"
+          );
+        },
+      }
+    );
+  }, [
+    selectedMailbox,
+    selectedUids,
+    selectedFolder,
+    selectedEmailUid,
+    bulkDelete,
+    setSelectedEmailUid,
+    exitSelectionMode,
+  ]);
 
   if (!selectedMailbox) {
     return (
@@ -74,8 +152,6 @@ function EmailList() {
     );
   }
 
-  const emails = data?.emails ?? [];
-
   if (emails.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
@@ -97,13 +173,70 @@ function EmailList() {
   return (
     <div className="flex flex-col h-full">
       {/* List header */}
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-xs text-muted-foreground">
-          {data?.total ?? 0} email{(data?.total ?? 0) !== 1 ? "s" : ""}
-          {search && ` matching "${search}"`}
-        </span>
-        {isFetching && !isLoading && (
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-between border-b px-3 py-2 gap-2">
+        {selectionMode ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={handleSelectAll}
+              >
+                {selectedUids.size === emails.length
+                  ? "Deselect all"
+                  : "Select all"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                {selectedUids.size} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={handleBulkDelete}
+                disabled={selectedUids.size === 0 || bulkDelete.isPending}
+              >
+                {bulkDelete.isPending ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-1 h-3 w-3" />
+                )}
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={exitSelectionMode}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="text-xs text-muted-foreground">
+              {data?.total ?? 0} email{(data?.total ?? 0) !== 1 ? "s" : ""}
+              {search && ` matching "${search}"`}
+            </span>
+            <div className="flex items-center gap-1">
+              {isFetching && !isLoading && (
+                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setSelectionMode(true)}
+                title="Select emails"
+              >
+                <CheckSquare className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </>
         )}
       </div>
 
@@ -115,6 +248,9 @@ function EmailList() {
             email={email}
             isSelected={selectedEmailUid === email.uid}
             onSelect={setSelectedEmailUid}
+            selectionMode={selectionMode}
+            isChecked={selectedUids.has(email.uid)}
+            onCheckChange={handleCheckChange}
           />
         ))}
 

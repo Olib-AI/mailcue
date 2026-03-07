@@ -10,6 +10,7 @@ import {
   Mail,
   AlertCircle,
   RefreshCw,
+  Eraser,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,12 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useMailboxes, useCreateMailbox, useDeleteMailbox } from "@/hooks/use-mailboxes";
+import {
+  useMailboxes,
+  useCreateMailbox,
+  useDeleteMailbox,
+  usePurgeMailbox,
+} from "@/hooks/use-mailboxes";
 import { formatEmailDate } from "@/lib/utils";
 
 const createMailboxSchema = z.object({
@@ -45,8 +51,10 @@ function MailboxManager() {
   const { data, isLoading, isError, error, refetch } = useMailboxes();
   const createMailbox = useCreateMailbox();
   const deleteMailbox = useDeleteMailbox();
+  const purgeMailbox = usePurgeMailbox();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
 
   const {
     register,
@@ -94,6 +102,23 @@ function MailboxManager() {
       },
     });
   }, [deleteTarget, deleteMailbox]);
+
+  const handlePurge = useCallback(() => {
+    if (!purgeTarget) return;
+    purgeMailbox.mutate(purgeTarget, {
+      onSuccess: (result) => {
+        toast.success(
+          `Cleaned ${purgeTarget}: ${result.deleted} email${result.deleted !== 1 ? "s" : ""} removed`
+        );
+        setPurgeTarget(null);
+      },
+      onError: (err) => {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to clean mailbox"
+        );
+      },
+    });
+  }, [purgeTarget, purgeMailbox]);
 
   const mailboxes = data?.mailboxes ?? [];
 
@@ -168,15 +193,29 @@ function MailboxManager() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="truncate">{mailbox.address}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                    onClick={() => setDeleteTarget(mailbox.address)}
-                    aria-label={`Delete ${mailbox.address}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-orange-600"
+                      onClick={() => setPurgeTarget(mailbox.address)}
+                      disabled={mailbox.email_count === 0}
+                      aria-label={`Clean ${mailbox.address}`}
+                      title="Delete all emails"
+                    >
+                      <Eraser className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteTarget(mailbox.address)}
+                      aria-label={`Delete ${mailbox.address}`}
+                      title="Delete mailbox"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -316,6 +355,40 @@ function MailboxManager() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Purge Confirmation Dialog */}
+      <Dialog
+        open={purgeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setPurgeTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clean Mailbox</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete all emails from{" "}
+              <strong>{purgeTarget}</strong>? This will permanently remove
+              every email in all folders. The mailbox itself will be kept.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurgeTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handlePurge}
+              disabled={purgeMailbox.isPending}
+            >
+              {purgeMailbox.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Delete All Emails
             </Button>
           </DialogFooter>
         </DialogContent>

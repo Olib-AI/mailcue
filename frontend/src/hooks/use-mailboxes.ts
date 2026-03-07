@@ -18,7 +18,7 @@ export function useMailboxes() {
   return useQuery({
     queryKey: mailboxKeys.list(),
     queryFn: () => api.get<MailboxListResponse>("/mailboxes"),
-    staleTime: 60_000,
+    staleTime: 10_000,
   });
 }
 
@@ -40,6 +40,20 @@ export function useDeleteMailbox() {
   return useMutation({
     mutationFn: (address: string) =>
       api.delete<void>(`/mailboxes/${encodeURIComponent(address)}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function usePurgeMailbox() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (address: string) =>
+      api.post<{ deleted: number }>(
+        `/mailboxes/${encodeURIComponent(address)}/purge`
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
     },

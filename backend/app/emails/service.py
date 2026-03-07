@@ -22,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.emails.parser import parse_email_async, parse_email_summary
 from app.emails.schemas import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
     BulkInjectRequest,
     BulkInjectResponse,
     EmailDetail,
@@ -481,6 +483,59 @@ async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
         )
     finally:
         await _imap_disconnect(imap)
+
+
+async def bulk_delete_emails(
+    mailbox: str, request: BulkDeleteRequest, folder: str = "INBOX"
+) -> BulkDeleteResponse:
+    """Delete multiple emails by UID from a mailbox."""
+    deleted = 0
+    failed = 0
+    for uid in request.uids:
+        try:
+            await delete_email(mailbox=mailbox, uid=uid, folder=folder)
+            deleted += 1
+        except Exception:
+            logger.exception("Failed to delete email uid=%s from %s", uid, mailbox)
+            failed += 1
+    return BulkDeleteResponse(deleted=deleted, failed=failed)
+
+
+async def purge_mailbox(mailbox: str) -> int:
+    """Delete ALL emails from every folder in a mailbox. Returns count deleted."""
+    from app.mailboxes.service import _imap_get_folder_stats
+
+    folders = await _imap_get_folder_stats(mailbox)
+    total_deleted = 0
+
+    for folder_info in folders:
+        if folder_info.message_count == 0:
+            continue
+        imap = await _imap_connect(mailbox)
+        try:
+            await imap.select(folder_info.name)
+            _status, data = await imap.uid_search("ALL")
+            if not data or not data[0]:
+                continue
+            raw_uids = data[0] if isinstance(data[0], str) else data[0].decode()
+            uid_list = raw_uids.split()
+            if not uid_list:
+                continue
+            uid_set = ",".join(uid_list)
+            await imap.uid("store", uid_set, "+FLAGS", "(\\Deleted)")
+            await imap.expunge()
+            total_deleted += len(uid_list)
+        finally:
+            await _imap_disconnect(imap)
+
+    if total_deleted > 0:
+        await event_bus.publish(
+            "email.deleted",
+            {"mailbox": mailbox, "uid": "*", "purged": total_deleted},
+        )
+
+    logger.info("Purged %d emails from mailbox %s", total_deleted, mailbox)
+    return total_deleted
 
 
 # ── Search ───────────────────────────────────────────────────────

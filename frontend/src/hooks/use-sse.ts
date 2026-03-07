@@ -36,6 +36,9 @@ export function useSSE(enabled: boolean): void {
             void queryClient.invalidateQueries({
               queryKey: emailKeys.lists(),
             });
+            void queryClient.invalidateQueries({
+              queryKey: mailboxKeys.list(),
+            });
             try {
               const data = JSON.parse(event.data) as EmailReceivedEvent;
               toast.info("New email received", {
@@ -49,6 +52,9 @@ export function useSSE(enabled: boolean): void {
           case "email.deleted": {
             void queryClient.invalidateQueries({
               queryKey: emailKeys.lists(),
+            });
+            void queryClient.invalidateQueries({
+              queryKey: mailboxKeys.list(),
             });
             break;
           }

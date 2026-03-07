@@ -98,3 +98,16 @@ class BulkInjectResponse(BaseModel):
     injected: int
     failed: int
     ids: list[str]
+
+
+class BulkDeleteRequest(BaseModel):
+    """Delete multiple emails from a mailbox."""
+
+    uids: list[str]
+
+
+class BulkDeleteResponse(BaseModel):
+    """Result of a bulk delete operation."""
+
+    deleted: int
+    failed: int

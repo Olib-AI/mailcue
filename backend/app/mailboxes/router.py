@@ -11,8 +11,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
-from app.emails.schemas import EmailDetail, EmailListResponse
-from app.emails.service import delete_email, get_email, list_emails
+from app.emails.schemas import (
+    BulkDeleteRequest,
+    BulkDeleteResponse,
+    EmailDetail,
+    EmailListResponse,
+)
+from app.emails.service import (
+    bulk_delete_emails,
+    delete_email,
+    get_email,
+    list_emails,
+    purge_mailbox,
+)
 from app.mailboxes.schemas import (
     MailboxCreateRequest,
     MailboxListResponse,
@@ -127,6 +138,20 @@ async def mailbox_stats(
     return await get_mailbox_stats(mailbox_id, db)
 
 
+@router.post("/{address}/purge")
+async def purge_mailbox_emails(
+    address: str,
+    _admin: User = Depends(require_admin),
+) -> dict[str, int]:
+    """Delete all emails from a mailbox across all folders.
+
+    **Admin only.** The mailbox itself is preserved.
+    """
+    decoded = unquote(address)
+    deleted = await purge_mailbox(decoded)
+    return {"deleted": deleted}
+
+
 # ── Nested email routes (under /mailboxes/{mailbox_address}/emails) ──────
 
 
@@ -163,6 +188,21 @@ async def get_mailbox_email(
     """Fetch a single email by UID from a specific mailbox."""
     decoded = unquote(mailbox_address)
     return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
+
+
+@router.post(
+    "/{mailbox_address}/emails/bulk-delete",
+    response_model=BulkDeleteResponse,
+)
+async def bulk_delete_mailbox_emails(
+    mailbox_address: str,
+    body: BulkDeleteRequest,
+    folder: str = Query("INBOX"),
+    _user: User = Depends(get_current_user),
+) -> BulkDeleteResponse:
+    """Delete multiple emails by UID from a specific mailbox."""
+    decoded = unquote(mailbox_address)
+    return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
 
 
 @router.delete("/{mailbox_address}/emails/{uid}", status_code=status.HTTP_204_NO_CONTENT)

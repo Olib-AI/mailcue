@@ -5,6 +5,7 @@ import {
   keepPreviousData,
 } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { mailboxKeys } from "./use-mailboxes";
 import type {
   EmailListResponse,
   EmailDetail,
@@ -74,6 +75,8 @@ export function useEmail(mailbox: string | null, uid: string | null) {
           };
         }
       );
+      // Also refresh mailbox counts (unread_count changed)
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
       return detail;
     },
     enabled: !!mailbox && uid !== null,
@@ -89,6 +92,7 @@ export function useSendEmail() {
       api.post<{ message_id: string }>("/emails/send", data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
     },
   });
 }
@@ -101,6 +105,7 @@ export function useInjectEmail() {
       api.post<{ uid: string }>("/emails/inject", data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
     },
   });
 }
@@ -120,6 +125,31 @@ export function useDeleteEmail() {
     }) => api.delete<void>(`/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}?folder=${encodeURIComponent(folder)}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function useBulkDeleteEmails() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mailbox,
+      uids,
+      folder = "INBOX",
+    }: {
+      mailbox: string;
+      uids: string[];
+      folder?: string;
+    }) =>
+      api.post<{ deleted: number; failed: number }>(
+        `/mailboxes/${encodeURIComponent(mailbox)}/emails/bulk-delete?folder=${encodeURIComponent(folder)}`,
+        { uids }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
     },
   });
 }
