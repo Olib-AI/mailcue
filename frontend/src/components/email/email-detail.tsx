@@ -50,7 +50,8 @@ function EmailDetail() {
     useUIStore();
   const { data: email, isLoading, isError, error, refetch } = useEmail(
     selectedMailbox,
-    selectedEmailUid
+    selectedEmailUid,
+    selectedFolder
   );
   const deleteEmail = useDeleteEmail();
   const [showAllHeaders, setShowAllHeaders] = useState(false);

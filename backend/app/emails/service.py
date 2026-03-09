@@ -126,7 +126,7 @@ async def list_emails(
             "fetch", uid_set, "(FLAGS BODY.PEEK[HEADER] RFC822.SIZE)"
         )
 
-        items: list[EmailSummary] = []
+        items_by_uid: dict[str, EmailSummary] = {}
         current_uid = ""
         current_flags = ""
         for line in fetch_data:
@@ -153,7 +153,11 @@ async def list_emails(
                     mailbox=mailbox,
                     is_read=is_read,
                 )
-                items.append(summary)
+                items_by_uid[current_uid] = summary
+
+        # Re-sort items to match the requested page_uids order (IMAP FETCH
+        # returns results in ascending UID order regardless of request order).
+        items = [items_by_uid[u] for u in page_uids if u in items_by_uid]
 
         return EmailListResponse(
             total=total,

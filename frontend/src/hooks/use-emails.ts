@@ -52,14 +52,15 @@ export function useEmails(
   });
 }
 
-export function useEmail(mailbox: string | null, uid: string | null) {
+export function useEmail(mailbox: string | null, uid: string | null, folder: string = "INBOX") {
   const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: emailKeys.detail(mailbox ?? "", uid ?? ""),
     queryFn: async () => {
+      const params = new URLSearchParams({ folder });
       const detail = await api.get<EmailDetail>(
-        `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails/${encodeURIComponent(uid ?? "")}`
+        `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails/${encodeURIComponent(uid ?? "")}?${params.toString()}`
       );
       // Backend marks email as read (\Seen) on fetch — update the list cache
       // so the unread indicator disappears immediately without a full refetch.
