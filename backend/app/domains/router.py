@@ -168,12 +168,7 @@ async def mta_sts_policy(
     for each managed domain.
     """
     hostname = await get_server_hostname(db)
-    return (
-        f"version: STSv1\n"
-        f"mode: testing\n"
-        f"mx: {hostname}\n"
-        f"max_age: 86400\n"
-    )
+    return f"version: STSv1\nmode: testing\nmx: {hostname}\nmax_age: 86400\n"
 
 
 @router.post("/{name}/verify-dns", response_model=DnsCheckResponse)

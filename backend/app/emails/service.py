@@ -634,9 +634,7 @@ def _generate_realistic_headers(
     sig_placeholder = _b64_token(48)
 
     msg["ARC-Seal"] = (
-        f"i=1; a=rsa-sha256; t={now_ts}; cv=none;\r\n"
-        f"\td={domain}; s=arc-{year};\r\n"
-        f"\tb={arc_b64}"
+        f"i=1; a=rsa-sha256; t={now_ts}; cv=none;\r\n\td={domain}; s=arc-{year};\r\n\tb={arc_b64}"
     )
     msg["ARC-Message-Signature"] = (
         f"i=1; a=rsa-sha256; c=relaxed/relaxed;\r\n"

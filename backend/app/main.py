@@ -157,13 +157,9 @@ def create_app() -> FastAPI:
     ) -> str:
         """Serve MTA-STS policy at the RFC-mandated path."""
         from app.system.service import get_server_hostname
+
         hostname = await get_server_hostname(db)
-        return (
-            f"version: STSv1\n"
-            f"mode: testing\n"
-            f"mx: {hostname}\n"
-            f"max_age: 86400\n"
-        )
+        return f"version: STSv1\nmode: testing\nmx: {hostname}\nmax_age: 86400\n"
 
     return app
 
