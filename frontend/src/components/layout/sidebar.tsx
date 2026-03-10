@@ -15,6 +15,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { MailCueLogo } from "@/components/mailcue-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -91,11 +92,13 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
     >
       {/* Logo / Brand */}
       <div className="flex h-14 items-center justify-between border-b px-3">
-        {!sidebarCollapsed && (
+        {!sidebarCollapsed ? (
           <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-primary" />
+            <MailCueLogo className="h-6 w-6" showBadge={false} />
             <span className="font-semibold text-lg">MailCue</span>
           </div>
+        ) : (
+          <MailCueLogo className="h-6 w-6" showBadge={false} />
         )}
         <Button
           variant="ghost"
@@ -289,6 +292,19 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             </kbd>
           )}
         </button>
+        {!sidebarCollapsed && (
+          <p className="px-2.5 pt-1 text-[10px] text-sidebar-foreground/40">
+            by{" "}
+            <a
+              href="https://www.olib.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-sidebar-foreground/70 transition-colors"
+            >
+              Olib AI
+            </a>
+          </p>
+        )}
       </div>
     </aside>
   );

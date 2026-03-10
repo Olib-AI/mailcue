@@ -1,6 +1,6 @@
 <p align="center">
   <br />
-  <strong>MailCue</strong>
+  <img src="logo.svg" alt="MailCue" width="320" />
   <br />
   <em>A realistic email testing server in a single Docker container.</em>
   <br /><br />

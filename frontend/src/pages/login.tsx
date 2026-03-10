@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect } from "react";
-import { Mail } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -9,6 +8,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { LoginForm } from "@/components/auth/login-form";
+import { MailCueLogo } from "@/components/mailcue-logo";
 import { useAuth } from "@/hooks/use-auth";
 
 function LoginPage() {
@@ -31,8 +31,8 @@ function LoginPage() {
       <div className="w-full max-w-sm space-y-6">
         {/* Branding */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center rounded-xl bg-primary p-2.5">
-            <Mail className="h-6 w-6 text-primary-foreground" />
+          <div className="inline-flex items-center justify-center">
+            <MailCueLogo className="h-14 w-14" />
           </div>
           <h1 className="text-2xl font-bold">MailCue</h1>
           <p className="text-sm text-muted-foreground">
@@ -55,7 +55,15 @@ function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground">
-          MailCue v1.0
+          by{" "}
+          <a
+            href="https://www.olib.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-foreground transition-colors"
+          >
+            Olib AI
+          </a>
         </p>
       </div>
     </div>
