@@ -5,4 +5,7 @@ exec 2>&1
 mkdir -p /var/run/opendmarc
 chown opendmarc:opendmarc /var/run/opendmarc
 
+# Add postfix to opendmarc group so it can connect to the milter socket
+adduser postfix opendmarc 2>/dev/null || true
+
 exec /usr/sbin/opendmarc -f -c /etc/opendmarc/opendmarc.conf

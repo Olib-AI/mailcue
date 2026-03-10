@@ -876,7 +876,68 @@ test_send_headers() {
 }
 
 # =============================================================================
-# 18. MTA-STS POLICY ENDPOINT
+# 18. DKIM SIGNING VERIFICATION
+# =============================================================================
+test_dkim_signing() {
+  section "DKIM Signing (Real)"
+
+  # Send an email via SMTP and verify it gets a real DKIM-Signature from OpenDKIM
+  http POST "${API}/emails/send" -d "{
+    \"from_address\": \"admin@${DOMAIN}\",
+    \"to_addresses\": [\"${TEST_MAILBOX}\"],
+    \"subject\": \"DKIM signing verification test\",
+    \"body\": \"This email should be DKIM-signed by OpenDKIM.\",
+    \"body_type\": \"plain\"
+  }"
+
+  if [ "$CODE" -ge 200 ] 2>/dev/null && [ "$CODE" -le 202 ] 2>/dev/null; then
+    pass "Send DKIM test email — $CODE"
+  else
+    fail "Send DKIM test email" "code: $CODE, resp: $BODY"
+    return
+  fi
+
+  # Wait for delivery
+  sleep 5
+
+  # Find the email
+  http GET "${API}/emails?mailbox=${TEST_MAILBOX}&search=DKIM+signing+verification"
+  local dkim_uid
+  dkim_uid=$(echo "$BODY" | jq -r '.emails[0].uid // empty' 2>/dev/null)
+
+  if [ -z "$dkim_uid" ]; then
+    fail "DKIM email delivery" "not found in inbox"
+    return
+  fi
+
+  # Get raw .eml and check for real DKIM-Signature
+  local raw_eml
+  raw_eml=$(curl -s "${API}/emails/${dkim_uid}/raw?mailbox=${TEST_MAILBOX}" \
+    -H "Authorization: Bearer ${TOKEN}")
+
+  if echo "$raw_eml" | grep -q "^DKIM-Signature:"; then
+    pass "DKIM-Signature header present on SMTP-sent email"
+  else
+    fail "DKIM-Signature header" "not found in raw email"
+  fi
+
+  # Verify it's signed for the correct domain
+  if echo "$raw_eml" | grep -q "d=${DOMAIN}"; then
+    pass "DKIM-Signature domain matches ${DOMAIN}"
+  else
+    fail "DKIM domain" "d=${DOMAIN} not found in signature"
+  fi
+
+  # Verify rsa-sha256 algorithm
+  if echo "$raw_eml" | grep -q "a=rsa-sha256"; then
+    pass "DKIM algorithm is rsa-sha256"
+  else
+    fail "DKIM algorithm" "rsa-sha256 not found"
+  fi
+}
+
+# =============================================================================
+# 19. MTA-STS POLICY ENDPOINT
 # =============================================================================
 test_mta_sts() {
   section "MTA-STS Policy Endpoint"
@@ -1040,6 +1101,7 @@ test_gpg
 test_gpg_operations
 test_realistic_headers
 test_send_headers
+test_dkim_signing
 test_mta_sts
 test_domains
 test_sse

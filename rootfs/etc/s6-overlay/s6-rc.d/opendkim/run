@@ -8,5 +8,8 @@ exec 2>&1
 mkdir -p /var/run/opendkim
 chown opendkim:opendkim /var/run/opendkim
 
+# Add postfix to opendkim group so it can connect to the milter socket
+adduser postfix opendkim 2>/dev/null || true
+
 # -f = foreground mode
 exec /usr/sbin/opendkim -f -x /etc/opendkim/opendkim.conf

@@ -53,6 +53,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         postfix-policyd-spf-python \
         spamassassin \
         spamc \
+        spamd \
     && rm -rf /var/lib/apt/lists/*
 
 # opendmarc postinst tries to restart the service which fails in Docker.
