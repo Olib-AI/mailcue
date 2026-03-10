@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     login_rate_limit: str = "5/minute"
     sensitive_rate_limit: str = "10/minute"
 
+    # ── Relay / Smarthost ─────────────────────────────────────────
+    relay_host: str = ""
+    relay_port: int = 587
+    relay_user: str = ""
+    relay_password: str = ""
+
     # ── Hostname (used for MX verification) ─────────────────────
     hostname: str = "mail.mailcue.local"
 

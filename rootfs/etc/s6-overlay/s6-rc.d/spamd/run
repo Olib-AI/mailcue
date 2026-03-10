@@ -1,0 +1,4 @@
+#!/bin/sh
+exec 2>&1
+
+exec /usr/sbin/spamd --nouser-config --max-children=2 --listen=127.0.0.1:783

@@ -153,6 +153,40 @@ async def _check_dmarc(domain_name: str) -> tuple[bool, str | None]:
         return False, None
 
 
+async def _check_mta_sts(domain_name: str) -> tuple[bool, str | None]:
+    """Check if _mta-sts TXT record exists."""
+    mta_sts_domain = f"_mta-sts.{domain_name}"
+    try:
+        answers = await asyncio.to_thread(dns.resolver.resolve, mta_sts_domain, "TXT")
+        for rdata in answers:
+            txt = str(rdata).strip('"')
+            if txt.startswith("v=STSv1"):
+                return True, txt
+        return False, None
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, None
+    except Exception as exc:
+        logger.debug("MTA-STS check for %s failed: %s", mta_sts_domain, exc)
+        return False, None
+
+
+async def _check_tls_rpt(domain_name: str) -> tuple[bool, str | None]:
+    """Check if _smtp._tls TXT record exists (TLS-RPT, RFC 8460)."""
+    tls_rpt_domain = f"_smtp._tls.{domain_name}"
+    try:
+        answers = await asyncio.to_thread(dns.resolver.resolve, tls_rpt_domain, "TXT")
+        for rdata in answers:
+            txt = str(rdata).strip('"')
+            if txt.startswith("v=TLSRPTv1"):
+                return True, txt
+        return False, None
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, None
+    except Exception as exc:
+        logger.debug("TLS-RPT check for %s failed: %s", tls_rpt_domain, exc)
+        return False, None
+
+
 # ── Config management ────────────────────────────────────────────
 
 
@@ -272,6 +306,38 @@ def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
             verified=domain.dmarc_verified,
             purpose="DMARC policy for handling authentication failures",
         ),
+        # MTA-STS policy record (RFC 8461)
+        DnsRecordInfo(
+            record_type="TXT",
+            hostname=f"_mta-sts.{domain.name}",
+            expected_value=f"v=STSv1; id={int(datetime.now(UTC).timestamp())}",
+            verified=domain.mta_sts_verified,
+            purpose="MTA-STS policy enabling strict TLS for inbound email (RFC 8461)",
+        ),
+        # TLS-RPT reporting record (RFC 8460)
+        DnsRecordInfo(
+            record_type="TXT",
+            hostname=f"_smtp._tls.{domain.name}",
+            expected_value=f"v=TLSRPTv1; rua=mailto:tls-reports@{domain.name}",
+            verified=domain.tls_rpt_verified,
+            purpose="TLS reporting — receive reports about TLS connection failures (RFC 8460)",
+        ),
+        # PTR (reverse DNS) guidance — informational only
+        DnsRecordInfo(
+            record_type="PTR",
+            hostname="(Configure at your VPS/hosting provider)",
+            expected_value=hostname,
+            verified=False,
+            purpose="Reverse DNS — critical for deliverability. Set your server IP's PTR record to match the hostname",
+        ),
+        # A record guidance
+        DnsRecordInfo(
+            record_type="A",
+            hostname=hostname,
+            expected_value="(Your server's public IPv4 address)",
+            verified=False,
+            purpose="Points your mail hostname to your server's IP address",
+        ),
     ]
     return records
 
@@ -343,24 +409,45 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
     hostname = await get_server_hostname(db)
 
     # Run all checks concurrently
-    mx_result, spf_result, dkim_result, dmarc_result = await asyncio.gather(
+    (
+        mx_result,
+        spf_result,
+        dkim_result,
+        dmarc_result,
+        mta_sts_result,
+        tls_rpt_result,
+    ) = await asyncio.gather(
         _check_mx(domain.name, hostname),
         _check_spf(domain.name),
         _check_dkim(domain.name, domain.dkim_selector, domain.dkim_public_key_txt),
         _check_dmarc(domain.name),
+        _check_mta_sts(domain.name),
+        _check_tls_rpt(domain.name),
     )
 
     domain.mx_verified = mx_result[0]
     domain.spf_verified = spf_result[0]
     domain.dkim_verified = dkim_result[0]
     domain.dmarc_verified = dmarc_result[0]
+    domain.mta_sts_verified = mta_sts_result[0]
+    domain.tls_rpt_verified = tls_rpt_result[0]
     domain.last_dns_check = datetime.now(UTC)
     await db.commit()
 
     # Build DNS records with current values
     records = _build_dns_records(domain, hostname)
     # Attach current values from the check results
-    current_values = [mx_result[1], spf_result[1], dkim_result[1], dmarc_result[1]]
+    # Order matches _build_dns_records: MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, PTR, A
+    current_values: list[str | None] = [
+        mx_result[1],
+        spf_result[1],
+        dkim_result[1],
+        dmarc_result[1],
+        mta_sts_result[1],
+        tls_rpt_result[1],
+        None,  # PTR — informational only
+        None,  # A — informational only
+    ]
     for record, current_value in zip(records, current_values, strict=False):
         record.current_value = current_value
 
@@ -370,6 +457,8 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
             domain.spf_verified,
             domain.dkim_verified,
             domain.dmarc_verified,
+            domain.mta_sts_verified,
+            domain.tls_rpt_verified,
         ]
     )
 
@@ -378,6 +467,8 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
         spf_verified=domain.spf_verified,
         dkim_verified=domain.dkim_verified,
         dmarc_verified=domain.dmarc_verified,
+        mta_sts_verified=domain.mta_sts_verified,
+        tls_rpt_verified=domain.tls_rpt_verified,
         all_verified=all_verified,
         dns_records=records,
     )

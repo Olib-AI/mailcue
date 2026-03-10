@@ -64,6 +64,8 @@ class DomainResponse(BaseModel):
     spf_verified: bool
     dkim_verified: bool
     dmarc_verified: bool
+    mta_sts_verified: bool
+    tls_rpt_verified: bool
     last_dns_check: datetime | None
     all_verified: bool
 
@@ -91,5 +93,7 @@ class DnsCheckResponse(BaseModel):
     spf_verified: bool
     dkim_verified: bool
     dmarc_verified: bool
+    mta_sts_verified: bool = False
+    tls_rpt_verified: bool = False
     all_verified: bool
     dns_records: list[DnsRecordInfo]

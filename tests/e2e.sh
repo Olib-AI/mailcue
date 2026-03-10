@@ -731,7 +731,245 @@ test_gpg_operations() {
 }
 
 # =============================================================================
-# 16. SSE EVENTS
+# 16. REALISTIC EMAIL HEADERS
+# =============================================================================
+test_realistic_headers() {
+  section "Realistic Email Headers (Inject)"
+
+  # Inject email with realistic_headers=true (default)
+  http POST "${API}/emails/inject" -d "{
+    \"mailbox\": \"${TEST_MAILBOX}\",
+    \"from_address\": \"notifications@github.com\",
+    \"to_addresses\": [\"${TEST_MAILBOX}\"],
+    \"subject\": \"Realistic headers test\",
+    \"text_body\": \"Testing realistic email headers.\",
+    \"realistic_headers\": true,
+    \"reply_to\": \"reply@github.com\",
+    \"in_reply_to\": \"<original-msg-id@github.com>\",
+    \"references\": [\"<thread-root@github.com>\", \"<original-msg-id@github.com>\"],
+    \"cc_addresses\": [\"cc-user@example.com\"],
+    \"return_path\": \"bounce@github.com\"
+  }"
+  local uid
+  uid=$(echo "$BODY" | jq -r '.uid' 2>/dev/null)
+
+  if [ "$uid" = "null" ] || [ -z "$uid" ]; then
+    fail "Inject realistic email" "response: $BODY"
+    return
+  fi
+  pass "Inject realistic email — UID: $uid"
+
+  # Fetch the email and check headers
+  http GET "${API}/emails/${uid}?mailbox=${TEST_MAILBOX}"
+
+  # Check for multi-hop Received headers
+  local received
+  received=$(echo "$BODY" | jq -r '.raw_headers["Received"] // .raw_headers["received"] // empty' 2>/dev/null)
+  echo "$received" | grep -q "MailCue" && pass "Received header present (multi-hop)" || fail "Received header" "got: $received"
+
+  # Check Authentication-Results
+  local auth_results
+  auth_results=$(echo "$BODY" | jq -r '.raw_headers["Authentication-Results"] // .raw_headers["authentication-results"] // empty' 2>/dev/null)
+  echo "$auth_results" | grep -q "dkim=pass" && pass "Authentication-Results header (dkim=pass)" || fail "Authentication-Results" "got: $auth_results"
+
+  # Check ARC headers
+  local arc_seal
+  arc_seal=$(echo "$BODY" | jq -r '.raw_headers["ARC-Seal"] // .raw_headers["arc-seal"] // empty' 2>/dev/null)
+  [ -n "$arc_seal" ] && pass "ARC-Seal header present" || fail "ARC-Seal header" "missing"
+
+  local arc_msg_sig
+  arc_msg_sig=$(echo "$BODY" | jq -r '.raw_headers["ARC-Message-Signature"] // .raw_headers["arc-message-signature"] // empty' 2>/dev/null)
+  [ -n "$arc_msg_sig" ] && pass "ARC-Message-Signature header present" || fail "ARC-Message-Signature" "missing"
+
+  # Check DKIM-Signature (simulated)
+  local dkim_sig
+  dkim_sig=$(echo "$BODY" | jq -r '.raw_headers["DKIM-Signature"] // .raw_headers["dkim-signature"] // empty' 2>/dev/null)
+  echo "$dkim_sig" | grep -q "a=rsa-sha256" && pass "DKIM-Signature header (simulated)" || fail "DKIM-Signature" "got: $dkim_sig"
+
+  # Check Return-Path
+  local return_path
+  return_path=$(echo "$BODY" | jq -r '.raw_headers["Return-Path"] // .raw_headers["return-path"] // empty' 2>/dev/null)
+  echo "$return_path" | grep -q "bounce@github.com" && pass "Return-Path header" || fail "Return-Path" "got: $return_path"
+
+  # Check X-Mailer
+  local x_mailer
+  x_mailer=$(echo "$BODY" | jq -r '.raw_headers["X-Mailer"] // .raw_headers["x-mailer"] // empty' 2>/dev/null)
+  [ "$x_mailer" = "MailCue/1.0" ] && pass "X-Mailer header" || fail "X-Mailer" "got: $x_mailer"
+
+  # Check Reply-To
+  local reply_to
+  reply_to=$(echo "$BODY" | jq -r '.raw_headers["Reply-To"] // .raw_headers["reply-to"] // empty' 2>/dev/null)
+  [ "$reply_to" = "reply@github.com" ] && pass "Reply-To header" || fail "Reply-To" "got: $reply_to"
+
+  # Check In-Reply-To
+  local in_reply_to
+  in_reply_to=$(echo "$BODY" | jq -r '.raw_headers["In-Reply-To"] // .raw_headers["in-reply-to"] // empty' 2>/dev/null)
+  echo "$in_reply_to" | grep -q "original-msg-id" && pass "In-Reply-To header (threading)" || fail "In-Reply-To" "got: $in_reply_to"
+
+  # Check References
+  local references
+  references=$(echo "$BODY" | jq -r '.raw_headers["References"] // .raw_headers["references"] // empty' 2>/dev/null)
+  echo "$references" | grep -q "thread-root" && pass "References header (threading)" || fail "References" "got: $references"
+
+  # Check Cc
+  local cc
+  cc=$(echo "$BODY" | jq -r '.raw_headers["Cc"] // .raw_headers["cc"] // empty' 2>/dev/null)
+  echo "$cc" | grep -q "cc-user@example.com" && pass "Cc header" || fail "Cc header" "got: $cc"
+
+  # Test with realistic_headers=false (backward compat)
+  http POST "${API}/emails/inject" -d "{
+    \"mailbox\": \"${TEST_MAILBOX}\",
+    \"from_address\": \"simple@example.com\",
+    \"to_addresses\": [\"${TEST_MAILBOX}\"],
+    \"subject\": \"Simple headers test\",
+    \"text_body\": \"Testing simple mode.\",
+    \"realistic_headers\": false
+  }"
+  local simple_uid
+  simple_uid=$(echo "$BODY" | jq -r '.uid' 2>/dev/null)
+  [ "$simple_uid" != "null" ] && [ -n "$simple_uid" ] \
+    && pass "Inject with realistic_headers=false — UID: $simple_uid" \
+    || fail "Simple inject" "response: $BODY"
+}
+
+# =============================================================================
+# 17. SEND EMAIL WITH THREADING HEADERS
+# =============================================================================
+test_send_headers() {
+  section "Send Email Headers (SMTP)"
+
+  # Send email with threading headers via SMTP
+  http POST "${API}/emails/send" -d "{
+    \"from_address\": \"admin@${DOMAIN}\",
+    \"to_addresses\": [\"${TEST_MAILBOX}\"],
+    \"subject\": \"Re: Threading test reply\",
+    \"body\": \"This is a reply with threading headers.\",
+    \"body_type\": \"plain\",
+    \"reply_to\": \"admin@${DOMAIN}\",
+    \"in_reply_to\": \"<original-thread@${DOMAIN}>\",
+    \"references\": [\"<original-thread@${DOMAIN}>\"]
+  }"
+  local msg_id
+  msg_id=$(echo "$BODY" | jq -r '.message_id // empty' 2>/dev/null)
+
+  if [ "$CODE" -ge 200 ] 2>/dev/null && [ "$CODE" -le 202 ] 2>/dev/null && [ -n "$msg_id" ]; then
+    pass "Send email with threading headers — $CODE"
+  else
+    fail "Send with threading headers" "code: $CODE, resp: $BODY"
+  fi
+
+  # Wait for delivery
+  sleep 4
+
+  # Verify it arrived with correct headers
+  http GET "${API}/emails?mailbox=${TEST_MAILBOX}&search=Threading+test+reply"
+  local found_uid
+  found_uid=$(echo "$BODY" | jq -r '.emails[0].uid // empty' 2>/dev/null)
+  if [ -n "$found_uid" ]; then
+    http GET "${API}/emails/${found_uid}?mailbox=${TEST_MAILBOX}"
+    local x_mailer
+    x_mailer=$(echo "$BODY" | jq -r '.raw_headers["X-Mailer"] // .raw_headers["x-mailer"] // empty' 2>/dev/null)
+    [ "$x_mailer" = "MailCue/1.0" ] && pass "SMTP sent email has X-Mailer header" || fail "SMTP X-Mailer" "got: $x_mailer"
+  else
+    fail "Threading email delivery" "not found in inbox"
+  fi
+}
+
+# =============================================================================
+# 18. MTA-STS POLICY ENDPOINT
+# =============================================================================
+test_mta_sts() {
+  section "MTA-STS Policy Endpoint"
+
+  # Test via domains router (legacy path)
+  http GET "${API}/domains/.well-known/mta-sts.txt"
+  if [ "$CODE" = "200" ]; then
+    echo "$BODY" | grep -q "version: STSv1" && pass "MTA-STS policy (API path) — version: STSv1" || fail "MTA-STS version" "got: $BODY"
+    echo "$BODY" | grep -q "mode: testing" && pass "MTA-STS policy (API path) — mode: testing" || fail "MTA-STS mode" "got: $BODY"
+    echo "$BODY" | grep -q "max_age:" && pass "MTA-STS policy (API path) — max_age present" || fail "MTA-STS max_age" "got: $BODY"
+  else
+    fail "MTA-STS endpoint (API path)" "code: $CODE"
+  fi
+
+  # Test via RFC-mandated root path: /.well-known/mta-sts.txt
+  http GET "${BASE_URL}/.well-known/mta-sts.txt"
+  if [ "$CODE" = "200" ]; then
+    echo "$BODY" | grep -q "version: STSv1" && pass "MTA-STS policy (root path) — version: STSv1" || fail "MTA-STS root version" "got: $BODY"
+  else
+    fail "MTA-STS endpoint (root /.well-known/)" "code: $CODE"
+  fi
+}
+
+# =============================================================================
+# 19. DOMAIN MANAGEMENT & DNS RECORDS
+# =============================================================================
+test_domains() {
+  section "Domain Management & DNS Records"
+
+  # Add domain
+  http POST "${API}/domains" -d "{\"name\": \"e2e-test-${RUN_ID}.example.com\", \"dkim_selector\": \"mail\"}"
+  local domain_name
+  domain_name=$(echo "$BODY" | jq -r '.name // empty' 2>/dev/null)
+
+  if [ "$CODE" = "201" ] && [ -n "$domain_name" ]; then
+    pass "Add domain — ${domain_name}"
+  else
+    fail "Add domain" "code: $CODE, response: $BODY"
+    return
+  fi
+
+  # Get domain detail — verify new DNS record types
+  http GET "${API}/domains/${domain_name}"
+  local record_count
+  record_count=$(echo "$BODY" | jq '.dns_records | length' 2>/dev/null)
+  [ "$record_count" -ge 8 ] && pass "Domain detail — $record_count DNS records (includes MTA-STS, TLS-RPT, PTR, A)" || fail "DNS record count" "expected >=8, got: $record_count"
+
+  # Check MTA-STS record present
+  local mta_sts_record
+  mta_sts_record=$(echo "$BODY" | jq -r '.dns_records[] | select(.hostname | contains("_mta-sts")) | .expected_value' 2>/dev/null)
+  echo "$mta_sts_record" | grep -q "v=STSv1" && pass "MTA-STS DNS record in domain detail" || fail "MTA-STS record" "got: $mta_sts_record"
+
+  # Check TLS-RPT record present
+  local tls_rpt_record
+  tls_rpt_record=$(echo "$BODY" | jq -r '.dns_records[] | select(.hostname | contains("_smtp._tls")) | .expected_value' 2>/dev/null)
+  echo "$tls_rpt_record" | grep -q "v=TLSRPTv1" && pass "TLS-RPT DNS record in domain detail" || fail "TLS-RPT record" "got: $tls_rpt_record"
+
+  # Check PTR guidance record present
+  local ptr_record
+  ptr_record=$(echo "$BODY" | jq -r '.dns_records[] | select(.record_type == "PTR") | .purpose' 2>/dev/null)
+  [ -n "$ptr_record" ] && pass "PTR guidance record in domain detail" || fail "PTR record" "missing"
+
+  # Check A record guidance present
+  local a_record
+  a_record=$(echo "$BODY" | jq -r '.dns_records[] | select(.record_type == "A") | .purpose' 2>/dev/null)
+  [ -n "$a_record" ] && pass "A record guidance in domain detail" || fail "A record" "missing"
+
+  # Check MTA-STS/TLS-RPT verified fields in response
+  local mta_sts_verified
+  mta_sts_verified=$(echo "$BODY" | jq -r '.mta_sts_verified' 2>/dev/null)
+  [ "$mta_sts_verified" = "false" ] && pass "mta_sts_verified field present (false — expected for test domain)" || fail "mta_sts_verified" "got: $mta_sts_verified"
+
+  # List domains
+  http GET "${API}/domains"
+  local total
+  total=$(echo "$BODY" | jq '.total' 2>/dev/null)
+  [ "$total" -ge 1 ] && pass "List domains — $total domain(s)" || fail "List domains" "total: $total"
+
+  # Verify DNS (will fail for fake domain, but endpoint should work)
+  http POST "${API}/domains/${domain_name}/verify-dns"
+  [ "$CODE" = "200" ] && pass "Verify DNS endpoint — 200 (checks run)" || fail "Verify DNS" "code: $CODE"
+
+  # Duplicate domain should fail
+  http POST "${API}/domains" -d "{\"name\": \"${domain_name}\", \"dkim_selector\": \"mail\"}"
+  [ "$CODE" = "409" ] && pass "Duplicate domain returns 409" || fail "Duplicate domain" "code: $CODE"
+
+  # Delete domain
+  http DELETE "${API}/domains/${domain_name}"
+  [ "$CODE" = "204" ] && pass "Delete domain — 204" || fail "Delete domain" "code: $CODE"
+}
+
+# =============================================================================
+# 20. SSE EVENTS
 # =============================================================================
 test_sse() {
   section "Server-Sent Events"
@@ -800,6 +1038,10 @@ test_pop3
 test_smtp_direct
 test_gpg
 test_gpg_operations
+test_realistic_headers
+test_send_headers
+test_mta_sts
+test_domains
 test_sse
 test_cleanup
 summary

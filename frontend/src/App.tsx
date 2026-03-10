@@ -9,6 +9,7 @@ import { MailPage } from "@/pages/mail";
 import { AdminPage } from "@/pages/admin";
 import { SettingsPage } from "@/pages/settings";
 import { ProfilePage } from "@/pages/profile";
+import { DevToolsPage } from "@/pages/dev-tools";
 import { useAuth } from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
@@ -45,6 +46,7 @@ function App() {
                 <Route path="/admin" element={<AdminPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/dev-tools" element={<DevToolsPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/mail" replace />} />

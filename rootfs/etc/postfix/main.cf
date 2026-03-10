@@ -85,6 +85,21 @@ milter_protocol = 6
 smtpd_milters = unix:/var/run/opendkim/opendkim.sock
 non_smtpd_milters = unix:/var/run/opendkim/opendkim.sock
 
+# --- OpenDMARC milter integration -------------------------------------------
+# Verify DMARC alignment on inbound mail. Added after OpenDKIM in the
+# milter chain so DKIM results are available for DMARC evaluation.
+# NOTE: Only active on port 25 (inbound); submission (587) skips this.
+
+
+# --- Smarthost / relay configuration ----------------------------------------
+# Uncomment and configure to relay outbound mail through an external service
+# (e.g., SendGrid, Mailgun, AWS SES) when port 25 is blocked.
+# relayhost = [smtp.sendgrid.net]:587
+# smtp_sasl_auth_enable = yes
+# smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+# smtp_sasl_security_options = noanonymous
+# smtp_tls_security_level = encrypt
+
 # --- Size limits -------------------------------------------------------------
 message_size_limit = 52428800
 mailbox_size_limit = 0

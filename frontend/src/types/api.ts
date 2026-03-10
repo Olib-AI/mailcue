@@ -109,6 +109,8 @@ export interface SendEmailRequest {
   body_type: "html" | "plain";
   sign?: boolean;
   encrypt?: boolean;
+  in_reply_to?: string;
+  references?: string[];
 }
 
 export interface InjectEmailRequest {
@@ -254,6 +256,8 @@ export interface Domain {
   spf_verified: boolean;
   dkim_verified: boolean;
   dmarc_verified: boolean;
+  mta_sts_verified: boolean;
+  tls_rpt_verified: boolean;
   last_dns_check: string | null;
   all_verified: boolean;
 }
@@ -287,6 +291,8 @@ export interface DnsCheckResponse {
   spf_verified: boolean;
   dkim_verified: boolean;
   dmarc_verified: boolean;
+  mta_sts_verified: boolean;
+  tls_rpt_verified: boolean;
   all_verified: boolean;
   dns_records: DnsRecordInfo[];
 }

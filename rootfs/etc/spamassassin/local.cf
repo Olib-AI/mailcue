@@ -1,0 +1,23 @@
+# =============================================================================
+# SpamAssassin — MailCue Spam Filtering
+# =============================================================================
+
+# Score threshold for spam (5.0 is standard)
+required_score          5.0
+
+# Rewrite subject for spam
+rewrite_header Subject  [SPAM]
+
+# Report format
+report_safe             0
+
+# Use Bayesian filtering
+use_bayes               1
+bayes_auto_learn        1
+
+# Network tests
+skip_rbl_checks         0
+dns_available           yes
+
+# Trusted networks (internal)
+trusted_networks        127.0.0.0/8 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16

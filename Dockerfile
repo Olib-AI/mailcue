@@ -30,7 +30,7 @@ ENV MAILCUE_DOMAIN=mailcue.local \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=30000
 
 # System packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         postfix \
         dovecot-core \
         dovecot-imapd \
@@ -50,6 +50,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps \
         xz-utils \
         gnupg \
+        postfix-policyd-spf-python \
+        spamassassin \
+        spamc \
+    && rm -rf /var/lib/apt/lists/*
+
+# opendmarc postinst tries to restart the service which fails in Docker.
+# Create the user manually, install deps, then unpack with postinst removed.
+RUN adduser --system --group --no-create-home --home /run/opendmarc opendmarc \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        libopendmarc2 publicsuffix adduser dbconfig-no-thanks libmilter1.0.1 \
+    && apt-get download opendmarc \
+    && dpkg --unpack opendmarc_*.deb \
+    ; rm -f /var/lib/dpkg/info/opendmarc.postinst \
+    && dpkg --configure opendmarc \
+    && rm -f opendmarc_*.deb \
     && rm -rf /var/lib/apt/lists/*
 
 # Build SQLCipher from source — Debian Bookworm's packaged libsqlcipher omits
@@ -108,6 +124,7 @@ RUN mkdir -p \
         /var/lib/mailcue \
         /var/www/mailcue \
         /var/run/opendkim \
+        /var/run/opendmarc \
         /var/spool/postfix/private \
     && chown opendkim:opendkim /var/run/opendkim /etc/opendkim/keys
 

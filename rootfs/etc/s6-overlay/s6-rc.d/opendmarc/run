@@ -1,0 +1,8 @@
+#!/bin/sh
+exec 2>&1
+
+# Ensure socket directory exists
+mkdir -p /var/run/opendmarc
+chown opendmarc:opendmarc /var/run/opendmarc
+
+exec /usr/sbin/opendmarc -f -c /etc/opendmarc/opendmarc.conf

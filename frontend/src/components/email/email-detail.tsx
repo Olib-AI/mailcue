@@ -6,6 +6,9 @@ import {
   ChevronDown,
   ChevronUp,
   Mail,
+  Reply,
+  ReplyAll,
+  Forward,
 } from "lucide-react";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -23,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
 import { EmailRenderer } from "./email-renderer";
 import { EmailHeaders } from "./email-headers";
+import { EmailAnalysis } from "./email-analysis";
 import { AttachmentList } from "./attachment-list";
 import { GpgStatusBadge } from "@/components/gpg/gpg-status-badge";
 import { useEmail, useDeleteEmail } from "@/hooks/use-emails";
@@ -46,7 +50,7 @@ function EmailDetailSkeleton() {
 }
 
 function EmailDetail() {
-  const { selectedMailbox, selectedEmailUid, setSelectedEmailUid, selectedFolder } =
+  const { selectedMailbox, selectedEmailUid, setSelectedEmailUid, selectedFolder, openCompose } =
     useUIStore();
   const { data: email, isLoading, isError, error, refetch } = useEmail(
     selectedMailbox,
@@ -127,6 +131,30 @@ function EmailDetail() {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openCompose({ mode: "reply", originalEmail: email })}
+              aria-label="Reply"
+            >
+              <Reply className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openCompose({ mode: "reply-all", originalEmail: email })}
+              aria-label="Reply all"
+            >
+              <ReplyAll className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => openCompose({ mode: "forward", originalEmail: email })}
+              aria-label="Forward"
+            >
+              <Forward className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -213,6 +241,7 @@ function EmailDetail() {
               <TabsTrigger value="text">Plain Text</TabsTrigger>
             )}
             <TabsTrigger value="headers">Headers</TabsTrigger>
+            <TabsTrigger value="analysis">Analysis</TabsTrigger>
             {email.gpg && (email.gpg.is_signed || email.gpg.is_encrypted) && (
               <TabsTrigger value="gpg">GPG</TabsTrigger>
             )}
@@ -237,6 +266,10 @@ function EmailDetail() {
 
           <TabsContent value="headers">
             <EmailHeaders headers={email.raw_headers} />
+          </TabsContent>
+
+          <TabsContent value="analysis">
+            <EmailAnalysis headers={email.raw_headers} />
           </TabsContent>
 
           {email.gpg && (email.gpg.is_signed || email.gpg.is_encrypted) && (

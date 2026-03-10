@@ -39,4 +39,6 @@ class Domain(Base):
     spf_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     dkim_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     dmarc_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    mta_sts_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    tls_rpt_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_dns_check: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

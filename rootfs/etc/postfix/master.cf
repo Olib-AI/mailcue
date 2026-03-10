@@ -7,8 +7,8 @@
 smtp      inet  n       -       n       -       -       smtpd
   -o smtpd_tls_security_level=may
   -o smtpd_sasl_auth_enable=no
-  -o smtpd_milters=
-  -o non_smtpd_milters=
+  -o smtpd_milters=unix:/var/run/opendkim/opendkim.sock,unix:/var/run/opendmarc/opendmarc.sock
+  -o non_smtpd_milters=unix:/var/run/opendkim/opendkim.sock,unix:/var/run/opendmarc/opendmarc.sock
 
 # ---- Port 587 — Submission (client → server) --------------------------------
 # STARTTLS required; SASL auth required. This is the port email clients use.
@@ -49,3 +49,7 @@ lmtp      unix  -       -       n       -       -       lmtp
 anvil     unix  -       -       n       -       1       anvil
 scache    unix  -       -       n       -       1       scache
 postlog   unix-dgram n  -       n       -       1       postlogd
+
+# ---- SPF policy server (postfix-policyd-spf-python) -------------------------
+policyd-spf  unix  -       n       n       -       0       spawn
+  user=policyd-spf argv=/usr/bin/policyd-spf

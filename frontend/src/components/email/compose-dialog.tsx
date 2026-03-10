@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,6 +19,56 @@ import { useUIStore } from "@/stores/ui-store";
 import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useSendEmail } from "@/hooks/use-emails";
 import { useGpgKey } from "@/hooks/use-gpg";
+import type { EmailDetail as EmailDetailType } from "@/types/api";
+import { formatFullDate, formatEmailAddress } from "@/lib/utils";
+
+function buildQuotedHtml(email: EmailDetailType): string {
+  const date = formatFullDate(email.date);
+  const from = formatEmailAddress(email.from_address);
+  const originalBody = email.html_body
+    ? email.html_body
+    : `<pre style="white-space: pre-wrap; margin: 0;">${(email.text_body ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+
+  return [
+    "<br/><br/>",
+    '<div style="border-left: 2px solid #ccc; padding-left: 12px; margin-left: 0; color: #666;">',
+    `<p>On ${date}, ${from} wrote:</p>`,
+    originalBody,
+    "</div>",
+  ].join("\n");
+}
+
+function buildForwardHtml(email: EmailDetailType): string {
+  const date = formatFullDate(email.date);
+  const from = formatEmailAddress(email.from_address);
+  const to = email.to_addresses.map(formatEmailAddress).join(", ");
+  const originalBody = email.html_body
+    ? email.html_body
+    : `<pre style="white-space: pre-wrap; margin: 0;">${(email.text_body ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+
+  return [
+    "<br/><br/>",
+    '<div style="border-left: 2px solid #ccc; padding-left: 12px; margin-left: 0; color: #666;">',
+    "<p>---------- Forwarded message ----------</p>",
+    `<p><strong>From:</strong> ${from}<br/>`,
+    `<strong>Date:</strong> ${date}<br/>`,
+    `<strong>Subject:</strong> ${email.subject}<br/>`,
+    `<strong>To:</strong> ${to}</p>`,
+    originalBody,
+    "</div>",
+  ].join("\n");
+}
+
+function prefixSubject(subject: string, prefix: "Re" | "Fwd"): string {
+  const pattern = prefix === "Re" ? /^Re:\s*/i : /^Fwd:\s*/i;
+  if (pattern.test(subject)) return subject;
+  return `${prefix}: ${subject}`;
+}
+
+function extractRawEmail(address: string): string {
+  const match = /<([^>]+)>/.exec(address);
+  return match?.[1] ?? address;
+}
 
 const composeSchema = z.object({
   from_address: z.string().min(1, "Select a sender address"),
@@ -33,9 +84,10 @@ const composeSchema = z.object({
 type ComposeFormValues = z.infer<typeof composeSchema>;
 
 function ComposeDialog() {
-  const { composeOpen, setComposeOpen } = useUIStore();
+  const { composeOpen, setComposeOpen, composeContext } = useUIStore();
   const { data: mailboxData } = useMailboxes();
   const sendEmail = useSendEmail();
+  const prevOpenRef = useRef(false);
 
   const {
     register,
@@ -59,14 +111,82 @@ function ComposeDialog() {
     },
   });
 
+  const mailboxes = useMemo(
+    () => mailboxData?.mailboxes ?? [],
+    [mailboxData?.mailboxes]
+  );
+
+  // Pre-fill form when compose dialog opens with context
+  useEffect(() => {
+    const justOpened = composeOpen && !prevOpenRef.current;
+    prevOpenRef.current = composeOpen;
+
+    if (!justOpened) return;
+
+    if (!composeContext) {
+      reset();
+      return;
+    }
+
+    const { mode, originalEmail } = composeContext;
+    const currentMailbox = mailboxes.find((mb) =>
+      originalEmail.to_addresses.some(
+        (addr) => extractRawEmail(addr).toLowerCase() === mb.address.toLowerCase()
+      )
+    );
+    const fromAddress = currentMailbox?.address ?? "";
+
+    if (mode === "reply") {
+      reset({
+        from_address: fromAddress,
+        to_addresses: originalEmail.from_address,
+        cc_addresses: "",
+        subject: prefixSubject(originalEmail.subject, "Re"),
+        body: buildQuotedHtml(originalEmail),
+        body_type: "html",
+        sign: false,
+        encrypt: false,
+      });
+    } else if (mode === "reply-all") {
+      const currentRaw = fromAddress.toLowerCase();
+      const ccAddresses = [
+        ...originalEmail.to_addresses,
+        ...originalEmail.cc_addresses,
+      ]
+        .filter((addr) => extractRawEmail(addr).toLowerCase() !== currentRaw)
+        .filter((addr) => extractRawEmail(addr).toLowerCase() !== extractRawEmail(originalEmail.from_address).toLowerCase())
+        .join(", ");
+
+      reset({
+        from_address: fromAddress,
+        to_addresses: originalEmail.from_address,
+        cc_addresses: ccAddresses,
+        subject: prefixSubject(originalEmail.subject, "Re"),
+        body: buildQuotedHtml(originalEmail),
+        body_type: "html",
+        sign: false,
+        encrypt: false,
+      });
+    } else if (mode === "forward") {
+      reset({
+        from_address: fromAddress,
+        to_addresses: "",
+        cc_addresses: "",
+        subject: prefixSubject(originalEmail.subject, "Fwd"),
+        body: buildForwardHtml(originalEmail),
+        body_type: "html",
+        sign: false,
+        encrypt: false,
+      });
+    }
+  }, [composeOpen, composeContext, reset, mailboxes]);
+
   const bodyType = watch("body_type");
   const watchedFromAddress = watch("from_address");
   const { data: senderGpgKey } = useGpgKey(
     watchedFromAddress || undefined
   );
   const hasSenderKey = !!senderGpgKey;
-
-  const mailboxes = mailboxData?.mailboxes ?? [];
 
   const onSubmit = (data: ComposeFormValues) => {
     const toList = data.to_addresses
@@ -80,6 +200,15 @@ function ComposeDialog() {
           .filter(Boolean)
       : undefined;
 
+    const isReply =
+      composeContext?.mode === "reply" || composeContext?.mode === "reply-all";
+    const inReplyTo = isReply
+      ? composeContext.originalEmail.message_id
+      : undefined;
+    const references = isReply
+      ? [composeContext.originalEmail.message_id]
+      : undefined;
+
     sendEmail.mutate(
       {
         from_address: data.from_address,
@@ -90,6 +219,8 @@ function ComposeDialog() {
         body_type: data.body_type,
         sign: data.sign || undefined,
         encrypt: data.encrypt || undefined,
+        in_reply_to: inReplyTo,
+        references: references,
       },
       {
         onSuccess: () => {
@@ -106,11 +237,20 @@ function ComposeDialog() {
     );
   };
 
+  const dialogTitle =
+    composeContext?.mode === "reply"
+      ? "Reply"
+      : composeContext?.mode === "reply-all"
+        ? "Reply All"
+        : composeContext?.mode === "forward"
+          ? "Forward"
+          : "New Message";
+
   return (
     <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>New Message</DialogTitle>
+          <DialogTitle>{dialogTitle}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

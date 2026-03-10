@@ -12,7 +12,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -20,7 +20,8 @@ from slowapi.errors import RateLimitExceeded
 from app.auth.router import router as auth_router
 from app.auth.service import create_default_admin
 from app.config import settings
-from app.database import AsyncSessionLocal, Base, engine
+from app.database import AsyncSessionLocal, Base, engine, get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.domains.models import Domain  # noqa: F401 — imported for table creation
 from app.domains.router import router as domains_router
 from app.emails.router import router as emails_router
@@ -146,6 +147,24 @@ def create_app() -> FastAPI:
     async def health_check() -> dict[str, str]:
         """Lightweight health probe for Docker HEALTHCHECK and load balancers."""
         return {"status": "ok", "service": "mailcue-api"}
+
+    # ── MTA-STS policy (RFC 8461) ──────────────────────────────
+    # Must be served at /.well-known/mta-sts.txt (root path, no /api prefix)
+    from fastapi.responses import PlainTextResponse  # noqa: E402
+
+    @app.get("/.well-known/mta-sts.txt", response_class=PlainTextResponse, tags=["Domains"])
+    async def mta_sts_policy_wellknown(
+        db: AsyncSession = Depends(get_db),
+    ) -> str:
+        """Serve MTA-STS policy at the RFC-mandated path."""
+        from app.system.service import get_server_hostname
+        hostname = await get_server_hostname(db)
+        return (
+            f"version: STSv1\n"
+            f"mode: testing\n"
+            f"mx: {hostname}\n"
+            f"max_age: 86400\n"
+        )
 
     return app
 

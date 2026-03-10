@@ -69,6 +69,9 @@ class SendEmailRequest(BaseModel):
     body_type: str = "plain"
     sign: bool = False
     encrypt: bool = False
+    reply_to: str | None = None
+    in_reply_to: str | None = None
+    references: list[str] = []
 
 
 class InjectEmailRequest(BaseModel):
@@ -84,6 +87,12 @@ class InjectEmailRequest(BaseModel):
     headers: dict[str, str] = {}
     sign: bool = False
     encrypt: bool = False
+    reply_to: str | None = None
+    in_reply_to: str | None = None
+    references: list[str] = []
+    cc_addresses: list[str] = []
+    return_path: str | None = None
+    realistic_headers: bool = True
 
 
 class BulkInjectRequest(BaseModel):

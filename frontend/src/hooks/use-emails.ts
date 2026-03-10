@@ -1,9 +1,10 @@
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
-  keepPreviousData,
 } from "@tanstack/react-query";
+import type { InfiniteData } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { mailboxKeys } from "./use-mailboxes";
 import type {
@@ -18,36 +19,41 @@ import type {
 export const emailKeys = {
   all: ["emails"] as const,
   lists: () => [...emailKeys.all, "list"] as const,
-  list: (mailbox: string, folder: string, page: number, search?: string) =>
-    [...emailKeys.lists(), mailbox, folder, page, search ?? ""] as const,
+  list: (mailbox: string, folder: string, search?: string) =>
+    [...emailKeys.lists(), mailbox, folder, search ?? ""] as const,
   details: () => [...emailKeys.all, "detail"] as const,
   detail: (mailbox: string, uid: string) =>
     [...emailKeys.details(), mailbox, uid] as const,
 };
+
+// --- Constants ---
+
+const PAGE_SIZE = 50;
 
 // --- Hooks ---
 
 export function useEmails(
   mailbox: string | null,
   folder: string,
-  page: number = 1,
   search?: string
 ) {
-  return useQuery({
-    queryKey: emailKeys.list(mailbox ?? "", folder, page, search),
-    queryFn: () => {
+  return useInfiniteQuery({
+    queryKey: emailKeys.list(mailbox ?? "", folder, search),
+    queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
         folder,
-        page: String(page),
-        page_size: "50",
+        page: String(pageParam),
+        page_size: String(PAGE_SIZE),
       });
       if (search) params.set("search", search);
       return api.get<EmailListResponse>(
         `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails?${params.toString()}`
       );
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? lastPage.page + 1 : undefined,
     enabled: !!mailbox,
-    placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 }
@@ -64,15 +70,18 @@ export function useEmail(mailbox: string | null, uid: string | null, folder: str
       );
       // Backend marks email as read (\Seen) on fetch — update the list cache
       // so the unread indicator disappears immediately without a full refetch.
-      queryClient.setQueriesData<EmailListResponse>(
+      queryClient.setQueriesData<InfiniteData<EmailListResponse>>(
         { queryKey: emailKeys.lists() },
         (old) => {
           if (!old) return old;
           return {
             ...old,
-            emails: old.emails.map((e) =>
-              e.uid === uid ? { ...e, is_read: true } : e
-            ),
+            pages: old.pages.map((page) => ({
+              ...page,
+              emails: page.emails.map((e) =>
+                e.uid === uid ? { ...e, is_read: true } : e
+              ),
+            })),
           };
         }
       );

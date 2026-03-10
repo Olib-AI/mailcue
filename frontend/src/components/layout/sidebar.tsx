@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Mail,
   Plus,
+  Keyboard,
+  Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -37,7 +39,11 @@ const FOLDER_LABELS: Record<FolderName, string> = {
 
 const FOLDERS: FolderName[] = ["INBOX", "Sent", "Drafts", "Trash"];
 
-function Sidebar() {
+interface SidebarProps {
+  onOpenShortcuts: () => void;
+}
+
+function Sidebar({ onOpenShortcuts }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -54,6 +60,7 @@ function Sidebar() {
 
   const isAdminPage = location.pathname.startsWith("/admin");
   const isSettingsPage = location.pathname.startsWith("/settings");
+  const isDevToolsPage = location.pathname.startsWith("/dev-tools");
 
   // Auto-select first mailbox if none selected
   if (!selectedMailbox && mailboxes.length > 0 && mailboxes[0]) {
@@ -110,7 +117,7 @@ function Sidebar() {
         <div className="px-2 space-y-0.5">
           {FOLDERS.map((folder) => {
             const Icon = FOLDER_ICONS[folder];
-            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage;
+            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage;
             const selectedMb = mailboxes.find(
               (m) => m.address === selectedMailbox
             );
@@ -249,8 +256,40 @@ function Sidebar() {
             <Settings className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Settings</span>}
           </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/dev-tools")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              isDevToolsPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Terminal className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>Dev Tools</span>}
+          </button>
         </div>
       </ScrollArea>
+
+      {/* Footer */}
+      <div className="border-t px-2 py-2">
+        <button
+          type="button"
+          onClick={onOpenShortcuts}
+          className="flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+        >
+          <Keyboard className="h-4 w-4 shrink-0" />
+          {!sidebarCollapsed && (
+            <span className="flex-1 text-left">Shortcuts</span>
+          )}
+          {!sidebarCollapsed && (
+            <kbd className="inline-flex items-center rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono font-medium">
+              ?
+            </kbd>
+          )}
+        </button>
+      </div>
     </aside>
   );
 }

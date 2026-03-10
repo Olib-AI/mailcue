@@ -82,6 +82,7 @@ function Header() {
           className="pl-8"
           value={searchValue}
           onChange={(e) => setSearchValue(e.target.value)}
+          data-search-input
         />
       </div>
 

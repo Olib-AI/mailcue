@@ -12,7 +12,7 @@
 
 ---
 
-MailCue is an all-in-one email testing server that packages **Postfix**, **Dovecot**, **OpenDKIM**, a **FastAPI** REST API, and a **React** web UI into a single Docker container managed by **s6-overlay**. Unlike simple SMTP catchers, MailCue provides a fully-featured mail stack -- complete with IMAP/POP3 access, DKIM signing, TLS, GPG encryption, and a modern web interface -- so you can test email workflows exactly as they will behave in production.
+MailCue is an all-in-one email testing server that packages **Postfix**, **Dovecot**, **OpenDKIM**, **OpenDMARC**, **SpamAssassin**, a **FastAPI** REST API, and a **React** web UI into a single Docker container managed by **s6-overlay**. Unlike simple SMTP catchers, MailCue provides a fully-featured mail stack -- complete with IMAP/POP3 access, DKIM signing, DMARC verification, spam filtering, TLS, GPG encryption, and a modern web interface -- so you can test email workflows exactly as they will behave in production.
 
 <p align="center">
   <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
@@ -34,17 +34,23 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 | **REST API** | Complete JSON API for sending, receiving, injecting, searching, and deleting emails -- ideal for CI pipelines. |
 | **Email Injection** | Bypass SMTP entirely -- insert emails directly into mailboxes via IMAP APPEND for deterministic test setup. |
 | **Bulk Injection** | Seed mailboxes with hundreds of test emails in a single API call. |
+| **Realistic Headers** | Injected emails include multi-hop Received chains, Authentication-Results, ARC headers (RFC 8617), simulated DKIM-Signature, Return-Path, X-Mailer, and threading headers (In-Reply-To, References). Indistinguishable from production email. |
 | **DKIM Signing** | Automatic DKIM key generation and signing via OpenDKIM so you can validate DKIM verification logic. |
+| **DMARC Verification** | OpenDMARC milter verifies DMARC alignment on inbound mail and adds Authentication-Results headers. |
+| **SPF Checking** | Inbound SPF verification via postfix-policyd-spf-python with results available in Authentication-Results. |
+| **Spam Filtering** | SpamAssassin (spamd) scores inbound messages. Configurable threshold with Bayesian filtering and RBL checks. |
+| **MTA-STS & TLS-RPT** | Serves MTA-STS policy (RFC 8461) at `/.well-known/mta-sts.txt` and provides TLS-RPT (RFC 8460) DNS record guidance. |
 | **TLS Everywhere** | Auto-generated self-signed certificates for SMTP STARTTLS, IMAPS (993), POP3S (995). Upload your own certs from the UI. |
 | **GPG / PGP-MIME** | Generate, import, and manage GPG keys per mailbox. Sign, encrypt, verify, and decrypt emails (RFC 3156). Publish public keys to `keys.openpgp.org`. |
 | **Real-time Events** | Server-Sent Events (SSE) stream pushes `email.received`, `email.deleted`, `mailbox.created`, and more. |
 | **Two-Factor Auth** | TOTP-based 2FA with authenticator app support. Setup wizard with QR code in the profile page. |
 | **API Keys** | Programmatic `X-API-Key` authentication for CI/CD and automation alongside JWT for the web UI. Manage keys from the profile page. |
-| **Domain Management** | Add custom email domains with automatic DKIM key generation. DNS verification dashboard for MX, SPF, DKIM, and DMARC records. |
+| **Domain Management** | Add custom email domains with automatic DKIM key generation. DNS verification dashboard for MX, SPF, DKIM, DMARC, MTA-STS, and TLS-RPT records. |
+| **Smarthost Relay** | Optional outbound relay via external SMTP services (SendGrid, Mailgun, AWS SES) when port 25 is blocked. Configured via `MAILCUE_RELAY_*` env vars. |
 | **Server Configuration** | Configure server hostname and upload custom TLS certificates from the admin UI. Certs persist across container restarts. |
 | **Admin Panel** | Create and delete mailboxes, inject test emails, manage domains, configure mail server -- all from the browser. |
 | **Single Container** | One `docker run` command. No external databases, no Redis, no message queues. |
-| **Persistent Storage** | SQLite database and Maildir storage survive container restarts via Docker volumes. |
+| **Persistent Storage** | SQLite (with optional SQLCipher AES-256 encryption) and Maildir storage survive container restarts via Docker volumes. |
 
 ## Tech Stack
 
@@ -74,8 +80,12 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 - **Postfix** -- SMTP server (ports 25 and 587)
 - **Dovecot** -- IMAP/POP3/LMTP server (ports 143, 993, 110, 995)
 - **OpenDKIM** -- DKIM signing and verification
+- **OpenDMARC** -- DMARC policy verification (milter)
+- **SpamAssassin** -- Spam scoring and filtering
+- **postfix-policyd-spf-python** -- SPF record verification
 - **Nginx** -- Reverse proxy and static file server
 - **s6-overlay v3** -- Process supervisor (PID 1)
+- **SQLCipher** -- Optional AES-256 database encryption (drop-in SQLite replacement)
 - **Debian Bookworm** slim base image
 
 ## Architecture
@@ -91,6 +101,7 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
   Port 587 ──────────────>|  Postfix (Submission w/ STARTTLS+AUTH) |
                           |    └── LMTP ──> Dovecot                |
                           |    └── milter ──> OpenDKIM             |
+                          |    └── milter ──> OpenDMARC            |
                           |                                        |
   Port 143 / 993 ────────>|  Dovecot (IMAP / IMAPS)               |
   Port 110 / 995 ────────>|  Dovecot (POP3 / POP3S)               |
@@ -228,6 +239,11 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_GPG_HOME` | `/var/lib/mailcue/gpg` | GnuPG keyring directory |
 | `MAILCUE_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
 | `MAILCUE_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | JWT refresh token lifetime |
+| `MAILCUE_DATABASE_ENCRYPTION_KEY` | *(empty)* | SQLCipher encryption key. Set for AES-256 database encryption. |
+| `MAILCUE_RELAY_HOST` | *(empty)* | Smarthost relay hostname (e.g., `smtp.sendgrid.net`) |
+| `MAILCUE_RELAY_PORT` | `587` | Smarthost relay port |
+| `MAILCUE_RELAY_USER` | *(empty)* | Smarthost SASL username |
+| `MAILCUE_RELAY_PASSWORD` | *(empty)* | Smarthost SASL password |
 | `MAILCUE_CORS_ORIGINS` | `["*"]` | Allowed CORS origins (JSON array) |
 | `MAILCUE_DEBUG` | `false` | Enable debug logging |
 
@@ -315,6 +331,7 @@ POST   /api/v1/domains                    # Add domain + generate DKIM (admin on
 GET    /api/v1/domains/:name              # Domain details with DNS records
 DELETE /api/v1/domains/:name              # Remove domain (admin only)
 POST   /api/v1/domains/:name/verify-dns   # Run live DNS verification
+GET    /.well-known/mta-sts.txt            # MTA-STS policy (RFC 8461, no auth)
 ```
 
 ### System
@@ -348,7 +365,7 @@ The frontend provides five main views:
   - **GPG Keys** -- Generate (RSA/ECC), import, export, delete GPG keys per mailbox. Publish public keys to `keys.openpgp.org` for non-local domains.
   - **TLS Certificate** -- View current server and CA certificate details, download CA cert, platform-specific installation instructions.
   - **Mail Server** -- Configure server hostname and upload custom TLS certificates (server cert, private key, CA chain).
-  - **Domains** -- Add custom email domains with automatic DKIM generation, DNS verification dashboard (MX, SPF, DKIM, DMARC), required DNS records display.
+  - **Domains** -- Add custom email domains with automatic DKIM generation, DNS verification dashboard (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT), required DNS records display with copy-to-clipboard.
 - **Admin** -- Mailbox management (create/delete with statistics) and email injection with custom headers and HTML/plain text editor.
 
 Real-time updates are delivered via SSE -- new emails appear instantly with toast notifications, and mailbox counts update automatically.
@@ -494,7 +511,9 @@ mailcue/
 │       ├── dovecot/       # Dovecot configuration
 │       ├── nginx/         # Nginx reverse proxy config
 │       ├── opendkim/      # OpenDKIM signing config
+│       ├── opendmarc/     # OpenDMARC verification config
 │       ├── postfix/       # Postfix SMTP config
+│       ├── spamassassin/  # SpamAssassin scoring config
 │       └── s6-overlay/    # s6 service definitions and init scripts
 ├── Dockerfile             # Multi-stage build (frontend + runtime)
 ├── docker-compose.yml     # Development / single-host deployment

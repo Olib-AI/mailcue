@@ -1,6 +1,14 @@
 import { create } from "zustand";
+import type { EmailDetail as EmailDetailType } from "@/types/api";
 
 type Theme = "light" | "dark" | "system";
+
+type ComposeMode = "new" | "reply" | "reply-all" | "forward";
+
+interface ComposeContext {
+  mode: ComposeMode;
+  originalEmail: EmailDetailType;
+}
 
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -43,7 +51,9 @@ interface UIState {
 
   // Compose dialog
   composeOpen: boolean;
+  composeContext: ComposeContext | null;
   setComposeOpen: (open: boolean) => void;
+  openCompose: (context?: ComposeContext) => void;
 
   // Theme
   theme: Theme;
@@ -85,7 +95,11 @@ export const useUIStore = create<UIState>((set) => {
       set({ selectedFolder: folder, selectedEmailUid: null }),
 
     composeOpen: false,
-    setComposeOpen: (open) => set({ composeOpen: open }),
+    composeContext: null,
+    setComposeOpen: (open) =>
+      set({ composeOpen: open, ...(!open && { composeContext: null }) }),
+    openCompose: (context) =>
+      set({ composeOpen: true, composeContext: context ?? null }),
 
     theme: initialTheme,
     setTheme: (theme) => {

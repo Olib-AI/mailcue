@@ -7,10 +7,13 @@ the API needs only a single credential to access every mailbox:
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import email.utils
 import logging
 import re
+import secrets
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -305,6 +308,14 @@ async def send_email(
     msg["Subject"] = request.subject
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=settings.domain)
+    msg["X-Mailer"] = "MailCue/1.0"
+    msg["MIME-Version"] = "1.0"
+    if request.reply_to:
+        msg["Reply-To"] = request.reply_to
+    if request.in_reply_to:
+        msg["In-Reply-To"] = request.in_reply_to
+    if request.references:
+        msg["References"] = " ".join(request.references)
 
     if text_body:
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
@@ -566,8 +577,115 @@ async def search_emails(
 # ── Internal helpers ─────────────────────────────────────────────
 
 
+def _generate_realistic_headers(
+    msg: MIMEMultipart,
+    request: InjectEmailRequest,
+) -> None:
+    """Add realistic email provider headers to a MIME message.
+
+    Generates multi-hop Received chains, authentication results,
+    ARC headers, and a simulated DKIM signature so injected emails
+    are indistinguishable from real MTA-delivered messages.
+    """
+    from_domain = request.from_address.split("@")[1]
+    to_address = request.to_addresses[0] if request.to_addresses else request.mailbox
+    domain = settings.domain
+    now_ts = int(time.time())
+    now_rfc = email.utils.formatdate(now_ts, localtime=True)
+    minus_1s = email.utils.formatdate(now_ts - 1, localtime=True)
+    minus_2s = email.utils.formatdate(now_ts - 2, localtime=True)
+
+    # Helper for realistic-looking base64 strings
+    def _b64_token(nbytes: int = 32) -> str:
+        return base64.b64encode(secrets.token_bytes(nbytes)).decode()
+
+    # ── Received headers (most recent first — 3 hops) ────────────
+    msg["Received"] = (
+        f"from edge-proxy-42.mailcue.net (edge-proxy-42.mailcue.net [10.128.0.42])\r\n"
+        f"\tby mx1.{domain} (MailCue MTA 1.0) with ESMTPS id {secrets.token_hex(8)}\r\n"
+        f"\tfor <{to_address}>; {now_rfc}"
+    )
+    msg["Received"] = (
+        f"from smtp-out-01.mailcue.net (smtp-out-01.mailcue.net [10.64.1.1])\r\n"
+        f"\tby edge-proxy-42.mailcue.net (MailCue Edge 1.0) with ESMTP id {secrets.token_hex(8)};\r\n"
+        f"\t{minus_1s}"
+    )
+    msg["Received"] = (
+        f"from [192.168.1.100] (client-host.example.com [203.0.113.42])\r\n"
+        f"\tby smtp-out-01.mailcue.net (MailCue Submission 1.0) with ESMTPSA id {secrets.token_hex(8)}\r\n"
+        f"\t(version=TLSv1.3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);\r\n"
+        f"\t{minus_2s}"
+    )
+
+    # ── Authentication-Results ────────────────────────────────────
+    short_sig = _b64_token(6)[:8]
+    msg["Authentication-Results"] = (
+        f"mx1.{domain};\r\n"
+        f"\tdkim=pass header.d={from_domain} header.s=mail header.b={short_sig};\r\n"
+        f"\tspf=pass (mailcue: domain of {request.from_address} designates 203.0.113.42 as permitted sender)"
+        f" smtp.mailfrom={request.from_address};\r\n"
+        f"\tdmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from={from_domain}"
+    )
+
+    # ── ARC headers (RFC 8617) ────────────────────────────────────
+    year = time.strftime("%Y")
+    arc_b64 = _b64_token(48)
+    body_hash = _b64_token(32)
+    sig_placeholder = _b64_token(48)
+
+    msg["ARC-Seal"] = (
+        f"i=1; a=rsa-sha256; t={now_ts}; cv=none;\r\n"
+        f"\td={domain}; s=arc-{year};\r\n"
+        f"\tb={arc_b64}"
+    )
+    msg["ARC-Message-Signature"] = (
+        f"i=1; a=rsa-sha256; c=relaxed/relaxed;\r\n"
+        f"\td={domain}; s=arc-{year}; t={now_ts};\r\n"
+        f"\th=from:to:subject:date:message-id;\r\n"
+        f"\tbh={body_hash};\r\n"
+        f"\tb={sig_placeholder}"
+    )
+    msg["ARC-Authentication-Results"] = (
+        f"i=1; mx1.{domain};\r\n"
+        f"\tdkim=pass header.d={from_domain};\r\n"
+        f"\tspf=pass smtp.mailfrom={request.from_address};\r\n"
+        f"\tdmarc=pass header.from={from_domain}"
+    )
+
+    # ── DKIM-Signature (simulated for inject path) ────────────────
+    dkim_body_hash = _b64_token(32)
+    dkim_sig = _b64_token(64)
+    msg["DKIM-Signature"] = (
+        f"v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n"
+        f"\td={from_domain}; s=mail; t={now_ts};\r\n"
+        f"\th=from:to:subject:date:message-id:content-type:mime-version;\r\n"
+        f"\tbh={dkim_body_hash};\r\n"
+        f"\tb={dkim_sig}"
+    )
+
+    # ── Standard headers ──────────────────────────────────────────
+    msg["Return-Path"] = f"<{request.return_path or request.from_address}>"
+    msg["X-Mailer"] = "MailCue/1.0"
+    msg["X-Originating-IP"] = "[203.0.113.42]"
+
+    if request.reply_to:
+        msg["Reply-To"] = request.reply_to
+    if request.in_reply_to:
+        msg["In-Reply-To"] = request.in_reply_to
+    if request.references:
+        msg["References"] = " ".join(request.references)
+    if request.cc_addresses:
+        msg["Cc"] = ", ".join(request.cc_addresses)
+
+
 def _build_raw_email(request: InjectEmailRequest) -> bytes:
-    """Construct raw RFC 5322 bytes from an ``InjectEmailRequest``."""
+    """Construct raw RFC 5322 bytes from an ``InjectEmailRequest``.
+
+    When ``request.realistic_headers`` is ``True``, the message is
+    enriched with multi-hop Received chains, authentication results,
+    ARC headers, and a simulated DKIM signature so it looks like a
+    genuine MTA-delivered email.
+    """
     msg = MIMEMultipart("alternative")
     msg["From"] = request.from_address
     msg["To"] = ", ".join(request.to_addresses)
@@ -581,15 +699,21 @@ def _build_raw_email(request: InjectEmailRequest) -> bytes:
 
     msg["Message-ID"] = email.utils.make_msgid(domain=settings.domain)
 
-    # Synthetic Received header so the message appears MTA-delivered
-    now = email.utils.formatdate(localtime=True)
-    msg["Received"] = (
-        f"from mailcue-inject (localhost [127.0.0.1]) "
-        f"by {settings.domain} (MailCue) with ESMTP; {now}"
-    )
+    if request.realistic_headers:
+        _generate_realistic_headers(msg, request)
+    else:
+        # Basic Received header for backward compatibility
+        now = email.utils.formatdate(localtime=True)
+        msg["Received"] = (
+            f"from mailcue-inject (localhost [127.0.0.1]) "
+            f"by {settings.domain} (MailCue) with ESMTP; {now}"
+        )
 
-    # Custom headers
+    # Custom headers (applied last so they can override generated ones)
     for key, value in request.headers.items():
+        # Remove existing header if present so the custom value wins
+        if key in msg:
+            del msg[key]
         msg[key] = value
 
     if request.text_body:

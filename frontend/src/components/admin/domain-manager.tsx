@@ -161,6 +161,8 @@ function DomainCard({ domain }: { domain: Domain }) {
             <DnsStatusBadge label="SPF" verified={domain.spf_verified} />
             <DnsStatusBadge label="DKIM" verified={domain.dkim_verified} />
             <DnsStatusBadge label="DMARC" verified={domain.dmarc_verified} />
+            <DnsStatusBadge label="MTA-STS" verified={domain.mta_sts_verified} />
+            <DnsStatusBadge label="TLS-RPT" verified={domain.tls_rpt_verified} />
           </div>
 
           {/* Expandable DNS records section */}
@@ -197,19 +199,28 @@ function DomainCard({ domain }: { domain: Domain }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {detail.dns_records.map((record) => (
-                      <tr key={record.hostname} className="border-b last:border-0">
+                    {detail.dns_records.map((record, idx) => (
+                      <tr key={`${record.record_type}-${record.hostname}-${idx}`} className="border-b last:border-0">
                         <td className="px-3 py-2">
                           <Badge variant="outline">{record.record_type}</Badge>
                         </td>
                         <td className="px-3 py-2 font-mono text-xs break-all">
                           {record.hostname}
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs break-all max-w-xs">
-                          {record.expected_value}
+                        <td className="px-3 py-2">
+                          <div className="font-mono text-xs break-all max-w-xs">
+                            {record.expected_value}
+                          </div>
+                          {record.purpose && (
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {record.purpose}
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2">
-                          {record.verified ? (
+                          {record.record_type === "PTR" || record.record_type === "A" ? (
+                            <span className="text-xs text-muted-foreground">Info</span>
+                          ) : record.verified ? (
                             <CheckCircle className="h-4 w-4 text-green-600" />
                           ) : (
                             <XCircle className="h-4 w-4 text-destructive" />

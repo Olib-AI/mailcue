@@ -47,18 +47,28 @@ function EmailList() {
     setSelectedEmailUid,
   } = useUIStore();
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useEmails(
-    selectedMailbox,
-    selectedFolder,
-    1,
-    search
-  );
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useEmails(selectedMailbox, selectedFolder, search);
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
   const bulkDelete = useBulkDeleteEmails();
 
-  const emails = useMemo(() => data?.emails ?? [], [data?.emails]);
+  const emails = useMemo(
+    () => data?.pages.flatMap((page) => page.emails) ?? [],
+    [data?.pages]
+  );
+
+  const total = data?.pages[0]?.total ?? 0;
 
   const handleCheckChange = useCallback((uid: string, checked: boolean) => {
     setSelectedUids((prev) => {
@@ -219,7 +229,10 @@ function EmailList() {
         ) : (
           <>
             <span className="text-xs text-muted-foreground">
-              {data?.total ?? 0} email{(data?.total ?? 0) !== 1 ? "s" : ""}
+              {total > emails.length
+                ? `Showing ${emails.length} of ${total}`
+                : `${total}`}{" "}
+              email{total !== 1 ? "s" : ""}
               {search && ` matching "${search}"`}
             </span>
             <div className="flex items-center gap-1">
@@ -255,10 +268,23 @@ function EmailList() {
         ))}
 
         {/* Load more */}
-        {data?.has_more && (
+        {hasNextPage && (
           <div className="p-3 text-center">
-            <Button variant="ghost" size="sm" className="text-xs">
-              Load more
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => void fetchNextPage()}
+              disabled={isFetchingNextPage}
+            >
+              {isFetchingNextPage ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                `Load more (${emails.length} of ${total})`
+              )}
             </Button>
           </div>
         )}

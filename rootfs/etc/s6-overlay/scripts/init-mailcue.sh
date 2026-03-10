@@ -191,6 +191,46 @@ TRUSTED
 chown -R opendkim:opendkim /etc/opendkim/
 
 # -------------------------------------------------------------------------
+# 3b. Configure OpenDMARC
+# -------------------------------------------------------------------------
+echo "[init-mailcue] Configuring OpenDMARC..."
+mkdir -p /var/run/opendmarc
+chown opendmarc:opendmarc /var/run/opendmarc 2>/dev/null || true
+
+# Template the config with the domain
+sed -i \
+    -e "s/postmaster@localhost/postmaster@${DOMAIN}/g" \
+    /etc/opendmarc/opendmarc.conf 2>/dev/null || true
+
+# -------------------------------------------------------------------------
+# 3c. Configure smarthost relay (if MAILCUE_RELAY_HOST is set)
+# -------------------------------------------------------------------------
+RELAY_HOST="${MAILCUE_RELAY_HOST:-}"
+RELAY_PORT="${MAILCUE_RELAY_PORT:-587}"
+RELAY_USER="${MAILCUE_RELAY_USER:-}"
+RELAY_PASSWORD="${MAILCUE_RELAY_PASSWORD:-}"
+
+if [ -n "${RELAY_HOST}" ]; then
+    echo "[init-mailcue] Configuring smarthost relay: ${RELAY_HOST}:${RELAY_PORT}"
+
+    # Update Postfix main.cf
+    cat >> /etc/postfix/main.cf << RELAY
+# --- Smarthost relay (auto-configured) ---
+relayhost = [${RELAY_HOST}]:${RELAY_PORT}
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = encrypt
+RELAY
+
+    # Create SASL password file
+    echo "[${RELAY_HOST}]:${RELAY_PORT} ${RELAY_USER}:${RELAY_PASSWORD}" > /etc/postfix/sasl_passwd
+    postmap /etc/postfix/sasl_passwd
+    chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
+    echo "[init-mailcue] Smarthost relay configured."
+fi
+
+# -------------------------------------------------------------------------
 # 4. Generate a secret key if none provided
 # -------------------------------------------------------------------------
 if [ -z "${SECRET_KEY}" ] && [ -f /var/lib/mailcue/.secret_key ]; then

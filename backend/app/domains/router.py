@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,6 +47,8 @@ def _domain_to_response(domain: Domain) -> DomainResponse:
         spf_verified=domain.spf_verified,
         dkim_verified=domain.dkim_verified,
         dmarc_verified=domain.dmarc_verified,
+        mta_sts_verified=domain.mta_sts_verified,
+        tls_rpt_verified=domain.tls_rpt_verified,
         last_dns_check=domain.last_dns_check,
         all_verified=all(
             [
@@ -53,6 +56,8 @@ def _domain_to_response(domain: Domain) -> DomainResponse:
                 domain.spf_verified,
                 domain.dkim_verified,
                 domain.dmarc_verified,
+                domain.mta_sts_verified,
+                domain.tls_rpt_verified,
             ]
         ),
     )
@@ -119,6 +124,8 @@ async def get_domain(
         spf_verified=domain.spf_verified,
         dkim_verified=domain.dkim_verified,
         dmarc_verified=domain.dmarc_verified,
+        mta_sts_verified=domain.mta_sts_verified,
+        tls_rpt_verified=domain.tls_rpt_verified,
         last_dns_check=domain.last_dns_check,
         all_verified=all(
             [
@@ -126,6 +133,8 @@ async def get_domain(
                 domain.spf_verified,
                 domain.dkim_verified,
                 domain.dmarc_verified,
+                domain.mta_sts_verified,
+                domain.tls_rpt_verified,
             ]
         ),
         dns_records=dns_records,
@@ -147,6 +156,24 @@ async def delete_domain(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.get("/.well-known/mta-sts.txt", response_class=PlainTextResponse)
+async def mta_sts_policy(
+    db: AsyncSession = Depends(get_db),
+) -> str:
+    """Serve the MTA-STS policy file (RFC 8461).
+
+    This must be accessible at https://mta-sts.{domain}/.well-known/mta-sts.txt
+    for each managed domain.
+    """
+    hostname = await get_server_hostname(db)
+    return (
+        f"version: STSv1\n"
+        f"mode: testing\n"
+        f"mx: {hostname}\n"
+        f"max_age: 86400\n"
+    )
 
 
 @router.post("/{name}/verify-dns", response_model=DnsCheckResponse)
