@@ -354,22 +354,6 @@ GET  /api/v1/health           # Health check endpoint
 
 **SSE event types:** `email.received`, `email.sent`, `email.deleted`, `mailbox.created`, `mailbox.deleted`, `heartbeat`
 
-## Web UI
-
-The frontend provides five main views:
-
-- **Mail** -- Two-panel email client with mailbox sidebar, folder navigation (Inbox, Sent, Drafts, Trash), email list with search, and rich email detail view with HTML rendering, raw headers, attachment downloads, and GPG verification badges.
-- **Compose** -- Dialog for sending emails via SMTP with a rich text editor (Tiptap), CC support, and optional GPG signing/encryption.
-- **Profile** -- Account information, password change, TOTP two-factor authentication setup/disable, and API key management (create, list, copy, revoke).
-- **Settings** -- Four tabs:
-  - **GPG Keys** -- Generate (RSA/ECC), import, export, delete GPG keys per mailbox. Publish public keys to `keys.openpgp.org` for non-local domains.
-  - **TLS Certificate** -- View current server and CA certificate details, download CA cert, platform-specific installation instructions.
-  - **Mail Server** -- Configure server hostname and upload custom TLS certificates (server cert, private key, CA chain).
-  - **Domains** -- Add custom email domains with automatic DKIM generation, DNS verification dashboard (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT), required DNS records display with copy-to-clipboard.
-- **Admin** -- Mailbox management (create/delete with statistics) and email injection with custom headers and HTML/plain text editor.
-
-Real-time updates are delivered via SSE -- new emails appear instantly with toast notifications, and mailbox counts update automatically.
-
 ## Using with Email Clients
 
 MailCue works with any standard email client. Configure your client with:
@@ -476,49 +460,18 @@ API_KEY=$(curl -s -X POST http://localhost:8088/api/v1/auth/api-keys \
 curl -H "X-API-Key: $API_KEY" http://localhost:8088/api/v1/emails?mailbox=admin@mailcue.local
 ```
 
-## Project Structure
+## Messaging Sandbox
 
-```
-mailcue/
-├── backend/
-│   ├── app/
-│   │   ├── auth/          # Authentication (JWT, API keys, TOTP 2FA, user management)
-│   │   ├── domains/       # Domain management and DNS verification
-│   │   ├── emails/        # Email CRUD (IMAP fetch, SMTP send, inject)
-│   │   ├── events/        # SSE event bus and streaming endpoint
-│   │   ├── gpg/           # GPG key management, PGP/MIME, keyserver publishing
-│   │   ├── mailboxes/     # Mailbox CRUD and Dovecot provisioning
-│   │   ├── system/        # Server settings, TLS certificate management
-│   │   ├── config.py      # Pydantic settings (env var configuration)
-│   │   ├── database.py    # Async SQLAlchemy engine and session
-│   │   ├── dependencies.py # FastAPI auth dependencies
-│   │   ├── exceptions.py  # Custom exception hierarchy
-│   │   └── main.py        # Application factory and lifespan
-│   ├── alembic/           # Database migrations
-│   └── pyproject.toml     # Python project config (hatchling)
-├── frontend/
-│   ├── src/
-│   │   ├── components/    # React components (UI, email, admin, GPG)
-│   │   ├── hooks/         # Custom hooks (auth, emails, SSE, mailboxes)
-│   │   ├── lib/           # API client, auth helpers, utilities
-│   │   ├── pages/         # Route pages (mail, admin, login)
-│   │   ├── stores/        # Zustand state stores
-│   │   └── types/         # TypeScript type definitions
-│   ├── package.json
-│   └── vite.config.ts
-├── rootfs/                # Container filesystem overlay
-│   └── etc/
-│       ├── dovecot/       # Dovecot configuration
-│       ├── nginx/         # Nginx reverse proxy config
-│       ├── opendkim/      # OpenDKIM signing config
-│       ├── opendmarc/     # OpenDMARC verification config
-│       ├── postfix/       # Postfix SMTP config
-│       ├── spamassassin/  # SpamAssassin scoring config
-│       └── s6-overlay/    # s6 service definitions and init scripts
-├── Dockerfile             # Multi-stage build (frontend + runtime)
-├── docker-compose.yml     # Development / single-host deployment
-└── .env.example           # Configuration template
-```
+MailCue includes a messaging sandbox that emulates the APIs of **Telegram**, **Slack**, **Mattermost**, and **Twilio**. Point your app at MailCue's sandbox endpoints instead of the real provider and all messages are captured locally. Webhooks fire in each provider's exact payload format with proper signatures.
+
+- Create provider instances via the UI or API (`/api/v1/sandbox/providers`)
+- Simulate inbound messages (provider → your app) and send outbound messages (your app → provider, triggers webhooks)
+- Configure webhook endpoints per provider with automatic retry and exponential backoff
+- Provider-native authentication on sandbox routes (bot token in URL for Telegram, Bearer for Slack/Mattermost, HTTP Basic for Twilio)
+
+## HTTP Bin
+
+A built-in request inspector at `/http-bin` in the UI. Create bins, point webhooks or any HTTP client at the bin URL, and inspect every captured request -- method, headers, query params, and body -- in real time. Useful for verifying webhook payloads without leaving MailCue.
 
 ## Contributing
 
