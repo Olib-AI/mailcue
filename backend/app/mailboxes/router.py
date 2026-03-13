@@ -108,6 +108,7 @@ async def create_new_mailbox(
 @router.delete(
     "/{address}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
 )
 async def delete_existing_mailbox(
     address: str,
@@ -205,7 +206,9 @@ async def bulk_delete_mailbox_emails(
     return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
 
 
-@router.delete("/{mailbox_address}/emails/{uid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{mailbox_address}/emails/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+)
 async def delete_mailbox_email(
     mailbox_address: str,
     uid: str,

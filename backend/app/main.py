@@ -30,9 +30,23 @@ from app.events.router import router as events_router
 from app.exceptions import register_exception_handlers
 from app.gpg.models import GpgKey  # noqa: F401 — imported for table creation
 from app.gpg.router import router as gpg_router
+from app.httpbin.models import (  # noqa: F401 — imported for table creation
+    HttpBinBin,
+    HttpBinRequest,
+)
+from app.httpbin.router import catch_all_router as httpbin_catch_all_router
+from app.httpbin.router import management_router as httpbin_management_router
 from app.mailboxes.models import Mailbox
 from app.mailboxes.router import router as mailboxes_router
 from app.rate_limit import limiter
+from app.sandbox.models import (  # noqa: F401 — imported for table creation
+    SandboxConversation,
+    SandboxMessage,
+    SandboxProvider,
+    SandboxWebhookDelivery,
+    SandboxWebhookEndpoint,
+)
+from app.sandbox.router import router as sandbox_router
 from app.system.models import (  # noqa: F401 — imported for table creation
     ServerSettings,
     TlsCertificate,
@@ -142,6 +156,21 @@ def create_app() -> FastAPI:
     app.include_router(gpg_router, prefix="/api/v1")
     app.include_router(domains_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
+
+    # ── HTTP Bin ──────────────────────────────────────────────────
+    app.include_router(httpbin_management_router, prefix="/api/v1")
+    app.include_router(httpbin_catch_all_router, prefix="/httpbin")
+
+    # ── Sandbox (management API under /api/v1, provider routes at /sandbox/) ──
+    if settings.sandbox_enabled:
+        app.include_router(sandbox_router, prefix="/api/v1")
+        # Register and mount provider-specific sandbox routes
+        from app.sandbox.providers import register_all_providers
+        from app.sandbox.registry import get_all_providers
+
+        register_all_providers()
+        for _name, provider_plugin in get_all_providers().items():
+            app.include_router(provider_plugin.get_router())
 
     # ── Health check ─────────────────────────────────────────────
     @app.get("/api/v1/health", tags=["Health"])

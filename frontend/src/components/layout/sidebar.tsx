@@ -13,6 +13,8 @@ import {
   Plus,
   Keyboard,
   Terminal,
+  MessageSquare,
+  Globe,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MailCueLogo } from "@/components/mailcue-logo";
@@ -62,6 +64,8 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
   const isAdminPage = location.pathname.startsWith("/admin");
   const isSettingsPage = location.pathname.startsWith("/settings");
   const isDevToolsPage = location.pathname.startsWith("/dev-tools");
+  const isMessagingPage = location.pathname.startsWith("/messaging");
+  const isHttpBinPage = location.pathname.startsWith("/http-bin");
 
   // Auto-select first mailbox if none selected
   if (!selectedMailbox && mailboxes.length > 0 && mailboxes[0]) {
@@ -86,7 +90,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-200",
+        "flex flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-200 overflow-hidden",
         sidebarCollapsed ? "w-14" : "w-60"
       )}
     >
@@ -115,12 +119,12 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
         </Button>
       </div>
 
-      <ScrollArea className="flex-1 py-2">
+      <ScrollArea className="flex-1 py-2 overflow-x-hidden">
         {/* Folders */}
         <div className="px-2 space-y-0.5">
           {FOLDERS.map((folder) => {
             const Icon = FOLDER_ICONS[folder];
-            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage;
+            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage && !isMessagingPage && !isHttpBinPage;
             const selectedMb = mailboxes.find(
               (m) => m.address === selectedMailbox
             );
@@ -191,7 +195,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
                     type="button"
                     onClick={() => handleMailboxClick(mailbox.address)}
                     className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+                      "flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors",
                       selectedMailbox === mailbox.address
                         ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
@@ -245,6 +249,32 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
           >
             <Syringe className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Inject Email</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/messaging")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              isMessagingPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <MessageSquare className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>Messaging</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/http-bin")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              isHttpBinPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Globe className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>HTTP Bin</span>}
           </button>
           <button
             type="button"

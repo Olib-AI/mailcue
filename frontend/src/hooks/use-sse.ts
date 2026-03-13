@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { getAccessToken } from "@/lib/api";
 import { emailKeys } from "./use-emails";
 import { mailboxKeys } from "./use-mailboxes";
+import { sandboxKeys } from "./use-sandbox";
 import type { EmailReceivedEvent } from "@/types/api";
 
 const SSE_URL = "/api/v1/events/stream";
@@ -62,6 +63,12 @@ export function useSSE(enabled: boolean): void {
           case "mailbox.deleted": {
             void queryClient.invalidateQueries({
               queryKey: mailboxKeys.list(),
+            });
+            break;
+          }
+          case "sandbox.message": {
+            void queryClient.invalidateQueries({
+              queryKey: sandboxKeys.all,
             });
             break;
           }

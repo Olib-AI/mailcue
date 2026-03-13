@@ -581,6 +581,7 @@ async def list_api_keys(
 @router.delete(
     "/api-keys/{key_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
 )
 async def revoke_api_key(
     key_id: str,

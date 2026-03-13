@@ -151,7 +151,7 @@ async def bulk_inject_emails(
     return await bulk_inject(body)
 
 
-@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def delete_single_email(
     uid: str,
     mailbox: str = Query(..., description="Target mailbox address"),

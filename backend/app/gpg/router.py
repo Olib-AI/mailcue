@@ -116,7 +116,7 @@ async def import_key(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.delete("/keys/{address}", status_code=204)
+@router.delete("/keys/{address}", status_code=204, response_model=None)
 async def delete_key(
     address: str,
     _user: User = Depends(get_current_user),

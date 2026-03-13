@@ -156,6 +156,7 @@ export type SSEEventType =
   | "email.deleted"
   | "mailbox.created"
   | "mailbox.deleted"
+  | "sandbox.message"
   | "heartbeat";
 
 export interface SSEEvent {

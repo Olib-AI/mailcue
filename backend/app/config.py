@@ -76,5 +76,10 @@ class Settings(BaseSettings):
     # ── CORS ─────────────────────────────────────────────────────
     cors_origins: list[str] = ["*"]
 
+    # ── Sandbox ────────────────────────────────────────────────────
+    sandbox_enabled: bool = True
+    sandbox_webhook_timeout_seconds: int = 10
+    sandbox_webhook_max_retries: int = 3
+
 
 settings = Settings()
