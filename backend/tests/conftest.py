@@ -59,7 +59,7 @@ async def _engine_and_session():
 @pytest.fixture()
 async def client(_engine_and_session) -> AsyncIterator[AsyncClient]:
     """Provide an httpx AsyncClient wired to the test database."""
-    engine, factory = _engine_and_session
+    _engine, factory = _engine_and_session
 
     from app.auth.models import User
     from app.dependencies import get_current_user
