@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   Globe,
   Plus,
   Copy,
   Check,
   Trash2,
-  XCircle,
   Inbox,
   Settings2,
   ChevronDown,
@@ -29,6 +28,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   useBins,
   useBin,
@@ -36,6 +36,7 @@ import {
   useUpdateBin,
   useDeleteBin,
   useBinRequests,
+  useDeleteBinRequest,
   useClearBinRequests,
 } from "@/hooks/use-httpbin";
 import { useHttpBinStore } from "@/stores/httpbin-store";
@@ -370,7 +371,17 @@ function BinList() {
 // RequestRow (expandable)
 // ---------------------------------------------------------------------------
 
-function RequestRow({ req }: { req: HttpBinCapturedRequest }) {
+function RequestRow({
+  req,
+  selected,
+  onSelect,
+  onDelete,
+}: {
+  req: HttpBinCapturedRequest;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onDelete: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const methodColor =
@@ -390,34 +401,52 @@ function RequestRow({ req }: { req: HttpBinCapturedRequest }) {
   const queryEntries = Object.entries(req.query_params);
 
   return (
-    <div className="rounded-md border text-sm">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2.5 px-3 py-2 hover:bg-muted/50 transition-colors cursor-pointer"
-      >
-        {expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <Badge
-          className={cn(
-            "text-[11px] px-2 py-0 font-mono font-semibold shrink-0",
-            methodColor
-          )}
-          variant="secondary"
+    <div className="group/row rounded-md border text-sm">
+      <div className="flex w-full items-center gap-1 px-1.5 py-2 hover:bg-muted/50 transition-colors">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(v) => onSelect(v === true)}
+          className="shrink-0 ml-1"
+        />
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex flex-1 items-center gap-2.5 px-1.5 cursor-pointer min-w-0"
         >
-          {req.method}
-        </Badge>
-        <span className="font-mono text-xs truncate">{req.path}</span>
-        <span className="text-xs text-muted-foreground ml-auto shrink-0">
-          {req.remote_addr}
-        </span>
-        <span className="text-xs text-muted-foreground shrink-0">
-          {formatTime(req.created_at)}
-        </span>
-      </button>
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <Badge
+            className={cn(
+              "text-[11px] px-2 py-0 font-mono font-semibold shrink-0",
+              methodColor
+            )}
+            variant="secondary"
+          >
+            {req.method}
+          </Badge>
+          <span className="font-mono text-xs truncate">{req.path}</span>
+          <span className="text-xs text-muted-foreground ml-auto shrink-0">
+            {req.remote_addr}
+          </span>
+          <span className="text-xs text-muted-foreground shrink-0">
+            {formatTime(req.created_at)}
+          </span>
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 shrink-0 opacity-0 group-hover/row:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
 
       {expanded && (
         <div className="border-t px-3 py-3 space-y-3">
@@ -505,9 +534,72 @@ function RequestPanel() {
   const { selectedBinId } = useHttpBinStore();
   const { data: bin } = useBin(selectedBinId);
   const { data: requestData, isLoading } = useBinRequests(selectedBinId);
+  const deleteRequest = useDeleteBinRequest();
   const clearRequests = useClearBinRequests();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const requests = requestData?.requests ?? [];
+
+  const toggleSelect = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const allSelected = requests.length > 0 && selectedIds.size === requests.length;
+  const someSelected = selectedIds.size > 0;
+
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedIds(new Set(requests.map((r) => r.id)));
+      } else {
+        setSelectedIds(new Set());
+      }
+    },
+    [requests]
+  );
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === requests.length) {
+      clearRequests.mutate(selectedBinId!, {
+        onSuccess: () => {
+          toast.success("All requests cleared");
+          setSelectedIds(new Set());
+        },
+      });
+    } else {
+      const ids = [...selectedIds];
+      let completed = 0;
+      for (const id of ids) {
+        deleteRequest.mutate(id, {
+          onSuccess: () => {
+            completed++;
+            if (completed === ids.length) {
+              toast.success(`Deleted ${ids.length} request${ids.length > 1 ? "s" : ""}`);
+              setSelectedIds(new Set());
+            }
+          },
+        });
+      }
+    }
+  };
+
+  const handleDeleteOne = (id: string) => {
+    deleteRequest.mutate(id, {
+      onSuccess: () => {
+        toast.success("Request deleted");
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      },
+    });
+  };
 
   if (!selectedBinId) {
     return (
@@ -540,20 +632,6 @@ function RequestPanel() {
             {binUrl}
           </Badge>
           <CopyButton text={binUrl} />
-          {requests.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-destructive hover:text-destructive-foreground"
-              onClick={() =>
-                clearRequests.mutate(selectedBinId, {
-                  onSuccess: () => toast.success("Requests cleared"),
-                })
-              }
-            >
-              <XCircle className="h-3.5 w-3.5" />
-            </Button>
-          )}
         </div>
       </div>
 
@@ -579,6 +657,54 @@ function RequestPanel() {
         </div>
       )}
 
+      {/* Select-all / bulk action bar */}
+      {requests.length > 0 && (
+        <div className="flex items-center gap-3 px-4 py-1.5 border-b shrink-0">
+          <Checkbox
+            checked={allSelected ? true : someSelected ? "indeterminate" : false}
+            onCheckedChange={(v) => handleSelectAll(v === true)}
+          />
+          {someSelected ? (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={handleDeleteSelected}
+                disabled={deleteRequest.isPending || clearRequests.isPending}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete selected
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">Select all</span>
+          )}
+          <div className="ml-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs hover:bg-destructive hover:text-destructive-foreground"
+              onClick={() =>
+                clearRequests.mutate(selectedBinId!, {
+                  onSuccess: () => {
+                    toast.success("All requests cleared");
+                    setSelectedIds(new Set());
+                  },
+                })
+              }
+              disabled={clearRequests.isPending}
+            >
+              <Trash2 className="h-3 w-3" />
+              Clear all
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Request list */}
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-2">
@@ -601,7 +727,15 @@ function RequestPanel() {
               </pre>
             </div>
           ) : (
-            requests.map((req) => <RequestRow key={req.id} req={req} />)
+            requests.map((req) => (
+              <RequestRow
+                key={req.id}
+                req={req}
+                selected={selectedIds.has(req.id)}
+                onSelect={(checked) => toggleSelect(req.id, checked)}
+                onDelete={() => handleDeleteOne(req.id)}
+              />
+            ))
           )}
         </div>
       </ScrollArea>
