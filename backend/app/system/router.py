@@ -163,8 +163,10 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
 
 
 @router.get("/certificate")
-async def get_certificate_info() -> dict:
-    """Return metadata for both the server and CA certificates."""
+async def get_certificate_info(
+    _admin: User = Depends(require_admin),
+) -> dict:
+    """Return metadata for both the server and CA certificates. **Admin only.**"""
     # Prefer split CA/server certs; fall back to legacy single cert
     if CA_CERT_PATH.exists() and SERVER_CERT_PATH.exists():
         ca_cert = _parse_cert(CA_CERT_PATH)
