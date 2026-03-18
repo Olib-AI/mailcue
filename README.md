@@ -7,6 +7,8 @@
   <a href="https://github.com/Olib-AI/mailcue/actions"><img src="https://img.shields.io/github/actions/workflow/status/Olib-AI/mailcue/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
   <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License" /></a>
   <a href="https://hub.docker.com/r/olibakram/mailcue"><img src="https://img.shields.io/docker/pulls/olibakram/mailcue?style=flat-square" alt="Docker Pulls" /></a>
+  <a href="https://github.com/Olib-AI/mailcue/stargazers"><img src="https://img.shields.io/github/stars/Olib-AI/mailcue?style=flat-square" alt="GitHub Stars" /></a>
+  <a href="https://github.com/Olib-AI/mailcue/releases"><img src="https://img.shields.io/github/v/release/Olib-AI/mailcue?style=flat-square" alt="Latest Release" /></a>
   <a href="https://www.olib.ai"><img src="https://img.shields.io/badge/by-Olib%20AI-6c47ff?style=flat-square" alt="Olib AI" /></a>
 </p>
 
@@ -503,14 +505,30 @@ Contributions are welcome! Please:
 
 This project is licensed under the [MIT License](LICENSE).
 
+## Star History
+
+<a href="https://star-history.com/#Olib-AI/mailcue&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Olib-AI/mailcue&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Olib-AI/mailcue&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Olib-AI/mailcue&type=Date" width="600" />
+ </picture>
+</a>
+
 ## Links
 
 - **Olib AI** -- [www.olib.ai](https://www.olib.ai)
 - **GitHub** -- [github.com/Olib-AI/mailcue](https://github.com/Olib-AI/mailcue)
+- **Docker Hub** -- [hub.docker.com/r/olibakram/mailcue](https://hub.docker.com/r/olibakram/mailcue)
 - **API Docs** -- Available at `/api/docs` when running
 - **Issues** -- [github.com/Olib-AI/mailcue/issues](https://github.com/Olib-AI/mailcue/issues)
+- **Discussions** -- [github.com/Olib-AI/mailcue/discussions](https://github.com/Olib-AI/mailcue/discussions)
 
 ---
+
+<p align="center">
+  If you find MailCue useful, please consider giving it a <a href="https://github.com/Olib-AI/mailcue">star on GitHub</a>. It helps others discover the project!
+</p>
 
 <p align="center">
   Built with care by <a href="https://www.olib.ai">Olib AI</a>
