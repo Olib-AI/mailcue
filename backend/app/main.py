@@ -26,8 +26,11 @@ from app.database import AsyncSessionLocal, Base, engine, get_db
 from app.domains.models import Domain  # noqa: F401 — imported for table creation
 from app.domains.router import router as domains_router
 from app.emails.router import router as emails_router
+from app.events.bus import event_bus
 from app.events.router import router as events_router
 from app.exceptions import register_exception_handlers
+from app.forwarding.models import ForwardingRule  # noqa: F401 — imported for table creation
+from app.forwarding.router import router as forwarding_router
 from app.gpg.models import GpgKey  # noqa: F401 — imported for table creation
 from app.gpg.router import router as gpg_router
 from app.httpbin.models import (  # noqa: F401 — imported for table creation
@@ -113,6 +116,24 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         await restore_custom_certs(session)
 
+    # Register forwarding-rule listener on the event bus so incoming
+    # emails are automatically evaluated against active rules.
+    from app.forwarding.service import process_incoming_email
+
+    async def _on_email_received(event_type: str, data: dict[str, object]) -> None:
+        async with AsyncSessionLocal() as session:
+            await process_incoming_email(
+                session,
+                from_address=str(data.get("from", "")),
+                to_address=str(data.get("to", data.get("mailbox", ""))),
+                subject=str(data.get("subject", "")),
+                mailbox=str(data.get("mailbox", "")),
+                uid=str(data.get("uid", "")),
+            )
+
+    event_bus.add_listener("email.received", _on_email_received)
+    logger.info("Forwarding-rule listener registered on event bus.")
+
     yield
 
     # ── Shutdown ─────────────────────────────────────────────────
@@ -156,6 +177,7 @@ def create_app() -> FastAPI:
     app.include_router(gpg_router, prefix="/api/v1")
     app.include_router(domains_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
+    app.include_router(forwarding_router, prefix="/api/v1")
 
     # ── HTTP Bin ──────────────────────────────────────────────────
     app.include_router(httpbin_management_router, prefix="/api/v1")

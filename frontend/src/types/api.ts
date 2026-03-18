@@ -387,6 +387,63 @@ export interface UploadTlsCertificateRequest {
   ca_certificate?: string;
 }
 
+// --- Forwarding Rule Types ---
+
+export type ForwardingRuleActionType = "smtp_forward" | "webhook";
+
+export interface ForwardingRuleActionConfig {
+  to_address?: string;
+  url?: string;
+  method?: string;
+  headers?: Record<string, string>;
+}
+
+export interface ForwardingRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  match_from: string | null;
+  match_to: string | null;
+  match_subject: string | null;
+  match_mailbox: string | null;
+  action_type: ForwardingRuleActionType;
+  action_config: ForwardingRuleActionConfig;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ForwardingRuleListResponse {
+  rules: ForwardingRule[];
+  total: number;
+}
+
+export interface CreateForwardingRuleRequest {
+  name: string;
+  enabled: boolean;
+  match_from?: string | null;
+  match_to?: string | null;
+  match_subject?: string | null;
+  match_mailbox?: string | null;
+  action_type: ForwardingRuleActionType;
+  action_config: ForwardingRuleActionConfig;
+}
+
+export interface UpdateForwardingRuleRequest {
+  name?: string;
+  enabled?: boolean;
+  match_from?: string | null;
+  match_to?: string | null;
+  match_subject?: string | null;
+  match_mailbox?: string | null;
+  action_type?: ForwardingRuleActionType;
+  action_config?: ForwardingRuleActionConfig;
+}
+
+export interface TestForwardingRuleResponse {
+  matched: boolean;
+  details: string;
+}
+
 // --- API Error ---
 
 export interface APIError {

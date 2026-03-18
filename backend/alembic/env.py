@@ -18,6 +18,7 @@ from app.auth.models import APIKey, User  # noqa: F401
 from app.config import settings
 from app.database import Base
 from app.domains.models import Domain  # noqa: F401
+from app.forwarding.models import ForwardingRule  # noqa: F401
 from app.mailboxes.models import Mailbox  # noqa: F401
 from app.system.models import ServerSettings, TlsCertificate  # noqa: F401
 
