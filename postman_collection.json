@@ -1,0 +1,2328 @@
+{
+  "info": {
+    "_postman_id": "4d496934-e67f-4b52-81ee-d00a8be93dd5",
+    "name": "MailCue API",
+    "description": "Realistic email testing server REST API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``."
+          },
+          "response": []
+        },
+        {
+          "name": "Login 2Fa",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login/2fa",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login",
+                "2fa"
+              ]
+            },
+            "description": "Complete login by verifying a TOTP code after step 1."
+          },
+          "response": []
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Create a new user account. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "password"
+              ]
+            },
+            "description": "Change the current user's password."
+          },
+          "response": []
+        },
+        {
+          "name": "Totp Setup",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/totp/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "totp",
+                "setup"
+              ]
+            },
+            "description": "Generate a TOTP secret and QR code for authenticator setup.\n\nThe secret is stored encrypted but TOTP is **not yet enabled** until\nthe user confirms with a valid code via ``POST /totp/confirm``."
+          },
+          "response": []
+        },
+        {
+          "name": "Totp Confirm",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/totp/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "totp",
+                "confirm"
+              ]
+            },
+            "description": "Verify a TOTP code from the authenticator app and enable 2FA."
+          },
+          "response": []
+        },
+        {
+          "name": "Totp Disable",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/totp/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "totp",
+                "disable"
+              ]
+            },
+            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Return the currently authenticated user's profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Clear the httpOnly refresh_token cookie."
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Exchange a refresh token for a new access + refresh token pair.\n\nThe refresh token can be passed in the JSON body **or** read from\nthe ``refresh_token`` httpOnly cookie.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Api Keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/api-keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "api-keys"
+              ]
+            },
+            "description": "List all API keys for the current user (without raw key values)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Api Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/api-keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "api-keys"
+              ]
+            },
+            "description": "Generate a new API key for the current user.\n\nThe raw key value is returned **only once** in this response.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke Api Key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/api-keys/:key_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "api-keys",
+                ":key_id"
+              ],
+              "variable": [
+                {
+                  "key": "key_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Revoke (deactivate) an API key."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Emails",
+      "item": [
+        {
+          "name": "List All Emails",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Target mailbox address (user@domain)"
+                },
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": "IMAP folder name"
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "description": "Page number"
+                },
+                {
+                  "key": "page_size",
+                  "value": "",
+                  "description": "Items per page"
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": "Full-text search query"
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": "Sort order (date_asc, date_desc)"
+                }
+              ]
+            },
+            "description": "List emails in a mailbox with pagination, search, and sorting.\n\nEmails are fetched directly from IMAP. The ``search`` parameter\nmaps to IMAP ``TEXT`` search which covers subject and body."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/:uid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                ":uid"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Target mailbox address"
+                },
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fetch a single email by its IMAP UID with full body and headers."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Single Email",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/:uid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                ":uid"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Target mailbox address"
+                },
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete an email by UID (sets \\Deleted flag and expunges)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Raw Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/:uid/raw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                ":uid",
+                "raw"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Target mailbox address"
+                },
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Download the raw RFC 5322 source of an email as a ``.eml`` file."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Attachment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/:uid/attachments/:part_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                ":uid",
+                "attachments",
+                ":part_id"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Target mailbox address"
+                },
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "part_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Download a specific MIME attachment identified by its part ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Send New Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send"
+              ]
+            },
+            "description": "Send an email via the local SMTP server (Postfix).\n\nReturns HTTP 202 (Accepted) because SMTP delivery is asynchronous --\nthe message has been accepted for delivery but not yet delivered.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_address\": \"string\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"body_type\": \"plain\",\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Inject Single Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/inject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "inject"
+              ]
+            },
+            "description": "Inject an email directly into a mailbox via IMAP APPEND.\n\nBypasses SMTP delivery entirely -- the email appears in the target\nmailbox immediately. Ideal for test data setup.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mailbox\": \"string\",\n  \"from_address\": \"string\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"html_body\": {},\n  \"text_body\": {},\n  \"date\": {},\n  \"headers\": {},\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"return_path\": {},\n  \"realistic_headers\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Inject Emails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/bulk-inject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "bulk-inject"
+              ]
+            },
+            "description": "Inject multiple emails into mailboxes in a single request.\n\nEach email in the ``emails`` array is injected independently.\nPartial failures are reported in the response without aborting\nthe entire batch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emails\": [\n    {\n      \"mailbox\": \"string\",\n      \"from_address\": \"string\",\n      \"to_addresses\": [\n        \"string\"\n      ],\n      \"subject\": \"string\",\n      \"html_body\": {},\n      \"text_body\": {},\n      \"date\": {},\n      \"headers\": {},\n      \"sign\": false,\n      \"encrypt\": false,\n      \"reply_to\": {},\n      \"in_reply_to\": {},\n      \"references\": [\n        \"string\"\n      ],\n      \"cc_addresses\": [\n        \"string\"\n      ],\n      \"return_path\": {},\n      \"realistic_headers\": true\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Mailboxes",
+      "item": [
+        {
+          "name": "List All Mailboxes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes"
+              ]
+            },
+            "description": "List all active mailboxes with email/unread counts."
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Mailbox",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes"
+              ]
+            },
+            "description": "Create a new mailbox and provision it on the mail server.\n\n**Admin only.** This creates a Dovecot virtual user entry and\nthe corresponding Maildir directory structure.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"domain\": {},\n  \"display_name\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Existing Mailbox",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:address",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":address"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete (deactivate) a mailbox by address and remove it from Dovecot.\n\n**Admin only.** The Maildir data is preserved by default.\nThe ``address`` path parameter is URL-decoded automatically."
+          },
+          "response": []
+        },
+        {
+          "name": "Mailbox Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_id/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_id",
+                "stats"
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Retrieve email counts and folder statistics via IMAP STATUS.\n\nFalls back to zeroed stats when the mail server is unreachable\n(common in local development without Docker)."
+          },
+          "response": []
+        },
+        {
+          "name": "Purge Mailbox Emails",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:address/purge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":address",
+                "purge"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete all emails from a mailbox across all folders.\n\n**Admin only.** The mailbox itself is preserved."
+          },
+          "response": []
+        },
+        {
+          "name": "List Mailbox Emails",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "page_size",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "sort",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List emails for a specific mailbox (path-based variant)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Mailbox Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fetch a single email by UID from a specific mailbox."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Mailbox Email",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete an email by UID from a specific mailbox."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Delete Mailbox Emails",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/bulk-delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                "bulk-delete"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete multiple emails by UID from a specific mailbox.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uids\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "Event Stream",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/events/stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "events",
+                "stream"
+              ]
+            },
+            "description": "Open an SSE stream for the authenticated user.\n\nEvents are broadcast from the in-process event bus.  The stream\nsends a heartbeat comment every 30 seconds to keep the TCP\nconnection alive through proxies and load balancers."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GPG",
+      "item": [
+        {
+          "name": "Generate Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/generate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                "generate"
+              ]
+            },
+            "description": "Generate a new GPG keypair for a mailbox address.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mailbox_address\": \"string\",\n  \"name\": \"MailCue User\",\n  \"algorithm\": \"RSA\",\n  \"key_length\": 2048,\n  \"expire\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Keys",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys"
+              ]
+            },
+            "description": "List all active GPG keys."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/:address",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                ":address"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Retrieve a GPG key by mailbox address."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Key",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/:address",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                ":address"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete all GPG keys for a mailbox address."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Key",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/:address/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                ":address",
+                "export"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Export the ASCII-armored public key for a mailbox address."
+          },
+          "response": []
+        },
+        {
+          "name": "Export Key Raw",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/:address/export/raw",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                ":address",
+                "export",
+                "raw"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Download the raw armored PGP public key as a ``.asc`` file."
+          },
+          "response": []
+        },
+        {
+          "name": "Publish Key",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/:address/publish",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                ":address",
+                "publish"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Publish a GPG public key to keys.openpgp.org."
+          },
+          "response": []
+        },
+        {
+          "name": "Import Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                "import"
+              ]
+            },
+            "description": "Import an armored PGP public key.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"armored_key\": \"string\",\n  \"mailbox_address\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Domains",
+      "item": [
+        {
+          "name": "List All Domains",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains"
+              ]
+            },
+            "description": "List all managed email domains. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Create Domain",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains"
+              ]
+            },
+            "description": "Add a new email domain and generate DKIM keys. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"dkim_selector\": \"mail\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Domain",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains/:name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get domain details including required DNS records. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Domain",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains/:name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains",
+                ":name"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Remove a managed domain and clean up config. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Mta Sts Policy",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains/.well-known/mta-sts.txt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains",
+                ".well-known",
+                "mta-sts.txt"
+              ]
+            },
+            "description": "Serve the MTA-STS policy file (RFC 8461).\n\nThis must be accessible at https://mta-sts.{domain}/.well-known/mta-sts.txt\nfor each managed domain."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Domain Dns",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains/:name/verify-dns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains",
+                ":name",
+                "verify-dns"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Run live DNS checks for a domain. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Mta Sts Policy Wellknown",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/.well-known/mta-sts.txt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ".well-known",
+                "mta-sts.txt"
+              ]
+            },
+            "description": "Serve MTA-STS policy at the RFC-mandated path."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Get Certificate Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/certificate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "certificate"
+              ]
+            },
+            "description": "Return metadata for both the server and CA certificates."
+          },
+          "response": []
+        },
+        {
+          "name": "Download Certificate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/certificate/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "certificate",
+                "download"
+              ]
+            },
+            "description": "Download the CA certificate as a PEM file."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "settings"
+              ]
+            },
+            "description": "Return server-wide settings. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "settings"
+              ]
+            },
+            "description": "Update server-wide settings. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hostname\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Tls Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/tls",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "tls"
+              ]
+            },
+            "description": "Return custom TLS certificate metadata. **Admin only.** No PEM content."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload Tls",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/tls",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "tls"
+              ]
+            },
+            "description": "Upload a custom TLS certificate + private key. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"certificate\": \"string\",\n  \"private_key\": \"string\",\n  \"ca_certificate\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "HTTP Bin",
+      "item": [
+        {
+          "name": "List Bins",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Bin Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"response_status_code\": 200,\n  \"response_body\": \"\",\n  \"response_content_type\": \"application/json\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bin Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update Bin Endpoint",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": {},\n  \"response_status_code\": {},\n  \"response_body\": {},\n  \"response_content_type\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Bin Endpoint",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List Bin Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins/:bin_id/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins",
+                ":bin_id",
+                "requests"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Bin Requests",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/bins/:bin_id/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "bins",
+                ":bin_id",
+                "requests"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Request Endpoint",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/httpbin/requests/:request_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "httpbin",
+                "requests",
+                ":request_id"
+              ],
+              "variable": [
+                {
+                  "key": "request_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "HTTP Bin Catch-All",
+      "item": [
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "OPTIONS",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Root",
+          "request": {
+            "method": "HEAD",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "OPTIONS",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Capture Path",
+          "request": {
+            "method": "HEAD",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/httpbin/:bin_id/:path",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "httpbin",
+                ":bin_id",
+                ":path"
+              ],
+              "variable": [
+                {
+                  "key": "bin_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "path",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            },
+            "description": "Lightweight health probe for Docker HEALTHCHECK and load balancers."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8088",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
+}

@@ -10,6 +10,9 @@
   <a href="https://github.com/Olib-AI/mailcue/stargazers"><img src="https://img.shields.io/github/stars/Olib-AI/mailcue?style=flat-square" alt="GitHub Stars" /></a>
   <a href="https://github.com/Olib-AI/mailcue/releases"><img src="https://img.shields.io/github/v/release/Olib-AI/mailcue?style=flat-square" alt="Latest Release" /></a>
   <a href="https://www.olib.ai"><img src="https://img.shields.io/badge/by-Olib%20AI-6c47ff?style=flat-square" alt="Olib AI" /></a>
+  <br />
+  <a href="https://github.com/Olib-AI/mailcue/blob/main/openapi.json"><img src="https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square&logo=openapiinitiative" alt="OpenAPI Spec" /></a>
+  <a href="https://github.com/Olib-AI/mailcue/blob/main/postman_collection.json"><img src="https://img.shields.io/badge/Postman-Collection-FF6C37?style=flat-square&logo=postman&logoColor=white" alt="Postman Collection" /></a>
 </p>
 
 ---
@@ -264,6 +267,19 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 ## API Reference
 
 The API is served under `/api/v1` and documented with interactive Swagger UI at `/api/docs`.
+
+**Machine-readable specs** are committed to the repo for easy import:
+
+| Format | File | Usage |
+|---|---|---|
+| **OpenAPI 3.1** | [`openapi.json`](openapi.json) | Import into any OpenAPI-compatible tool |
+| **Postman v2.1** | [`postman_collection.json`](postman_collection.json) | **File > Import** in Postman, or click the badge above |
+
+To regenerate these files after changing API routes:
+
+```bash
+cd backend && python ../scripts/export_openapi.py && python ../scripts/openapi_to_postman.py
+```
 
 ### Authentication
 

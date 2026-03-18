@@ -1,0 +1,5536 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "MailCue API",
+    "description": "Realistic email testing server REST API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login",
+        "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``.",
+        "operationId": "login_api_v1_auth_login_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/LoginStepResponse"
+                    }
+                  ],
+                  "title": "Response Login Api V1 Auth Login Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/2fa": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login 2Fa",
+        "description": "Complete login by verifying a TOTP code after step 1.",
+        "operationId": "login_2fa_api_v1_auth_login_2fa_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register",
+        "description": "Create a new user account. **Admin only.**",
+        "operationId": "register_api_v1_auth_register_post",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "put": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Change Password",
+        "description": "Change the current user's password.",
+        "operationId": "change_password_api_v1_auth_password_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Change Password Api V1 Auth Password Put"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/totp/setup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Totp Setup",
+        "description": "Generate a TOTP secret and QR code for authenticator setup.\n\nThe secret is stored encrypted but TOTP is **not yet enabled** until\nthe user confirms with a valid code via ``POST /totp/confirm``.",
+        "operationId": "totp_setup_api_v1_auth_totp_setup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPSetupResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/totp/confirm": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Totp Confirm",
+        "description": "Verify a TOTP code from the authenticator app and enable 2FA.",
+        "operationId": "totp_confirm_api_v1_auth_totp_confirm_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Totp Confirm Api V1 Auth Totp Confirm Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/totp/disable": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Totp Disable",
+        "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code.",
+        "operationId": "totp_disable_api_v1_auth_totp_disable_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Totp Disable Api V1 Auth Totp Disable Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get Current User Info",
+        "description": "Return the currently authenticated user's profile.",
+        "operationId": "get_current_user_info_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Logout",
+        "description": "Clear the httpOnly refresh_token cookie.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Logout Api V1 Auth Logout Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh",
+        "description": "Exchange a refresh token for a new access + refresh token pair.\n\nThe refresh token can be passed in the JSON body **or** read from\nthe ``refresh_token`` httpOnly cookie.",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RefreshRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/api-keys": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "List Api Keys",
+        "description": "List all API keys for the current user (without raw key values).",
+        "operationId": "list_api_keys_api_v1_auth_api_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/APIKeyResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Api Keys Api V1 Auth Api Keys Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Create Api Key",
+        "description": "Generate a new API key for the current user.\n\nThe raw key value is returned **only once** in this response.",
+        "operationId": "create_api_key_api_v1_auth_api_keys_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/APIKeyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIKeyCreatedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/api-keys/{key_id}": {
+      "delete": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Revoke Api Key",
+        "description": "Revoke (deactivate) an API key.",
+        "operationId": "revoke_api_key_api_v1_auth_api_keys__key_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "key_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "List All Emails",
+        "description": "List emails in a mailbox with pagination, search, and sorting.\n\nEmails are fetched directly from IMAP. The ``search`` parameter\nmaps to IMAP ``TEXT`` search which covers subject and body.",
+        "operationId": "list_all_emails_api_v1_emails_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target mailbox address (user@domain)",
+              "title": "Mailbox"
+            },
+            "description": "Target mailbox address (user@domain)"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "IMAP folder name",
+              "default": "INBOX",
+              "title": "Folder"
+            },
+            "description": "IMAP folder name"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Page number",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "Page number"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Items per page",
+              "default": 50,
+              "title": "Page Size"
+            },
+            "description": "Items per page"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Full-text search query",
+              "title": "Search"
+            },
+            "description": "Full-text search query"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Sort order (date_asc, date_desc)",
+              "default": "date_desc",
+              "title": "Sort"
+            },
+            "description": "Sort order (date_asc, date_desc)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/{uid}": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Get Single Email",
+        "description": "Fetch a single email by its IMAP UID with full body and headers.",
+        "operationId": "get_single_email_api_v1_emails__uid__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Target mailbox address"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Delete Single Email",
+        "description": "Delete an email by UID (sets \\Deleted flag and expunges).",
+        "operationId": "delete_single_email_api_v1_emails__uid__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Target mailbox address"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/{uid}/raw": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Get Raw Email",
+        "description": "Download the raw RFC 5322 source of an email as a ``.eml`` file.",
+        "operationId": "get_raw_email_api_v1_emails__uid__raw_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Target mailbox address"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/{uid}/attachments/{part_id}": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Download Attachment",
+        "description": "Download a specific MIME attachment identified by its part ID.",
+        "operationId": "download_attachment_api_v1_emails__uid__attachments__part_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "part_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Part Id"
+            }
+          },
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Target mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Target mailbox address"
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/send": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Send New Email",
+        "description": "Send an email via the local SMTP server (Postfix).\n\nReturns HTTP 202 (Accepted) because SMTP delivery is asynchronous --\nthe message has been accepted for delivery but not yet delivered.",
+        "operationId": "send_new_email_api_v1_emails_send_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Send New Email Api V1 Emails Send Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/emails/inject": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Inject Single Email",
+        "description": "Inject an email directly into a mailbox via IMAP APPEND.\n\nBypasses SMTP delivery entirely -- the email appears in the target\nmailbox immediately. Ideal for test data setup.",
+        "operationId": "inject_single_email_api_v1_emails_inject_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InjectEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Inject Single Email Api V1 Emails Inject Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/emails/bulk-inject": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Bulk Inject Emails",
+        "description": "Inject multiple emails into mailboxes in a single request.\n\nEach email in the ``emails`` array is injected independently.\nPartial failures are reported in the response without aborting\nthe entire batch.",
+        "operationId": "bulk_inject_emails_api_v1_emails_bulk_inject_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkInjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkInjectResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mailboxes": {
+      "get": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "List All Mailboxes",
+        "description": "List all active mailboxes with email/unread counts.",
+        "operationId": "list_all_mailboxes_api_v1_mailboxes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Create New Mailbox",
+        "description": "Create a new mailbox and provision it on the mail server.\n\n**Admin only.** This creates a Dovecot virtual user entry and\nthe corresponding Maildir directory structure.",
+        "operationId": "create_new_mailbox_api_v1_mailboxes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailboxCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/mailboxes/{address}": {
+      "delete": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Delete Existing Mailbox",
+        "description": "Delete (deactivate) a mailbox by address and remove it from Dovecot.\n\n**Admin only.** The Maildir data is preserved by default.\nThe ``address`` path parameter is URL-decoded automatically.",
+        "operationId": "delete_existing_mailbox_api_v1_mailboxes__address__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{mailbox_id}/stats": {
+      "get": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Mailbox Stats",
+        "description": "Retrieve email counts and folder statistics via IMAP STATUS.\n\nFalls back to zeroed stats when the mail server is unreachable\n(common in local development without Docker).",
+        "operationId": "mailbox_stats_api_v1_mailboxes__mailbox_id__stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailboxStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{address}/purge": {
+      "post": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Purge Mailbox Emails",
+        "description": "Delete all emails from a mailbox across all folders.\n\n**Admin only.** The mailbox itself is preserved.",
+        "operationId": "purge_mailbox_emails_api_v1_mailboxes__address__purge_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Purge Mailbox Emails Api V1 Mailboxes  Address  Purge Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{mailbox_address}/emails": {
+      "get": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "List Mailbox Emails",
+        "description": "List emails for a specific mailbox (path-based variant).",
+        "operationId": "list_mailbox_emails_api_v1_mailboxes__mailbox_address__emails_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "date_desc",
+              "title": "Sort"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{mailbox_address}/emails/{uid}": {
+      "get": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Get Mailbox Email",
+        "description": "Fetch a single email by UID from a specific mailbox.",
+        "operationId": "get_mailbox_email_api_v1_mailboxes__mailbox_address__emails__uid__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Delete Mailbox Email",
+        "description": "Delete an email by UID from a specific mailbox.",
+        "operationId": "delete_mailbox_email_api_v1_mailboxes__mailbox_address__emails__uid__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{mailbox_address}/emails/bulk-delete": {
+      "post": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Bulk Delete Mailbox Emails",
+        "description": "Delete multiple emails by UID from a specific mailbox.",
+        "operationId": "bulk_delete_mailbox_emails_api_v1_mailboxes__mailbox_address__emails_bulk_delete_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events/stream": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Event Stream",
+        "description": "Open an SSE stream for the authenticated user.\n\nEvents are broadcast from the in-process event bus.  The stream\nsends a heartbeat comment every 30 seconds to keep the TCP\nconnection alive through proxies and load balancers.",
+        "operationId": "event_stream_api_v1_events_stream_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/gpg/keys/generate": {
+      "post": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Generate Key",
+        "description": "Generate a new GPG keypair for a mailbox address.",
+        "operationId": "generate_key_api_v1_gpg_keys_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/gpg/keys": {
+      "get": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "List Keys",
+        "description": "List all active GPG keys.",
+        "operationId": "list_keys_api_v1_gpg_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/gpg/keys/{address}": {
+      "get": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Get Key",
+        "description": "Retrieve a GPG key by mailbox address.",
+        "operationId": "get_key_api_v1_gpg_keys__address__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Delete Key",
+        "description": "Delete all GPG keys for a mailbox address.",
+        "operationId": "delete_key_api_v1_gpg_keys__address__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpg/keys/{address}/export": {
+      "get": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Export Key",
+        "description": "Export the ASCII-armored public key for a mailbox address.",
+        "operationId": "export_key_api_v1_gpg_keys__address__export_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyExportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpg/keys/{address}/export/raw": {
+      "get": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Export Key Raw",
+        "description": "Download the raw armored PGP public key as a ``.asc`` file.",
+        "operationId": "export_key_raw_api_v1_gpg_keys__address__export_raw_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpg/keys/{address}/publish": {
+      "post": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Publish Key",
+        "description": "Publish a GPG public key to keys.openpgp.org.",
+        "operationId": "publish_key_api_v1_gpg_keys__address__publish_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Address"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyserverPublishResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/gpg/keys/import": {
+      "post": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Import Key",
+        "description": "Import an armored PGP public key.",
+        "operationId": "import_key_api_v1_gpg_keys_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/domains": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "List All Domains",
+        "description": "List all managed email domains. **Admin only.**",
+        "operationId": "list_all_domains_api_v1_domains_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Create Domain",
+        "description": "Add a new email domain and generate DKIM keys. **Admin only.**",
+        "operationId": "create_domain_api_v1_domains_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/domains/{name}": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Get Domain",
+        "description": "Get domain details including required DNS records. **Admin only.**",
+        "operationId": "get_domain_api_v1_domains__name__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainDetailResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Delete Domain",
+        "description": "Remove a managed domain and clean up config. **Admin only.**",
+        "operationId": "delete_domain_api_v1_domains__name__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/.well-known/mta-sts.txt": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Mta Sts Policy",
+        "description": "Serve the MTA-STS policy file (RFC 8461).\n\nThis must be accessible at https://mta-sts.{domain}/.well-known/mta-sts.txt\nfor each managed domain.",
+        "operationId": "mta_sts_policy_api_v1_domains__well_known_mta_sts_txt_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{name}/verify-dns": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Verify Domain Dns",
+        "description": "Run live DNS checks for a domain. **Admin only.**",
+        "operationId": "verify_domain_dns_api_v1_domains__name__verify_dns_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/certificate": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get Certificate Info",
+        "description": "Return metadata for both the server and CA certificates.",
+        "operationId": "get_certificate_info_api_v1_system_certificate_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Certificate Info Api V1 System Certificate Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/certificate/download": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Download Certificate",
+        "description": "Download the CA certificate as a PEM file.",
+        "operationId": "download_certificate_api_v1_system_certificate_download_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/system/settings": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get Settings",
+        "description": "Return server-wide settings. **Admin only.**",
+        "operationId": "get_settings_api_v1_system_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerSettingsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Update Settings",
+        "description": "Update server-wide settings. **Admin only.**",
+        "operationId": "update_settings_api_v1_system_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServerSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerSettingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/system/tls": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get Tls Status",
+        "description": "Return custom TLS certificate metadata. **Admin only.** No PEM content.",
+        "operationId": "get_tls_status_api_v1_system_tls_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TlsCertificateStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Upload Tls",
+        "description": "Upload a custom TLS certificate + private key. **Admin only.**",
+        "operationId": "upload_tls_api_v1_system_tls_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadTlsCertificateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TlsCertificateStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/httpbin/bins": {
+      "get": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "List Bins",
+        "operationId": "list_bins_api_v1_httpbin_bins_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BinResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Bins Api V1 Httpbin Bins Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Create Bin Endpoint",
+        "operationId": "create_bin_endpoint_api_v1_httpbin_bins_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BinCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/httpbin/bins/{bin_id}": {
+      "get": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Get Bin Endpoint",
+        "operationId": "get_bin_endpoint_api_v1_httpbin_bins__bin_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Update Bin Endpoint",
+        "operationId": "update_bin_endpoint_api_v1_httpbin_bins__bin_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BinUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BinResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Delete Bin Endpoint",
+        "operationId": "delete_bin_endpoint_api_v1_httpbin_bins__bin_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/httpbin/bins/{bin_id}/requests": {
+      "get": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "List Bin Requests",
+        "operationId": "list_bin_requests_api_v1_httpbin_bins__bin_id__requests_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapturedRequestListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Clear Bin Requests",
+        "operationId": "clear_bin_requests_api_v1_httpbin_bins__bin_id__requests_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/httpbin/requests/{request_id}": {
+      "delete": {
+        "tags": [
+          "HTTP Bin"
+        ],
+        "summary": "Delete Request Endpoint",
+        "operationId": "delete_request_endpoint_api_v1_httpbin_requests__request_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/httpbin/{bin_id}": {
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/httpbin/{bin_id}/{path}": {
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__head",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health Check",
+        "description": "Lightweight health probe for Docker HEALTHCHECK and load balancers.",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Check Api V1 Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/mta-sts.txt": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Mta Sts Policy Wellknown",
+        "description": "Serve MTA-STS policy at the RFC-mandated path.",
+        "operationId": "mta_sts_policy_wellknown__well_known_mta_sts_txt_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "APIKeyCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "APIKeyCreateRequest",
+        "description": "Create a new API key for the current user."
+      },
+      "APIKeyCreatedResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_at",
+          "is_active",
+          "key"
+        ],
+        "title": "APIKeyCreatedResponse",
+        "description": "Extends ``APIKeyResponse`` with the raw key -- returned only at creation time."
+      },
+      "APIKeyResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "prefix": {
+            "type": "string",
+            "title": "Prefix"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "created_at",
+          "is_active"
+        ],
+        "title": "APIKeyResponse",
+        "description": "Returned once on creation (``key`` field) and on listing (without ``key``)."
+      },
+      "AttachmentInfo": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "part_id": {
+            "type": "string",
+            "title": "Part Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "content_type",
+          "size",
+          "part_id"
+        ],
+        "title": "AttachmentInfo",
+        "description": "Metadata about a single MIME attachment."
+      },
+      "BinCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "response_status_code": {
+            "type": "integer",
+            "title": "Response Status Code",
+            "default": 200
+          },
+          "response_body": {
+            "type": "string",
+            "title": "Response Body",
+            "default": ""
+          },
+          "response_content_type": {
+            "type": "string",
+            "title": "Response Content Type",
+            "default": "application/json"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "BinCreateRequest"
+      },
+      "BinResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "response_status_code": {
+            "type": "integer",
+            "title": "Response Status Code"
+          },
+          "response_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Body"
+          },
+          "response_content_type": {
+            "type": "string",
+            "title": "Response Content Type"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "request_count": {
+            "type": "integer",
+            "title": "Request Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "response_status_code",
+          "response_content_type",
+          "created_at"
+        ],
+        "title": "BinResponse"
+      },
+      "BinUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "response_status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Status Code"
+          },
+          "response_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Body"
+          },
+          "response_content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Content Type"
+          }
+        },
+        "type": "object",
+        "title": "BinUpdateRequest"
+      },
+      "BulkDeleteRequest": {
+        "properties": {
+          "uids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Uids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "uids"
+        ],
+        "title": "BulkDeleteRequest",
+        "description": "Delete multiple emails from a mailbox."
+      },
+      "BulkDeleteResponse": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "failed"
+        ],
+        "title": "BulkDeleteResponse",
+        "description": "Result of a bulk delete operation."
+      },
+      "BulkInjectRequest": {
+        "properties": {
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/InjectEmailRequest"
+            },
+            "type": "array",
+            "title": "Emails"
+          }
+        },
+        "type": "object",
+        "required": [
+          "emails"
+        ],
+        "title": "BulkInjectRequest",
+        "description": "Inject multiple emails at once."
+      },
+      "BulkInjectResponse": {
+        "properties": {
+          "injected": {
+            "type": "integer",
+            "title": "Injected"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "injected",
+          "failed",
+          "ids"
+        ],
+        "title": "BulkInjectResponse",
+        "description": "Result of a bulk inject operation."
+      },
+      "CapturedRequestListResponse": {
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/CapturedRequestResponse"
+            },
+            "type": "array",
+            "title": "Requests"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requests",
+          "total"
+        ],
+        "title": "CapturedRequestListResponse"
+      },
+      "CapturedRequestResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "bin_id": {
+            "type": "string",
+            "title": "Bin Id"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "headers": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Headers"
+          },
+          "query_params": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Query Params"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "remote_addr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Addr"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "bin_id",
+          "method",
+          "path",
+          "headers",
+          "query_params",
+          "created_at"
+        ],
+        "title": "CapturedRequestResponse"
+      },
+      "DnsCheckResponse": {
+        "properties": {
+          "mx_verified": {
+            "type": "boolean",
+            "title": "Mx Verified"
+          },
+          "spf_verified": {
+            "type": "boolean",
+            "title": "Spf Verified"
+          },
+          "dkim_verified": {
+            "type": "boolean",
+            "title": "Dkim Verified"
+          },
+          "dmarc_verified": {
+            "type": "boolean",
+            "title": "Dmarc Verified"
+          },
+          "mta_sts_verified": {
+            "type": "boolean",
+            "title": "Mta Sts Verified",
+            "default": false
+          },
+          "tls_rpt_verified": {
+            "type": "boolean",
+            "title": "Tls Rpt Verified",
+            "default": false
+          },
+          "all_verified": {
+            "type": "boolean",
+            "title": "All Verified"
+          },
+          "dns_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecordInfo"
+            },
+            "type": "array",
+            "title": "Dns Records"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mx_verified",
+          "spf_verified",
+          "dkim_verified",
+          "dmarc_verified",
+          "all_verified",
+          "dns_records"
+        ],
+        "title": "DnsCheckResponse",
+        "description": "Result of a live DNS verification check."
+      },
+      "DnsRecordInfo": {
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "title": "Record Type"
+          },
+          "hostname": {
+            "type": "string",
+            "title": "Hostname"
+          },
+          "expected_value": {
+            "type": "string",
+            "title": "Expected Value"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "current_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Value"
+          },
+          "purpose": {
+            "type": "string",
+            "title": "Purpose"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_type",
+          "hostname",
+          "expected_value",
+          "verified",
+          "purpose"
+        ],
+        "title": "DnsRecordInfo",
+        "description": "A single DNS record that needs to be configured."
+      },
+      "DomainCreateRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dkim_selector": {
+            "type": "string",
+            "title": "Dkim Selector",
+            "default": "mail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DomainCreateRequest",
+        "description": "Add a new email domain."
+      },
+      "DomainDetailResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "dkim_selector": {
+            "type": "string",
+            "title": "Dkim Selector"
+          },
+          "mx_verified": {
+            "type": "boolean",
+            "title": "Mx Verified"
+          },
+          "spf_verified": {
+            "type": "boolean",
+            "title": "Spf Verified"
+          },
+          "dkim_verified": {
+            "type": "boolean",
+            "title": "Dkim Verified"
+          },
+          "dmarc_verified": {
+            "type": "boolean",
+            "title": "Dmarc Verified"
+          },
+          "mta_sts_verified": {
+            "type": "boolean",
+            "title": "Mta Sts Verified"
+          },
+          "tls_rpt_verified": {
+            "type": "boolean",
+            "title": "Tls Rpt Verified"
+          },
+          "last_dns_check": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dns Check"
+          },
+          "all_verified": {
+            "type": "boolean",
+            "title": "All Verified"
+          },
+          "dns_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecordInfo"
+            },
+            "type": "array",
+            "title": "Dns Records"
+          },
+          "dkim_public_key_txt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dkim Public Key Txt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_active",
+          "created_at",
+          "dkim_selector",
+          "mx_verified",
+          "spf_verified",
+          "dkim_verified",
+          "dmarc_verified",
+          "mta_sts_verified",
+          "tls_rpt_verified",
+          "last_dns_check",
+          "all_verified",
+          "dns_records"
+        ],
+        "title": "DomainDetailResponse",
+        "description": "Extended domain info with DNS records and DKIM public key."
+      },
+      "DomainListResponse": {
+        "properties": {
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainResponse"
+            },
+            "type": "array",
+            "title": "Domains"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domains",
+          "total"
+        ],
+        "title": "DomainListResponse",
+        "description": "List of managed domains."
+      },
+      "DomainResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "dkim_selector": {
+            "type": "string",
+            "title": "Dkim Selector"
+          },
+          "mx_verified": {
+            "type": "boolean",
+            "title": "Mx Verified"
+          },
+          "spf_verified": {
+            "type": "boolean",
+            "title": "Spf Verified"
+          },
+          "dkim_verified": {
+            "type": "boolean",
+            "title": "Dkim Verified"
+          },
+          "dmarc_verified": {
+            "type": "boolean",
+            "title": "Dmarc Verified"
+          },
+          "mta_sts_verified": {
+            "type": "boolean",
+            "title": "Mta Sts Verified"
+          },
+          "tls_rpt_verified": {
+            "type": "boolean",
+            "title": "Tls Rpt Verified"
+          },
+          "last_dns_check": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Dns Check"
+          },
+          "all_verified": {
+            "type": "boolean",
+            "title": "All Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "is_active",
+          "created_at",
+          "dkim_selector",
+          "mx_verified",
+          "spf_verified",
+          "dkim_verified",
+          "dmarc_verified",
+          "mta_sts_verified",
+          "tls_rpt_verified",
+          "last_dns_check",
+          "all_verified"
+        ],
+        "title": "DomainResponse",
+        "description": "Basic domain information."
+      },
+      "EmailDetail": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "to_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To Addresses"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "has_attachments": {
+            "type": "boolean",
+            "title": "Has Attachments"
+          },
+          "is_read": {
+            "type": "boolean",
+            "title": "Is Read"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id",
+            "default": ""
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "default": 0
+          },
+          "is_signed": {
+            "type": "boolean",
+            "title": "Is Signed",
+            "default": false
+          },
+          "is_encrypted": {
+            "type": "boolean",
+            "title": "Is Encrypted",
+            "default": false
+          },
+          "html_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Body"
+          },
+          "text_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Body"
+          },
+          "cc_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cc Addresses",
+            "default": []
+          },
+          "bcc_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bcc Addresses",
+            "default": []
+          },
+          "raw_headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Raw Headers",
+            "default": {}
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentInfo"
+            },
+            "type": "array",
+            "title": "Attachments",
+            "default": []
+          },
+          "gpg": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GpgEmailInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "mailbox",
+          "from_address",
+          "to_addresses",
+          "subject",
+          "has_attachments",
+          "is_read",
+          "preview"
+        ],
+        "title": "EmailDetail",
+        "description": "Full representation including body and headers."
+      },
+      "EmailListResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "emails": {
+            "items": {
+              "$ref": "#/components/schemas/EmailSummary"
+            },
+            "type": "array",
+            "title": "Emails"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "emails"
+        ],
+        "title": "EmailListResponse",
+        "description": "Paginated list of email summaries."
+      },
+      "EmailSummary": {
+        "properties": {
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "to_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To Addresses"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "has_attachments": {
+            "type": "boolean",
+            "title": "Has Attachments"
+          },
+          "is_read": {
+            "type": "boolean",
+            "title": "Is Read"
+          },
+          "preview": {
+            "type": "string",
+            "title": "Preview"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id",
+            "default": ""
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size",
+            "default": 0
+          },
+          "is_signed": {
+            "type": "boolean",
+            "title": "Is Signed",
+            "default": false
+          },
+          "is_encrypted": {
+            "type": "boolean",
+            "title": "Is Encrypted",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "uid",
+          "mailbox",
+          "from_address",
+          "to_addresses",
+          "subject",
+          "has_attachments",
+          "is_read",
+          "preview"
+        ],
+        "title": "EmailSummary",
+        "description": "Lightweight representation used in list views."
+      },
+      "FolderInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "message_count": {
+            "type": "integer",
+            "title": "Message Count"
+          },
+          "unseen_count": {
+            "type": "integer",
+            "title": "Unseen Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "message_count",
+          "unseen_count"
+        ],
+        "title": "FolderInfo",
+        "description": "Per-folder message counts."
+      },
+      "GenerateKeyRequest": {
+        "properties": {
+          "mailbox_address": {
+            "type": "string",
+            "title": "Mailbox Address"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": "MailCue User"
+          },
+          "algorithm": {
+            "type": "string",
+            "pattern": "^(RSA|ECC)$",
+            "title": "Algorithm",
+            "default": "RSA"
+          },
+          "key_length": {
+            "type": "integer",
+            "maximum": 4096.0,
+            "minimum": 1024.0,
+            "title": "Key Length",
+            "default": 2048
+          },
+          "expire": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expire"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailbox_address"
+        ],
+        "title": "GenerateKeyRequest",
+        "description": "Request body for generating a new GPG keypair."
+      },
+      "GpgEmailInfo": {
+        "properties": {
+          "is_signed": {
+            "type": "boolean",
+            "title": "Is Signed",
+            "default": false
+          },
+          "is_encrypted": {
+            "type": "boolean",
+            "title": "Is Encrypted",
+            "default": false
+          },
+          "signature_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignatureStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signer_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Fingerprint"
+          },
+          "signer_key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Key Id"
+          },
+          "signer_uid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Uid"
+          },
+          "decrypted": {
+            "type": "boolean",
+            "title": "Decrypted",
+            "default": false
+          },
+          "encryption_key_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Encryption Key Ids"
+          }
+        },
+        "type": "object",
+        "title": "GpgEmailInfo",
+        "description": "PGP/MIME metadata attached to a parsed email."
+      },
+      "GpgKeyExportResponse": {
+        "properties": {
+          "mailbox_address": {
+            "type": "string",
+            "title": "Mailbox Address"
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          },
+          "public_key": {
+            "type": "string",
+            "title": "Public Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailbox_address",
+          "fingerprint",
+          "public_key"
+        ],
+        "title": "GpgKeyExportResponse",
+        "description": "Armored PGP public key export."
+      },
+      "GpgKeyListResponse": {
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/GpgKeyResponse"
+            },
+            "type": "array",
+            "title": "Keys"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys",
+          "total"
+        ],
+        "title": "GpgKeyListResponse",
+        "description": "Paginated list of GPG keys."
+      },
+      "GpgKeyResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "mailbox_address": {
+            "type": "string",
+            "title": "Mailbox Address"
+          },
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          },
+          "key_id": {
+            "type": "string",
+            "title": "Key Id"
+          },
+          "uid_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid Name"
+          },
+          "uid_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uid Email"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "key_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Length"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "is_private": {
+            "type": "boolean",
+            "title": "Is Private"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mailbox_address",
+          "fingerprint",
+          "key_id",
+          "created_at",
+          "is_private",
+          "is_active"
+        ],
+        "title": "GpgKeyResponse",
+        "description": "Serialised GPG key metadata returned by the API."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ImportKeyRequest": {
+        "properties": {
+          "armored_key": {
+            "type": "string",
+            "title": "Armored Key"
+          },
+          "mailbox_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mailbox Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "armored_key"
+        ],
+        "title": "ImportKeyRequest",
+        "description": "Request body for importing an armored PGP key."
+      },
+      "InjectEmailRequest": {
+        "properties": {
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "to_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To Addresses"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "html_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html Body"
+          },
+          "text_body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Body"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Headers",
+            "default": {}
+          },
+          "sign": {
+            "type": "boolean",
+            "title": "Sign",
+            "default": false
+          },
+          "encrypt": {
+            "type": "boolean",
+            "title": "Encrypt",
+            "default": false
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "in_reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Reply To"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "References",
+            "default": []
+          },
+          "cc_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cc Addresses",
+            "default": []
+          },
+          "return_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Path"
+          },
+          "realistic_headers": {
+            "type": "boolean",
+            "title": "Realistic Headers",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailbox",
+          "from_address",
+          "to_addresses",
+          "subject"
+        ],
+        "title": "InjectEmailRequest",
+        "description": "Inject an email directly into a mailbox via IMAP APPEND."
+      },
+      "KeyserverPublishResponse": {
+        "properties": {
+          "published": {
+            "type": "boolean",
+            "title": "Published"
+          },
+          "key_fingerprint": {
+            "type": "string",
+            "title": "Key Fingerprint"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "published",
+          "key_fingerprint",
+          "message"
+        ],
+        "title": "KeyserverPublishResponse",
+        "description": "Result of publishing a key to keys.openpgp.org."
+      },
+      "LoginStepResponse": {
+        "properties": {
+          "requires_2fa": {
+            "type": "boolean",
+            "title": "Requires 2Fa",
+            "default": true
+          },
+          "temp_token": {
+            "type": "string",
+            "title": "Temp Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "temp_token"
+        ],
+        "title": "LoginStepResponse",
+        "description": "Returned when login requires a second factor (TOTP)."
+      },
+      "MailboxCreateRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "MailboxCreateRequest",
+        "description": "Request body for creating a new mailbox.\n\nThe full address is composed as ``username@domain``.  If ``domain``\nis omitted, the server's ``MAILCUE_DOMAIN`` setting is used."
+      },
+      "MailboxListResponse": {
+        "properties": {
+          "mailboxes": {
+            "items": {
+              "$ref": "#/components/schemas/MailboxResponse"
+            },
+            "type": "array",
+            "title": "Mailboxes"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailboxes",
+          "total"
+        ],
+        "title": "MailboxListResponse",
+        "description": "Wrapper for the mailbox listing endpoint."
+      },
+      "MailboxResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username",
+            "default": ""
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "quota_mb": {
+            "type": "integer",
+            "title": "Quota Mb",
+            "default": 500
+          },
+          "email_count": {
+            "type": "integer",
+            "title": "Email Count",
+            "default": 0
+          },
+          "unread_count": {
+            "type": "integer",
+            "title": "Unread Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "address",
+          "display_name",
+          "domain",
+          "is_active",
+          "created_at"
+        ],
+        "title": "MailboxResponse",
+        "description": "Public mailbox representation."
+      },
+      "MailboxStats": {
+        "properties": {
+          "mailbox_id": {
+            "type": "string",
+            "title": "Mailbox Id"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "total_emails": {
+            "type": "integer",
+            "title": "Total Emails"
+          },
+          "unread_emails": {
+            "type": "integer",
+            "title": "Unread Emails"
+          },
+          "total_size_bytes": {
+            "type": "integer",
+            "title": "Total Size Bytes"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/FolderInfo"
+            },
+            "type": "array",
+            "title": "Folders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailbox_id",
+          "address",
+          "total_emails",
+          "unread_emails",
+          "total_size_bytes",
+          "folders"
+        ],
+        "title": "MailboxStats",
+        "description": "Mailbox statistics returned from IMAP STATUS."
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "description": "Explicitly pass a refresh token (alternative to cookie)."
+      },
+      "SendEmailRequest": {
+        "properties": {
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "to_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "To Addresses"
+          },
+          "cc_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Cc Addresses",
+            "default": []
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "default": ""
+          },
+          "body_type": {
+            "type": "string",
+            "title": "Body Type",
+            "default": "plain"
+          },
+          "sign": {
+            "type": "boolean",
+            "title": "Sign",
+            "default": false
+          },
+          "encrypt": {
+            "type": "boolean",
+            "title": "Encrypt",
+            "default": false
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "in_reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Reply To"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "References",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_address",
+          "to_addresses",
+          "subject"
+        ],
+        "title": "SendEmailRequest",
+        "description": "Send a new email via SMTP."
+      },
+      "ServerSettingsResponse": {
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "title": "Hostname"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hostname"
+        ],
+        "title": "ServerSettingsResponse"
+      },
+      "SignatureStatus": {
+        "type": "string",
+        "enum": [
+          "valid",
+          "invalid",
+          "no_public_key",
+          "expired_key",
+          "error"
+        ],
+        "title": "SignatureStatus",
+        "description": "Result of a PGP signature verification."
+      },
+      "TOTPSetupResponse": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          },
+          "qr_code": {
+            "type": "string",
+            "title": "Qr Code"
+          },
+          "provisioning_uri": {
+            "type": "string",
+            "title": "Provisioning Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "qr_code",
+          "provisioning_uri"
+        ],
+        "title": "TOTPSetupResponse",
+        "description": "Returned when initiating TOTP setup -- secret, QR code, provisioning URI."
+      },
+      "TlsCertificateStatusResponse": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "common_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Common Name"
+          },
+          "san_dns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "San Dns Names",
+            "default": []
+          },
+          "not_before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Before"
+          },
+          "not_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not After"
+          },
+          "fingerprint_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint Sha256"
+          },
+          "uploaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uploaded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "title": "TlsCertificateStatusResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "user"
+        ],
+        "title": "TokenResponse",
+        "description": "JWT access + refresh token pair, including the authenticated user."
+      },
+      "UpdateServerSettingsRequest": {
+        "properties": {
+          "hostname": {
+            "type": "string",
+            "title": "Hostname"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hostname"
+        ],
+        "title": "UpdateServerSettingsRequest"
+      },
+      "UploadTlsCertificateRequest": {
+        "properties": {
+          "certificate": {
+            "type": "string",
+            "title": "Certificate"
+          },
+          "private_key": {
+            "type": "string",
+            "title": "Private Key"
+          },
+          "ca_certificate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ca Certificate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "certificate",
+          "private_key"
+        ],
+        "title": "UploadTlsCertificateRequest"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_admin": {
+            "type": "boolean",
+            "title": "Is Admin"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "totp_enabled": {
+            "type": "boolean",
+            "title": "Totp Enabled",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "is_admin",
+          "is_active",
+          "created_at"
+        ],
+        "title": "UserResponse",
+        "description": "Public user representation."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}
