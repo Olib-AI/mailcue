@@ -9,6 +9,8 @@ import {
   Reply,
   ReplyAll,
   Forward,
+  GitCompareArrows,
+  Check,
 } from "lucide-react";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -31,6 +33,7 @@ import { AttachmentList } from "./attachment-list";
 import { GpgStatusBadge } from "@/components/gpg/gpg-status-badge";
 import { useEmail, useDeleteEmail } from "@/hooks/use-emails";
 import { useUIStore } from "@/stores/ui-store";
+import { useCompareStore } from "@/stores/compare-store";
 
 function EmailDetailSkeleton() {
   return (
@@ -58,6 +61,8 @@ function EmailDetail() {
     selectedFolder
   );
   const deleteEmail = useDeleteEmail();
+  const { addEmail, removeEmail, hasEmail } = useCompareStore();
+  const isInCompare = hasEmail(selectedMailbox ?? "", selectedEmailUid ?? "");
   const [showAllHeaders, setShowAllHeaders] = useState(false);
 
   const handleDelete = useCallback(() => {
@@ -154,6 +159,32 @@ function EmailDetail() {
               aria-label="Forward"
             >
               <Forward className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (!selectedMailbox || !selectedEmailUid) return;
+                if (isInCompare) {
+                  removeEmail(selectedMailbox, selectedEmailUid);
+                } else {
+                  addEmail({
+                    uid: selectedEmailUid,
+                    mailbox: selectedMailbox,
+                    folder: selectedFolder,
+                    subject: email.subject,
+                    from_address: email.from_address,
+                  });
+                }
+              }}
+              className={isInCompare ? "text-primary hover:text-primary" : ""}
+              aria-label={isInCompare ? "Remove from compare" : "Add to compare"}
+            >
+              {isInCompare ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <GitCompareArrows className="h-4 w-4" />
+              )}
             </Button>
             <Button
               variant="ghost"

@@ -3,6 +3,8 @@ import { Outlet } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { ComposeDialog } from "@/components/email/compose-dialog";
+import { CompareBar } from "@/components/email/compare-bar";
+import { CompareView } from "@/components/email/compare-view";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { useSSE } from "@/hooks/use-sse";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,6 +37,8 @@ function AppShell() {
         </main>
       </div>
       <ComposeDialog />
+      <CompareBar />
+      <CompareView />
       <KeyboardShortcutsDialog
         open={shortcutsOpen}
         onOpenChange={setShortcutsOpen}

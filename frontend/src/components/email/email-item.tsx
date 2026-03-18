@@ -1,4 +1,4 @@
-import { Paperclip, Shield, Lock } from "lucide-react";
+import { Paperclip, Shield, Lock, GitCompareArrows, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatEmailDate,
@@ -7,6 +7,8 @@ import {
   truncate,
 } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { useCompareStore } from "@/stores/compare-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { EmailSummary } from "@/types/api";
 
 interface EmailItemProps {
@@ -27,11 +29,29 @@ function EmailItem({
   selectionMode = false,
 }: EmailItemProps) {
   const fromDisplay = extractDisplayName(email.from_address);
+  const { addEmail, removeEmail, hasEmail } = useCompareStore();
+  const selectedFolder = useUIStore((s) => s.selectedFolder);
+  const isInCompare = hasEmail(email.mailbox, email.uid);
+
+  const handleToggleCompare = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isInCompare) {
+      removeEmail(email.mailbox, email.uid);
+    } else {
+      addEmail({
+        uid: email.uid,
+        mailbox: email.mailbox,
+        folder: selectedFolder,
+        subject: email.subject,
+        from_address: email.from_address,
+      });
+    }
+  };
 
   return (
     <div
       className={cn(
-        "flex w-full items-start gap-3 border-b p-3 text-left transition-colors",
+        "group flex w-full items-start gap-3 border-b p-3 text-left transition-colors",
         isSelected ? "bg-accent" : "hover:bg-muted/50",
         !email.is_read && "bg-primary/[0.03]"
       )}
@@ -100,6 +120,26 @@ function EmailItem({
           </p>
         </div>
       </button>
+      {/* Add to Compare toggle */}
+      {!selectionMode && (
+        <button
+          type="button"
+          onClick={handleToggleCompare}
+          title={isInCompare ? "Remove from compare" : "Add to compare"}
+          className={cn(
+            "shrink-0 mt-1 rounded p-1 transition-all",
+            isInCompare
+              ? "text-primary bg-primary/10"
+              : "text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-muted"
+          )}
+        >
+          {isInCompare ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <GitCompareArrows className="h-3.5 w-3.5" />
+          )}
+        </button>
+      )}
     </div>
   );
 }
