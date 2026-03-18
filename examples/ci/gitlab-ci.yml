@@ -1,0 +1,75 @@
+# =============================================================================
+# GitLab CI — Email testing with MailCue
+# =============================================================================
+# MailCue runs as a GitLab CI service. Services are accessible by their
+# alias name (here: "mailcue") from within the job container.
+#
+# Copy this file to .gitlab-ci.yml in your project (or merge into yours).
+# =============================================================================
+
+stages:
+  - test
+
+email-tests:
+  stage: test
+  image: node:22-slim  # or python:3.12, golang:1.22, etc.
+
+  services:
+    - name: olibakram/mailcue
+      alias: mailcue
+      variables:
+        MAILCUE_DOMAIN: test.local
+        MAILCUE_ADMIN_PASSWORD: mailcue
+
+  variables:
+    MAILCUE_URL: "http://mailcue:80"
+    SMTP_HOST: mailcue
+    SMTP_PORT: "25"
+
+  before_script:
+    # Install curl and jq for health checks and API calls
+    - apt-get update -qq && apt-get install -y -qq curl jq > /dev/null
+
+    # Wait for MailCue to be ready
+    - |
+      echo "Waiting for MailCue..."
+      for i in $(seq 1 30); do
+        if curl -sf "$MAILCUE_URL/api/v1/health" > /dev/null 2>&1; then
+          echo "MailCue is ready"
+          break
+        fi
+        sleep 2
+      done
+
+    # Create an API key for the test suite
+    - |
+      TOKEN=$(curl -sf -X POST "$MAILCUE_URL/api/v1/auth/login" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"admin","password":"mailcue"}' | jq -r .access_token)
+      export MAILCUE_API_KEY=$(curl -sf -X POST "$MAILCUE_URL/api/v1/auth/api-keys" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"name":"ci"}' | jq -r .key)
+
+  script:
+    # Verify MailCue is working — inject and retrieve an email
+    - |
+      curl -sf -X POST "$MAILCUE_URL/api/v1/emails/inject" \
+        -H "X-API-Key: $MAILCUE_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "mailbox": "admin@test.local",
+          "from_address": "ci@example.com",
+          "to_addresses": ["admin@test.local"],
+          "subject": "GitLab CI Test",
+          "html_body": "<p>Email testing works!</p>"
+        }'
+
+    - |
+      COUNT=$(curl -sf "$MAILCUE_URL/api/v1/emails?mailbox=admin@test.local" \
+        -H "X-API-Key: $MAILCUE_API_KEY" | jq '.total')
+      echo "Emails in mailbox: $COUNT"
+      [ "$COUNT" -ge 1 ] || exit 1
+
+    # Run your actual test suite
+    - npm test  # or pytest, go test, etc.

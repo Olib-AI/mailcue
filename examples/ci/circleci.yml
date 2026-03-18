@@ -1,0 +1,83 @@
+# =============================================================================
+# CircleCI — Email testing with MailCue
+# =============================================================================
+# MailCue runs as a secondary Docker container alongside your primary image.
+# It's accessible at localhost because CircleCI runs all containers in
+# the same network namespace.
+#
+# Copy this into your .circleci/config.yml (or merge into yours).
+# =============================================================================
+
+version: 2.1
+
+jobs:
+  email-tests:
+    docker:
+      # Primary container — your test environment
+      - image: cimg/node:22.0  # or cimg/python:3.12, cimg/go:1.22, etc.
+
+      # MailCue service container
+      - image: olibakram/mailcue
+        environment:
+          MAILCUE_DOMAIN: test.local
+          MAILCUE_ADMIN_PASSWORD: mailcue
+
+    steps:
+      - checkout
+
+      - run:
+          name: Wait for MailCue
+          command: |
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:80/api/v1/health > /dev/null 2>&1; then
+                echo "MailCue is ready"
+                break
+              fi
+              echo "Waiting for MailCue... ($i)"
+              sleep 2
+            done
+
+      - run:
+          name: Create API key
+          command: |
+            TOKEN=$(curl -sf -X POST http://localhost:80/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"admin","password":"mailcue"}' | jq -r .access_token)
+            KEY=$(curl -sf -X POST http://localhost:80/api/v1/auth/api-keys \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"ci"}' | jq -r .key)
+            echo "export MAILCUE_API_KEY=$KEY" >> "$BASH_ENV"
+
+      - run:
+          name: Verify email delivery
+          command: |
+            curl -sf -X POST http://localhost:80/api/v1/emails/inject \
+              -H "X-API-Key: $MAILCUE_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "mailbox": "admin@test.local",
+                "from_address": "ci@example.com",
+                "to_addresses": ["admin@test.local"],
+                "subject": "CircleCI Test",
+                "html_body": "<p>Email testing works!</p>"
+              }'
+            COUNT=$(curl -sf "http://localhost:80/api/v1/emails?mailbox=admin@test.local" \
+              -H "X-API-Key: $MAILCUE_API_KEY" | jq '.total')
+            echo "Emails in mailbox: $COUNT"
+            [ "$COUNT" -ge 1 ] || exit 1
+
+      # Install deps and run your test suite
+      - run: npm ci
+      - run:
+          name: Run tests
+          command: npm test
+          environment:
+            SMTP_HOST: localhost
+            SMTP_PORT: "25"
+            MAILCUE_API: http://localhost:80/api/v1
+
+workflows:
+  test:
+    jobs:
+      - email-tests

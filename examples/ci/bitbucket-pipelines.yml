@@ -1,0 +1,76 @@
+# =============================================================================
+# Bitbucket Pipelines — Email testing with MailCue
+# =============================================================================
+# MailCue runs as a Bitbucket service container. Services are accessible
+# at localhost on their exposed ports.
+#
+# Copy this into your bitbucket-pipelines.yml (or merge into yours).
+# =============================================================================
+
+image: node:22-slim  # or python:3.12, golang:1.22, etc.
+
+definitions:
+  services:
+    mailcue:
+      image: olibakram/mailcue
+      variables:
+        MAILCUE_DOMAIN: test.local
+        MAILCUE_ADMIN_PASSWORD: mailcue
+      # Bitbucket allocates 1 GB memory per service by default.
+      # MailCue runs fine with the default allocation.
+
+pipelines:
+  default:
+    - step:
+        name: Email Tests
+        services:
+          - mailcue
+        caches:
+          - node
+        script:
+          # Install curl and jq for health checks
+          - apt-get update -qq && apt-get install -y -qq curl jq > /dev/null
+
+          # Wait for MailCue to be ready
+          - |
+            echo "Waiting for MailCue..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:80/api/v1/health > /dev/null 2>&1; then
+                echo "MailCue is ready"
+                break
+              fi
+              sleep 2
+            done
+
+          # Create an API key
+          - |
+            TOKEN=$(curl -sf -X POST http://localhost:80/api/v1/auth/login \
+              -H "Content-Type: application/json" \
+              -d '{"username":"admin","password":"mailcue"}' | jq -r .access_token)
+            export MAILCUE_API_KEY=$(curl -sf -X POST http://localhost:80/api/v1/auth/api-keys \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"ci"}' | jq -r .key)
+
+          # Verify email delivery
+          - |
+            curl -sf -X POST http://localhost:80/api/v1/emails/inject \
+              -H "X-API-Key: $MAILCUE_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "mailbox": "admin@test.local",
+                "from_address": "ci@example.com",
+                "to_addresses": ["admin@test.local"],
+                "subject": "Bitbucket Pipeline Test",
+                "html_body": "<p>Email testing works!</p>"
+              }'
+            COUNT=$(curl -sf "http://localhost:80/api/v1/emails?mailbox=admin@test.local" \
+              -H "X-API-Key: $MAILCUE_API_KEY" | jq '.total')
+            echo "Emails in mailbox: $COUNT"
+            [ "$COUNT" -ge 1 ] || exit 1
+
+          # Install deps and run your test suite
+          - npm ci
+          - npm test
+        # Environment variables available to your test suite
+        # SMTP_HOST=localhost SMTP_PORT=25 MAILCUE_API=http://localhost:80/api/v1

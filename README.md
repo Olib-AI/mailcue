@@ -478,6 +478,20 @@ API_KEY=$(curl -s -X POST http://localhost:8088/api/v1/auth/api-keys \
 curl -H "X-API-Key: $API_KEY" http://localhost:8088/api/v1/emails?mailbox=admin@mailcue.local
 ```
 
+### CI Platform Examples
+
+Ready-to-use configuration files for popular CI/CD platforms:
+
+| Platform | Example file |
+|---|---|
+| **GitHub Actions** | [`examples/ci/github-actions.yml`](examples/ci/github-actions.yml) |
+| **GitLab CI** | [`examples/ci/gitlab-ci.yml`](examples/ci/gitlab-ci.yml) |
+| **CircleCI** | [`examples/ci/circleci.yml`](examples/ci/circleci.yml) |
+| **Jenkins** | [`examples/ci/Jenkinsfile`](examples/ci/Jenkinsfile) |
+| **Bitbucket Pipelines** | [`examples/ci/bitbucket-pipelines.yml`](examples/ci/bitbucket-pipelines.yml) |
+
+Each example includes the full pattern: health check wait, authentication, API key creation, email injection, and verification.
+
 ## Messaging Sandbox
 
 MailCue includes a messaging sandbox that emulates the APIs of **Telegram**, **Slack**, **Mattermost**, and **Twilio**. Point your app at MailCue's sandbox endpoints instead of the real provider and all messages are captured locally. Webhooks fire in each provider's exact payload format with proper signatures.

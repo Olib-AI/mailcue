@@ -1,0 +1,95 @@
+# =============================================================================
+# GitHub Actions — Email testing with MailCue
+# =============================================================================
+# MailCue runs as a service container alongside your tests.
+# All email stays inside the container — nothing leaves.
+#
+# Copy this file to .github/workflows/email-tests.yml in your project.
+# =============================================================================
+
+name: Email Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  email-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mailcue:
+        image: olibakram/mailcue
+        ports:
+          - 8088:80
+          - 25:25
+          - 587:587
+          - 143:143
+        env:
+          MAILCUE_DOMAIN: test.local
+          MAILCUE_ADMIN_PASSWORD: mailcue
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for MailCue
+        run: |
+          until curl -sf http://localhost:8088/api/v1/health; do
+            echo "Waiting for MailCue..."
+            sleep 2
+          done
+          echo "MailCue is ready"
+
+      # Option 1: Get a JWT token for authenticated requests
+      - name: Authenticate
+        id: auth
+        run: |
+          TOKEN=$(curl -sf -X POST http://localhost:8088/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"username":"admin","password":"mailcue"}' | jq -r .access_token)
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      # Option 2: Create a long-lived API key for simpler auth
+      - name: Create API key
+        id: apikey
+        run: |
+          KEY=$(curl -sf -X POST http://localhost:8088/api/v1/auth/api-keys \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.token }}" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"ci"}' | jq -r .key)
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
+      # Example: Inject a test email and verify it arrived
+      - name: Inject test email
+        run: |
+          curl -sf -X POST http://localhost:8088/api/v1/emails/inject \
+            -H "X-API-Key: ${{ steps.apikey.outputs.key }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "mailbox": "admin@test.local",
+              "from_address": "noreply@myapp.com",
+              "to_addresses": ["admin@test.local"],
+              "subject": "Welcome to MyApp",
+              "html_body": "<h1>Welcome!</h1><p>Your account is ready.</p>"
+            }'
+
+      - name: Verify email arrived
+        run: |
+          RESULT=$(curl -sf http://localhost:8088/api/v1/emails?mailbox=admin@test.local \
+            -H "X-API-Key: ${{ steps.apikey.outputs.key }}")
+          COUNT=$(echo "$RESULT" | jq '.total')
+          if [ "$COUNT" -ge 1 ]; then
+            echo "Email delivered successfully (total: $COUNT)"
+          else
+            echo "ERROR: No emails found" && exit 1
+          fi
+
+      # Run your actual test suite here
+      - name: Run tests
+        run: npm test  # or pytest, go test, etc.
+        env:
+          SMTP_HOST: localhost
+          SMTP_PORT: 25
+          MAILCUE_API: http://localhost:8088/api/v1
+          MAILCUE_API_KEY: ${{ steps.apikey.outputs.key }}

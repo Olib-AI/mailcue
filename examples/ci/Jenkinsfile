@@ -1,0 +1,85 @@
+// =============================================================================
+// Jenkins — Email testing with MailCue
+// =============================================================================
+// Uses Docker Pipeline plugin to run MailCue as a sidecar container.
+// Requires: Docker Pipeline plugin, Pipeline plugin.
+//
+// Copy this Jenkinsfile to your project root (or merge into yours).
+// =============================================================================
+
+pipeline {
+    agent any
+
+    environment {
+        MAILCUE_URL    = 'http://localhost:8088'
+        MAILCUE_DOMAIN = 'test.local'
+        SMTP_HOST      = 'localhost'
+        SMTP_PORT      = '25'
+    }
+
+    stages {
+        stage('Start MailCue') {
+            steps {
+                script {
+                    docker.image('olibakram/mailcue').withRun(
+                        '-p 8088:80 -p 25:25 -p 587:587 -p 143:143 ' +
+                        '-e MAILCUE_DOMAIN=test.local ' +
+                        '-e MAILCUE_ADMIN_PASSWORD=mailcue'
+                    ) { mailcue ->
+                        // Wait for MailCue to be ready
+                        sh '''
+                            for i in $(seq 1 30); do
+                                if curl -sf $MAILCUE_URL/api/v1/health > /dev/null 2>&1; then
+                                    echo "MailCue is ready"
+                                    break
+                                fi
+                                echo "Waiting for MailCue... ($i)"
+                                sleep 2
+                            done
+                        '''
+
+                        // Create API key
+                        sh '''
+                            TOKEN=$(curl -sf -X POST $MAILCUE_URL/api/v1/auth/login \
+                                -H "Content-Type: application/json" \
+                                -d '{"username":"admin","password":"mailcue"}' | jq -r .access_token)
+                            KEY=$(curl -sf -X POST $MAILCUE_URL/api/v1/auth/api-keys \
+                                -H "Authorization: Bearer $TOKEN" \
+                                -H "Content-Type: application/json" \
+                                -d '{"name":"ci"}' | jq -r .key)
+                            echo "MAILCUE_API_KEY=$KEY" > mailcue.env
+                        '''
+
+                        // Verify email delivery
+                        sh '''
+                            source mailcue.env
+                            curl -sf -X POST $MAILCUE_URL/api/v1/emails/inject \
+                                -H "X-API-Key: $MAILCUE_API_KEY" \
+                                -H "Content-Type: application/json" \
+                                -d '{
+                                    "mailbox": "admin@test.local",
+                                    "from_address": "ci@example.com",
+                                    "to_addresses": ["admin@test.local"],
+                                    "subject": "Jenkins Test",
+                                    "html_body": "<p>Email testing works!</p>"
+                                }'
+                            COUNT=$(curl -sf "$MAILCUE_URL/api/v1/emails?mailbox=admin@test.local" \
+                                -H "X-API-Key: $MAILCUE_API_KEY" | jq '.total')
+                            echo "Emails in mailbox: $COUNT"
+                            [ "$COUNT" -ge 1 ] || exit 1
+                        '''
+
+                        // Run your test suite inside the MailCue sidecar context
+                        sh 'npm ci && npm test'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh 'rm -f mailcue.env'
+        }
+    }
+}
