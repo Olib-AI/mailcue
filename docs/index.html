@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MailCue — Realistic Email Testing Server</title>
+<meta name="description" content="A fully-featured email testing server in a single Docker container. SMTP, IMAP, DKIM, DMARC, SpamAssassin, REST API, and a modern web UI.">
+<meta name="theme-color" content="#0a0f0d">
+<meta property="og:title" content="MailCue — Realistic Email Testing Server">
+<meta property="og:description" content="Postfix, Dovecot, DKIM, DMARC, SpamAssassin, FastAPI, and React UI in one Docker container.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --green-50: #f0fdf4;
+  --green-100: #dcfce7;
+  --green-200: #bbf7d0;
+  --green-300: #7FBD8A;
+  --green-400: #52A97C;
+  --green-500: #3A7D5C;
+  --green-600: #2B5F43;
+  --green-700: #1a3d2a;
+  --green-900: #0a1a10;
+  --bg: #07090a;
+  --bg-elevated: #0d1210;
+  --bg-card: #111916;
+  --border: #1a2820;
+  --border-bright: #253d30;
+  --text: #e8efe9;
+  --text-dim: #7a9484;
+  --text-muted: #4a6454;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'Outfit', system-ui, sans-serif;
+  --mono: 'DM Mono', 'Fira Code', monospace;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-weight: 400;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--green-300); text-decoration: none; transition: color .2s; }
+a:hover { color: var(--green-200); }
+::selection { background: var(--green-600); color: var(--green-50); }
+
+/* ─── Noise overlay ─── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── Glow effect behind hero ─── */
+.hero-glow {
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(58,125,92,.15) 0%, rgba(58,125,92,.05) 40%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ─── Layout ─── */
+.container { max-width: 1200px; margin: 0 auto; padding: 0 2rem; }
+
+/* ─── Nav ─── */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1rem 0;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  background: rgba(7,9,10,.7);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+.nav-logo { display: flex; align-items: center; gap: .75rem; font-weight: 600; font-size: 1.2rem; }
+.nav-logo svg { width: 32px; height: 32px; }
+.nav-links { display: flex; align-items: center; gap: 2rem; }
+.nav-links a { color: var(--text-dim); font-size: .9rem; font-weight: 400; transition: color .2s; }
+.nav-links a:hover { color: var(--text); }
+.nav-links .gh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1.1rem;
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  font-size: .85rem;
+  color: var(--text);
+  transition: all .2s;
+}
+.nav-links .gh-btn:hover { background: var(--bg-card); border-color: var(--green-500); }
+.nav-links .gh-btn svg { width: 18px; height: 18px; }
+
+/* ─── Hero ─── */
+.hero {
+  position: relative;
+  padding: 10rem 0 6rem;
+  text-align: center;
+  overflow: hidden;
+}
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .4rem 1rem .4rem .6rem;
+  margin-bottom: 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-bright);
+  border-radius: 100px;
+  font-size: .82rem;
+  color: var(--text-dim);
+  animation: fadeUp .8s ease both;
+}
+.hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green-400); animation: pulse 2s ease infinite; }
+.hero h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(3rem, 8vw, 6rem);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  margin-bottom: 1.5rem;
+  animation: fadeUp .8s ease .1s both;
+}
+.hero h1 em {
+  font-style: italic;
+  color: var(--green-300);
+  position: relative;
+}
+.hero h1 em::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: .08em;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--green-400), transparent);
+  opacity: .5;
+}
+.hero-sub {
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  color: var(--text-dim);
+  max-width: 640px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.7;
+  font-weight: 300;
+  animation: fadeUp .8s ease .2s both;
+}
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  animation: fadeUp .8s ease .3s both;
+}
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem 2rem;
+  background: var(--green-500);
+  color: #fff;
+  font-family: var(--sans);
+  font-size: .95rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .25s;
+  text-decoration: none;
+}
+.btn-primary:hover { background: var(--green-400); color: #fff; transform: translateY(-1px); box-shadow: 0 8px 30px rgba(58,125,92,.3); }
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem 2rem;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: .95rem;
+  font-weight: 500;
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .25s;
+  text-decoration: none;
+}
+.btn-secondary:hover { border-color: var(--green-500); background: var(--bg-card); }
+
+/* ─── Terminal block ─── */
+.terminal-wrap {
+  max-width: 680px;
+  margin: 4rem auto 0;
+  animation: fadeUp .8s ease .4s both;
+}
+.terminal {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  text-align: left;
+  box-shadow: 0 20px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(255,255,255,.03) inset;
+}
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: .75rem 1.1rem;
+  background: rgba(255,255,255,.02);
+  border-bottom: 1px solid var(--border);
+}
+.terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+.terminal-dot:nth-child(1) { background: #ff5f57; }
+.terminal-dot:nth-child(2) { background: #febc2e; }
+.terminal-dot:nth-child(3) { background: #28c840; }
+.terminal-bar span { flex: 1; text-align: center; font-family: var(--mono); font-size: .75rem; color: var(--text-muted); margin-right: 40px; }
+.terminal-body { padding: 1.5rem; font-family: var(--mono); font-size: .85rem; line-height: 2; }
+.terminal-body .prompt { color: var(--green-400); }
+.terminal-body .cmd { color: var(--text); }
+.terminal-body .comment { color: var(--text-muted); }
+.terminal-body .output { color: var(--text-dim); }
+
+/* ─── Screenshot showcase ─── */
+.showcase {
+  padding: 4rem 0 6rem;
+  position: relative;
+}
+.showcase-img-wrap {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03) inset;
+}
+.showcase-img-wrap img {
+  width: 100%;
+  display: block;
+}
+.showcase-img-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  box-shadow: inset 0 0 80px rgba(0,0,0,.3);
+  pointer-events: none;
+}
+
+/* ─── Features ─── */
+.features { padding: 6rem 0; }
+.section-label {
+  font-family: var(--mono);
+  font-size: .8rem;
+  font-weight: 400;
+  color: var(--green-400);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-family: var(--serif);
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 400;
+  line-height: 1.15;
+  margin-bottom: 1rem;
+}
+.section-desc {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  font-weight: 300;
+  max-width: 560px;
+  margin-bottom: 4rem;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.feature-card {
+  background: var(--bg);
+  padding: 2.2rem;
+  transition: background .3s;
+  position: relative;
+}
+.feature-card:hover { background: var(--bg-card); }
+.feature-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.2rem;
+  font-size: 1.1rem;
+}
+.feature-card h3 {
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: .6rem;
+}
+.feature-card p {
+  font-size: .88rem;
+  color: var(--text-dim);
+  line-height: 1.6;
+  font-weight: 300;
+}
+
+/* ─── Stack section ─── */
+.stack { padding: 6rem 0; }
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+}
+.stack-col h3 {
+  font-family: var(--mono);
+  font-size: .8rem;
+  color: var(--green-400);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.2rem;
+}
+.stack-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem 0;
+  font-size: .92rem;
+  color: var(--text-dim);
+}
+.stack-item strong { color: var(--text); font-weight: 500; }
+
+/* ─── API section ─── */
+.api-section { padding: 6rem 0; }
+.api-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+.api-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2rem;
+  transition: border-color .3s;
+}
+.api-card:hover { border-color: var(--border-bright); }
+.api-card h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: .5rem; }
+.api-card p { font-size: .88rem; color: var(--text-dim); line-height: 1.6; font-weight: 300; }
+.api-endpoints {
+  margin-top: 1rem;
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--text-muted);
+  line-height: 2;
+}
+.api-endpoints .method { display: inline-block; min-width: 3.5em; color: var(--green-400); font-weight: 500; }
+
+/* ─── CTA ─── */
+.cta {
+  padding: 8rem 0;
+  text-align: center;
+  position: relative;
+}
+.cta::before {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  bottom: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(58,125,92,.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+.cta h2 {
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 400;
+  margin-bottom: 1.2rem;
+}
+.cta p {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  font-weight: 300;
+  max-width: 480px;
+  margin: 0 auto 2.5rem;
+}
+.cta-code {
+  display: inline-block;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .8rem 1.5rem;
+  font-family: var(--mono);
+  font-size: .9rem;
+  color: var(--text-dim);
+  margin-bottom: 2rem;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+}
+.cta-code:hover { border-color: var(--green-500); color: var(--text); }
+.cta-code .copy-hint {
+  position: absolute;
+  top: -.5rem;
+  right: -.5rem;
+  background: var(--green-500);
+  color: #fff;
+  font-size: .65rem;
+  padding: .2rem .5rem;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.cta-code:hover .copy-hint { opacity: 1; }
+
+/* ─── Footer ─── */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 3rem 0;
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-left { display: flex; align-items: center; gap: .6rem; font-size: .85rem; color: var(--text-muted); }
+.footer-left svg { width: 22px; height: 22px; }
+.footer-links { display: flex; gap: 2rem; }
+.footer-links a { font-size: .85rem; color: var(--text-muted); transition: color .2s; }
+.footer-links a:hover { color: var(--text); }
+
+/* ─── Scroll reveal ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity .7s ease, transform .7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Animations ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .4; }
+}
+
+/* ─── Mobile ─── */
+@media (max-width: 900px) {
+  .feature-grid { grid-template-columns: repeat(2, 1fr); }
+  .stack-grid { grid-template-columns: 1fr; gap: 3rem; }
+  .api-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .feature-grid { grid-template-columns: 1fr; }
+  .hero { padding: 8rem 0 4rem; }
+  .nav-links a:not(.gh-btn) { display: none; }
+  .footer-inner { flex-direction: column; gap: 1.5rem; text-align: center; }
+  .footer-links { flex-wrap: wrap; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── Nav ─── -->
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="nav-logo">
+      <svg viewBox="0 0 100 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="10" width="88" height="76" rx="10" fill="#3A7D5C"/>
+        <path d="M6 86 L6 52 L46 73 Q50 75 54 73 L94 52 L94 86 Z" fill="#52A97C"/>
+        <path d="M6 10 L94 10 L94 48 L54 67 Q50 69 46 67 L6 48 Z" fill="#2B5F43"/>
+        <circle cx="86" cy="16" r="13" fill="#7FBD8A" stroke="#0a0f0d" stroke-width="2.5"/>
+        <path d="M79.5 16.5 L83 20 L92.5 11" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      MailCue
+    </a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#stack">Stack</a>
+      <a href="#api">API</a>
+      <a href="https://github.com/Olib-AI/mailcue" class="gh-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ─── Hero ─── -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="container" style="position: relative; z-index: 1;">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Open-source &middot; MIT License
+    </div>
+    <h1>Email testing that<br>feels <em>real</em></h1>
+    <p class="hero-sub">
+      A full mail stack in a single Docker container. SMTP, IMAP, DKIM, DMARC, spam filtering, REST API, and a modern web UI. Test email exactly as it behaves in production.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/Olib-AI/mailcue" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Get Started
+      </a>
+      <a href="https://github.com/Olib-AI/mailcue" class="btn-secondary">
+        View Documentation
+      </a>
+    </div>
+    <div class="terminal-wrap">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <span>terminal</span>
+        </div>
+        <div class="terminal-body">
+          <div><span class="prompt">$</span> <span class="cmd">docker run -d -p 8088:80 -p 25:25 ghcr.io/olib-ai/mailcue</span></div>
+          <div><span class="output">a3f8c2e1...  mailcue started</span></div>
+          <div style="margin-top:.5rem"><span class="prompt">$</span> <span class="cmd">curl http://localhost:8088/api/v1/health</span></div>
+          <div><span class="output">{"status": "healthy", "services": {"postfix": "running", "dovecot": "running"}}</span></div>
+          <div style="margin-top:.5rem"><span class="comment"># That's it. Full mail server running.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Screenshot ─── -->
+<section class="showcase">
+  <div class="container reveal">
+    <div class="showcase-img-wrap">
+      <img src="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png"
+           alt="MailCue inbox showing a rich HTML email"
+           loading="lazy">
+    </div>
+  </div>
+</section>
+
+<!-- ─── Features ─── -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
+      <p class="section-desc">One container replaces an entire email infrastructure. No external databases, no message queues, no configuration headaches.</p>
+    </div>
+    <div class="feature-grid reveal">
+      <div class="feature-card">
+        <div class="feature-icon">&#9993;</div>
+        <h3>Catch-all SMTP</h3>
+        <p>Accepts mail for any address on any domain. Nothing ever leaves the container. Safe by default.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128274;</div>
+        <h3>DKIM &amp; DMARC</h3>
+        <p>Automatic DKIM signing via OpenDKIM and DMARC verification via OpenDMARC. Test authentication flows end-to-end.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128737;</div>
+        <h3>Spam Filtering</h3>
+        <p>SpamAssassin scores every inbound message. Configurable thresholds with Bayesian filtering and RBL checks.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128268;</div>
+        <h3>REST API</h3>
+        <p>Complete JSON API for sending, receiving, injecting, and searching emails. Built for CI/CD pipelines.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128241;</div>
+        <h3>Modern Web UI</h3>
+        <p>React-based interface with mailbox sidebar, folder navigation, rich email viewer, and HTML compose editor.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128274;</div>
+        <h3>GPG / PGP-MIME</h3>
+        <p>Generate, import, and manage GPG keys. Sign, encrypt, verify, and decrypt emails per RFC 3156.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128225;</div>
+        <h3>IMAP &amp; POP3</h3>
+        <p>Full Dovecot server with STARTTLS and implicit TLS. Use Thunderbird, mutt, or any standard client.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9889;</div>
+        <h3>Real-time Events</h3>
+        <p>Server-Sent Events stream pushes email.received, email.deleted, mailbox.created, and more live.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128230;</div>
+        <h3>Single Container</h3>
+        <p>One docker run. No external databases, no Redis, no message queues. SQLite with optional AES-256 encryption.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Stack ─── -->
+<section class="stack" id="stack">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">Tech Stack</div>
+      <h2 class="section-title">Built on proven<br>infrastructure</h2>
+      <p class="section-desc">Production-grade open-source components, assembled into a cohesive testing platform.</p>
+    </div>
+    <div class="stack-grid reveal">
+      <div class="stack-col">
+        <h3>Backend</h3>
+        <div class="stack-item"><strong>Python 3.12</strong>&nbsp; FastAPI + Uvicorn</div>
+        <div class="stack-item"><strong>SQLAlchemy 2</strong>&nbsp; async + aiosqlite</div>
+        <div class="stack-item"><strong>Alembic</strong>&nbsp; database migrations</div>
+        <div class="stack-item"><strong>Argon2id</strong>&nbsp; password hashing</div>
+        <div class="stack-item"><strong>JWT</strong>&nbsp; HS256 authentication</div>
+        <div class="stack-item"><strong>python-gnupg</strong>&nbsp; PGP/MIME ops</div>
+      </div>
+      <div class="stack-col">
+        <h3>Frontend</h3>
+        <div class="stack-item"><strong>React 19</strong>&nbsp; TypeScript</div>
+        <div class="stack-item"><strong>Vite 6</strong>&nbsp; with SWC</div>
+        <div class="stack-item"><strong>Tailwind CSS 4</strong>&nbsp; styling</div>
+        <div class="stack-item"><strong>TanStack Query</strong>&nbsp; server state</div>
+        <div class="stack-item"><strong>React Router 7</strong>&nbsp; routing</div>
+        <div class="stack-item"><strong>Tiptap</strong>&nbsp; rich text editor</div>
+      </div>
+      <div class="stack-col">
+        <h3>Infrastructure</h3>
+        <div class="stack-item"><strong>Postfix</strong>&nbsp; SMTP :25 / :587</div>
+        <div class="stack-item"><strong>Dovecot</strong>&nbsp; IMAP / POP3 / LMTP</div>
+        <div class="stack-item"><strong>OpenDKIM</strong>&nbsp; DKIM signing</div>
+        <div class="stack-item"><strong>OpenDMARC</strong>&nbsp; DMARC verification</div>
+        <div class="stack-item"><strong>SpamAssassin</strong>&nbsp; spam filtering</div>
+        <div class="stack-item"><strong>s6-overlay v3</strong>&nbsp; process supervisor</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── API ─── -->
+<section class="api-section" id="api">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">API</div>
+      <h2 class="section-title">Designed for<br>automation</h2>
+      <p class="section-desc">A comprehensive REST API with OpenAPI 3.1 spec and Postman collection included. Authenticate with JWT or API keys.</p>
+    </div>
+    <div class="api-grid reveal">
+      <div class="api-card">
+        <h3>Emails</h3>
+        <p>Send, receive, inject, bulk-inject, search, and manage emails programmatically.</p>
+        <div class="api-endpoints">
+          <div><span class="method">GET</span> /api/v1/emails</div>
+          <div><span class="method">POST</span> /api/v1/emails/send</div>
+          <div><span class="method">POST</span> /api/v1/emails/inject</div>
+          <div><span class="method">POST</span> /api/v1/emails/bulk-inject</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <h3>Mailboxes</h3>
+        <p>Create, delete, and query mailboxes with folder statistics and email listings.</p>
+        <div class="api-endpoints">
+          <div><span class="method">GET</span> /api/v1/mailboxes</div>
+          <div><span class="method">POST</span> /api/v1/mailboxes</div>
+          <div><span class="method">GET</span> /api/v1/mailboxes/:addr/emails</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <h3>GPG Keys</h3>
+        <p>Generate, import, export, and publish PGP keys. Full RFC 3156 PGP/MIME support.</p>
+        <div class="api-endpoints">
+          <div><span class="method">POST</span> /api/v1/gpg/keys/generate</div>
+          <div><span class="method">POST</span> /api/v1/gpg/keys/import</div>
+          <div><span class="method">GET</span> /api/v1/gpg/keys/:addr/export</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <h3>Domains &amp; System</h3>
+        <p>Manage email domains with DKIM, DNS verification dashboard, TLS certs, and server settings.</p>
+        <div class="api-endpoints">
+          <div><span class="method">POST</span> /api/v1/domains</div>
+          <div><span class="method">POST</span> /api/v1/domains/:name/verify-dns</div>
+          <div><span class="method">GET</span> /api/v1/events/stream</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── CTA ─── -->
+<section class="cta">
+  <div class="container reveal">
+    <h2>Start testing in<br>30 seconds</h2>
+    <p>One command. No signup. No configuration. A full email server at your fingertips.</p>
+    <div class="cta-code" onclick="navigator.clipboard.writeText('docker run -d -p 8088:80 -p 25:25 ghcr.io/olib-ai/mailcue')">
+      <span class="copy-hint">click to copy</span>
+      <span class="prompt" style="color:var(--green-400)">$</span> docker run -d -p 8088:80 ghcr.io/olib-ai/mailcue
+    </div>
+    <br><br>
+    <div class="hero-actions" style="animation:none">
+      <a href="https://github.com/Olib-AI/mailcue" class="btn-primary">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        Star on GitHub
+      </a>
+      <a href="https://github.com/Olib-AI/mailcue#quick-start" class="btn-secondary">
+        Read the Docs
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <svg viewBox="0 0 100 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6" y="10" width="88" height="76" rx="10" fill="#3A7D5C"/>
+          <path d="M6 86 L6 52 L46 73 Q50 75 54 73 L94 52 L94 86 Z" fill="#52A97C"/>
+          <path d="M6 10 L94 10 L94 48 L54 67 Q50 69 46 67 L6 48 Z" fill="#2B5F43"/>
+        </svg>
+        Built by <a href="https://www.olib.ai" style="margin-left:.3rem">Olib AI</a>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Olib-AI/mailcue">GitHub</a>
+        <a href="https://github.com/Olib-AI/mailcue/issues">Issues</a>
+        <a href="https://github.com/Olib-AI/mailcue/discussions">Discussions</a>
+        <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE">MIT License</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Scroll-triggered reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
