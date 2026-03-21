@@ -95,26 +95,64 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 
 ## Architecture
 
-```
-                          +------- Single Docker Container -------+
-                          |                                        |
-  Port 80 ───────────────>|  Nginx                                 |
-    /api/* ──────────────>|    ├── proxy_pass ──> Uvicorn (:8000)  |
-    /* (SPA) ────────────>|    └── static files (/var/www/mailcue) |
-                          |                                        |
-  Port 25 ───────────────>|  Postfix (SMTP inbound)                |
-  Port 587 ──────────────>|  Postfix (Submission w/ STARTTLS+AUTH) |
-                          |    └── LMTP ──> Dovecot                |
-                          |    └── milter ──> OpenDKIM             |
-                          |    └── milter ──> OpenDMARC            |
-                          |                                        |
-  Port 143 / 993 ────────>|  Dovecot (IMAP / IMAPS)               |
-  Port 110 / 995 ────────>|  Dovecot (POP3 / POP3S)               |
-                          |                                        |
-                          |  SQLite (/var/lib/mailcue/mailcue.db)  |
-                          |  Maildir (/var/mail/vhosts/)           |
-                          |  GPG keyring (/var/lib/mailcue/gpg/)   |
-                          +----------------------------------------+
+```mermaid
+graph TB
+    subgraph external["External Clients"]
+        browser["Browser / HTTP Client"]
+        smtp_client["SMTP Client / MTA"]
+        imap_client["IMAP / POP3 Client"]
+    end
+
+    subgraph container["Single Docker Container — managed by s6-overlay"]
+        direction TB
+
+        subgraph web["Web Layer"]
+            nginx["Nginx<br/><sub>:80 — Reverse Proxy</sub>"]
+            spa["React SPA<br/><sub>/var/www/mailcue</sub>"]
+            uvicorn["Uvicorn + FastAPI<br/><sub>:8000 — REST API + SSE</sub>"]
+        end
+
+        subgraph mail["Mail Stack"]
+            postfix["Postfix<br/><sub>:25 SMTP · :587 Submission</sub>"]
+            dovecot["Dovecot<br/><sub>:143/:993 IMAP · :110/:995 POP3 · LMTP</sub>"]
+            opendkim["OpenDKIM<br/><sub>milter — DKIM sign/verify</sub>"]
+            opendmarc["OpenDMARC<br/><sub>milter — DMARC verify</sub>"]
+            spamassassin["SpamAssassin<br/><sub>spamd — spam scoring</sub>"]
+            spf["policyd-spf<br/><sub>SPF checking</sub>"]
+        end
+
+        subgraph storage["Persistent Storage"]
+            sqlite[("SQLite / SQLCipher<br/><sub>/var/lib/mailcue/mailcue.db</sub>")]
+            maildir[("Maildir<br/><sub>/var/mail/vhosts/</sub>")]
+            gpg[("GPG Keyring<br/><sub>/var/lib/mailcue/gpg/</sub>")]
+        end
+    end
+
+    browser -- ":80 /*" --> nginx
+    smtp_client -- ":25 / :587" --> postfix
+    imap_client -- ":143/:993 / :110/:995" --> dovecot
+
+    nginx -- "static files" --> spa
+    nginx -- "/api/*" --> uvicorn
+
+    uvicorn -- "IMAP<br/><sub>master-user</sub>" --> dovecot
+    uvicorn -- "local SMTP" --> postfix
+    uvicorn --> sqlite
+    uvicorn --> gpg
+
+    postfix -- "LMTP" --> dovecot
+    postfix -- "milter" --> opendkim
+    postfix -- "milter" --> opendmarc
+    postfix -- "policy" --> spf
+    postfix -- "spamc" --> spamassassin
+
+    dovecot --> maildir
+
+    style container fill:none,stroke:#6c47ff,stroke-width:2px,color:#6c47ff
+    style web fill:none,stroke:#3b82f6,stroke-width:1px
+    style mail fill:none,stroke:#f59e0b,stroke-width:1px
+    style storage fill:none,stroke:#10b981,stroke-width:1px
+    style external fill:none,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:5 5
 ```
 
 **Request flow:** Nginx serves the React SPA for all non-API routes and proxies `/api/*` to Uvicorn. The FastAPI backend talks to Dovecot via IMAP (using a master-user credential for mailbox impersonation) and to Postfix via local SMTP. All services are supervised by s6-overlay, which handles startup ordering and automatic restarts.
