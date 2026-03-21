@@ -1,0 +1,11 @@
+"""Discord Bot API sandbox provider plugin."""
+
+from __future__ import annotations
+
+from app.sandbox.providers.discord.router import DiscordProvider
+from app.sandbox.registry import register_provider
+
+_provider = DiscordProvider()
+register_provider(_provider)
+
+__all__ = ["DiscordProvider"]

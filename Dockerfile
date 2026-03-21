@@ -15,6 +15,10 @@ RUN npm run build
 # ── Stage 2: Runtime ────────────────────────────────────────────
 FROM debian:bookworm-slim
 
+LABEL org.opencontainers.image.source="https://github.com/Olib-AI/mailcue"
+LABEL org.opencontainers.image.description="Realistic email testing server — Postfix, Dovecot, DKIM, API, Web UI in one container"
+LABEL org.opencontainers.image.licenses="MIT"
+
 ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TARGETARCH
 

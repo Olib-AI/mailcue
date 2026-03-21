@@ -6,7 +6,7 @@
   <br /><br />
   <a href="https://github.com/Olib-AI/mailcue/actions"><img src="https://img.shields.io/github/actions/workflow/status/Olib-AI/mailcue/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
   <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT License" /></a>
-  <a href="https://hub.docker.com/r/olibakram/mailcue"><img src="https://img.shields.io/docker/pulls/olibakram/mailcue?style=flat-square" alt="Docker Pulls" /></a>
+  <a href="https://github.com/Olib-AI/mailcue/pkgs/container/mailcue"><img src="https://img.shields.io/badge/GHCR-ghcr.io%2Folib--ai%2Fmailcue-blue?style=flat-square&logo=github" alt="GHCR" /></a>
   <a href="https://github.com/Olib-AI/mailcue/stargazers"><img src="https://img.shields.io/github/stars/Olib-AI/mailcue?style=flat-square" alt="GitHub Stars" /></a>
   <a href="https://github.com/Olib-AI/mailcue/releases"><img src="https://img.shields.io/github/v/release/Olib-AI/mailcue?style=flat-square" alt="Latest Release" /></a>
   <a href="https://www.olib.ai"><img src="https://img.shields.io/badge/by-Olib%20AI-6c47ff?style=flat-square" alt="Olib AI" /></a>
@@ -147,7 +147,7 @@ docker run -d \
   -v mailcue-db:/var/lib/mailcue \
   -e MAILCUE_DOMAIN=mailcue.local \
   -e MAILCUE_ADMIN_PASSWORD=mailcue \
-  olibakram/mailcue
+  ghcr.io/olib-ai/mailcue
 ```
 
 ### Verify It Works
@@ -442,7 +442,7 @@ MailCue is designed for automated testing pipelines:
 # GitHub Actions example
 services:
   mailcue:
-    image: olibakram/mailcue
+    image: ghcr.io/olib-ai/mailcue
     ports:
       - 8088:80
       - 25:25
@@ -549,7 +549,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 - **Olib AI** -- [www.olib.ai](https://www.olib.ai)
 - **GitHub** -- [github.com/Olib-AI/mailcue](https://github.com/Olib-AI/mailcue)
-- **Docker Hub** -- [hub.docker.com/r/olibakram/mailcue](https://hub.docker.com/r/olibakram/mailcue)
+- **Container Registry** -- [ghcr.io/olib-ai/mailcue](https://github.com/Olib-AI/mailcue/pkgs/container/mailcue)
 - **API Docs** -- Available at `/api/docs` when running
 - **Issues** -- [github.com/Olib-AI/mailcue/issues](https://github.com/Olib-AI/mailcue/issues)
 - **Discussions** -- [github.com/Olib-AI/mailcue/discussions](https://github.com/Olib-AI/mailcue/discussions)

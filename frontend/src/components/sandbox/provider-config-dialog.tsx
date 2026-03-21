@@ -36,6 +36,14 @@ const CREDENTIAL_FIELDS: Record<ProviderType, { key: string; label: string; plac
     { key: "account_sid", label: "Account SID", placeholder: "AC..." },
     { key: "auth_token", label: "Auth Token", placeholder: "abc123..." },
   ],
+  whatsapp: [
+    { key: "access_token", label: "Access Token", placeholder: "EAABx..." },
+    { key: "phone_number_id", label: "Phone Number ID", placeholder: "106540352..." },
+  ],
+  discord: [
+    { key: "bot_token", label: "Bot Token", placeholder: "MTI3..." },
+    { key: "application_id", label: "Application ID", placeholder: "1234567890..." },
+  ],
 };
 
 const PROVIDER_LABELS: Record<ProviderType, string> = {
@@ -43,6 +51,8 @@ const PROVIDER_LABELS: Record<ProviderType, string> = {
   slack: "Slack",
   mattermost: "Mattermost",
   twilio: "Twilio",
+  whatsapp: "WhatsApp",
+  discord: "Discord",
 };
 
 interface ProviderConfigDialogProps {

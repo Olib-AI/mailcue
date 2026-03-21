@@ -1,4 +1,4 @@
-export type ProviderType = "telegram" | "slack" | "mattermost" | "twilio";
+export type ProviderType = "telegram" | "slack" | "mattermost" | "twilio" | "whatsapp" | "discord";
 
 export interface SandboxProvider {
   id: string;
