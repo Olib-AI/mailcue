@@ -510,12 +510,15 @@ footer {
 <nav>
   <div class="nav-inner">
     <a href="#" class="nav-logo">
-      <svg viewBox="0 0 100 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="6" y="10" width="88" height="76" rx="10" fill="#3A7D5C"/>
-        <path d="M6 86 L6 52 L46 73 Q50 75 54 73 L94 52 L94 86 Z" fill="#52A97C"/>
-        <path d="M6 10 L94 10 L94 48 L54 67 Q50 69 46 67 L6 48 Z" fill="#2B5F43"/>
-        <circle cx="86" cy="16" r="13" fill="#7FBD8A" stroke="#0a0f0d" stroke-width="2.5"/>
-        <path d="M79.5 16.5 L83 20 L92.5 11" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs><clipPath id="nav-env-clip"><rect x="10" y="10" width="100" height="76" rx="10"/></clipPath></defs>
+        <rect x="10" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
+        <g clip-path="url(#nav-env-clip)">
+          <path d="M10 86 L10 52 L56 73 Q60 75 64 73 L110 52 L110 86 Z" fill="#52A97C"/>
+          <path d="M10 10 L110 10 L110 48 L64 67 Q60 69 56 67 L10 48 Z" fill="#2B5F43"/>
+        </g>
+        <circle cx="102" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
+        <path d="M94.5 16.5 L99 21 L109.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
       MailCue
     </a>
@@ -758,10 +761,15 @@ footer {
   <div class="container">
     <div class="footer-inner">
       <div class="footer-left">
-        <svg viewBox="0 0 100 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="6" y="10" width="88" height="76" rx="10" fill="#3A7D5C"/>
-          <path d="M6 86 L6 52 L46 73 Q50 75 54 73 L94 52 L94 86 Z" fill="#52A97C"/>
-          <path d="M6 10 L94 10 L94 48 L54 67 Q50 69 46 67 L6 48 Z" fill="#2B5F43"/>
+        <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><clipPath id="footer-env-clip"><rect x="10" y="10" width="100" height="76" rx="10"/></clipPath></defs>
+          <rect x="10" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
+          <g clip-path="url(#footer-env-clip)">
+            <path d="M10 86 L10 52 L56 73 Q60 75 64 73 L110 52 L110 86 Z" fill="#52A97C"/>
+            <path d="M10 10 L110 10 L110 48 L64 67 Q60 69 56 67 L10 48 Z" fill="#2B5F43"/>
+          </g>
+          <circle cx="102" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
+          <path d="M94.5 16.5 L99 21 L109.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         Built by <a href="https://www.olib.ai" style="margin-left:.3rem">Olib AI</a>
       </div>
