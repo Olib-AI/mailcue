@@ -14,7 +14,7 @@
     "@hookform/resolvers": "^3.9.0",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-query": "^5.90.21",
-    "@tiptap/extension-color": "^3.20.0",
+    "@tiptap/extension-color": "^3.20.4",
     "@tiptap/extension-link": "^3.20.4",
     "@tiptap/extension-placeholder": "^3.20.0",
     "@tiptap/extension-text-style": "^3.20.4",
