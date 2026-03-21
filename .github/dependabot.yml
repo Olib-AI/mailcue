@@ -1,0 +1,45 @@
+version: 2
+updates:
+  # Python (pip) dependencies
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Olib-AI"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 10
+
+  # npm (frontend) dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Olib-AI"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 10
+
+  # Docker base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Olib-AI"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Olib-AI"
+    labels:
+      - "dependencies"
+    open-pull-requests-limit: 5
