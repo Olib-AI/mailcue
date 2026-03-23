@@ -328,6 +328,14 @@ async def send_email(
     elif text_body:
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
     if html_body:
+        # Wrap in a proper HTML document if not already wrapped
+        if "<html" not in html_body.lower():
+            html_body = (
+                '<!DOCTYPE html>\n<html lang="en">\n<head>'
+                '<meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+                "</head>\n<body>\n" + html_body + "\n</body>\n</html>"
+            )
         msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     all_recipients = list(request.to_addresses) + list(request.cc_addresses)

@@ -357,9 +357,17 @@ def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
         DnsRecordInfo(
             record_type="TXT",
             hostname=f"_dmarc.{domain.name}",
-            expected_value="v=DMARC1; p=quarantine; rua=mailto:postmaster@" + domain.name,
+            expected_value="v=DMARC1; p=reject; rua=mailto:postmaster@" + domain.name,
             verified=domain.dmarc_verified,
-            purpose="DMARC policy for handling authentication failures",
+            purpose="DMARC policy for handling authentication failures (p=reject for BIMI eligibility)",
+        ),
+        # BIMI brand logo record
+        DnsRecordInfo(
+            record_type="TXT",
+            hostname=f"default._bimi.{domain.name}",
+            expected_value=f"v=BIMI1; l=https://{hostname}/brand/logo.svg",
+            verified=False,
+            purpose="BIMI — publish a brand logo displayed by supporting mailbox providers (requires DMARC p=reject)",
         ),
         # MTA-STS policy record (RFC 8461)
         DnsRecordInfo(
