@@ -23,13 +23,17 @@ ARG S6_OVERLAY_VERSION=3.2.0.2
 ARG TARGETARCH
 
 # Environment defaults (overridable at runtime)
-ENV MAILCUE_DOMAIN=mailcue.local \
+ENV MAILCUE_MODE=test \
+    MAILCUE_DOMAIN=mailcue.local \
     MAILCUE_HOSTNAME=mail.mailcue.local \
     MAILCUE_ADMIN_USER=admin \
     MAILCUE_ADMIN_PASSWORD=mailcue \
     MAILCUE_SECRET_KEY="" \
     MAILCUE_DB_PATH=/var/lib/mailcue/mailcue.db \
     MAILCUE_DATABASE_ENCRYPTION_KEY="" \
+    MAILCUE_ACME_EMAIL="" \
+    MAILCUE_TLS_CERT_PATH="" \
+    MAILCUE_TLS_KEY_PATH="" \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=30000
 
