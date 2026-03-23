@@ -25,7 +25,7 @@ from app.auth.router import router as auth_router
 from app.auth.service import create_default_admin
 from app.config import settings
 from app.database import AsyncSessionLocal, Base, engine, get_db
-from app.domains.models import Domain  # noqa: F401 — imported for table creation
+from app.domains.models import Domain
 from app.domains.router import router as domains_router
 from app.emails.router import router as emails_router
 from app.events.bus import event_bus
