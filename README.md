@@ -245,14 +245,32 @@ Production mode supports three approaches:
 
 ### DNS Requirements
 
-For each domain, configure the following DNS records (the domain management UI provides exact values):
+For each domain, configure the following DNS records. The domain management UI (`/api/v1/domains/:name`) provides the exact values for your setup. Replace `example.com` with your domain and `mail.example.com` with your mail server hostname.
 
-- **MX** record pointing to your server hostname
-- **SPF** TXT record (`v=spf1 mx -all`)
-- **DKIM** TXT record (auto-generated when you add the domain)
-- **DMARC** TXT record (`v=DMARC1; p=reject; ...`)
-- **MTA-STS** TXT and HTTPS policy
-- **PTR / rDNS** on your server IP (required for direct delivery)
+| # | Type | Name | Value | Purpose |
+|---|------|------|-------|---------|
+| 1 | **A** | `mail.example.com` | `<server-ip>` | Points mail hostname to your server |
+| 2 | **MX** | `example.com` | `10 mail.example.com.` | Routes inbound email to your server |
+| 3 | **TXT** | `example.com` | `v=spf1 mx a:mail.example.com ~all` | SPF — authorizes your server to send email |
+| 4 | **TXT** | `mail.example.com` | `v=spf1 a -all` | HELO SPF — validates the SMTP EHLO hostname |
+| 5 | **TXT** | `mail._domainkey.example.com` | `v=DKIM1; h=rsa-sha256; k=rsa; p=<key>` | DKIM — email signature verification |
+| 6 | **TXT** | `_dmarc.example.com` | `v=DMARC1; p=quarantine; rua=mailto:postmaster@example.com` | DMARC — policy for authentication failures |
+| 7 | **TXT** | `_mta-sts.example.com` | `v=STSv1; id=<timestamp>` | MTA-STS — strict TLS for inbound (optional) |
+| 8 | **TXT** | `_smtp._tls.example.com` | `v=TLSRPTv1; rua=mailto:tls-reports@example.com` | TLS-RPT — TLS failure reporting (optional) |
+| 9 | **PTR** | `<server-ip>` | `mail.example.com` | Reverse DNS — set at your VPS provider. Critical for deliverability. |
+
+**Getting the DKIM public key:** After starting MailCue, retrieve your DKIM key with:
+
+```bash
+docker exec mailcue cat /etc/opendkim/keys/<domain>/mail.txt
+```
+
+Extract the `p=...` value (concatenate if split across lines) and use it for record #5.
+
+**Important notes:**
+- Records 1-6 and 9 are **required** for production email delivery.
+- The DKIM key is auto-generated at first startup and persists in the `dkim-data` volume. It will not change across restarts.
+- If your VPS provider blocks outbound port 25 (common on GCP, AWS), you will need a smarthost relay or a provider that allows it (OVH, Hetzner, Vultr).
 
 ## Development Setup
 
