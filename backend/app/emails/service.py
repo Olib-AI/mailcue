@@ -59,9 +59,8 @@ async def _imap_connect(mailbox_address: str) -> aioimaplib.IMAP4:
         await imap.login(master_login, settings.imap_master_password)
         return imap
     except Exception as exc:
-        raise MailServerError(
-            f"Failed to connect to IMAP server for {mailbox_address}: {exc}"
-        ) from exc
+        logger.error("Failed to connect to IMAP server for %s: %s", mailbox_address, exc)
+        raise MailServerError("Mail server unavailable. Please try again later.") from exc
 
 
 async def _imap_disconnect(imap: aioimaplib.IMAP4) -> None:
@@ -347,12 +346,12 @@ async def send_email(
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             recipients=all_recipients,
-            source_address=settings.hostname,
             start_tls=False,
             use_tls=False,
         )
     except Exception as exc:
-        raise MailServerError(f"SMTP send failed: {exc}") from exc
+        logger.error("SMTP send failed: %s", exc)
+        raise MailServerError("Failed to send email. Please try again later.") from exc
 
     message_id: str = msg["Message-ID"]
 
