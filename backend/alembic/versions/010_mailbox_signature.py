@@ -20,10 +20,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "mailboxes",
-        sa.Column("signature", sa.Text(), server_default="", nullable=False),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    columns = [c["name"] for c in inspector.get_columns("mailboxes")]
+    if "signature" not in columns:
+        op.add_column(
+            "mailboxes",
+            sa.Column("signature", sa.Text(), server_default="", nullable=False),
+        )
 
 
 def downgrade() -> None:
