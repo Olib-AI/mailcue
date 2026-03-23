@@ -300,7 +300,7 @@ SMTPS
     echo "[init-mailcue] [production] Hardening OpenDMARC..."
     sed -i 's/^RejectFailures          false$/RejectFailures          true/' /etc/opendmarc/opendmarc.conf
 
-    # --- Let's Encrypt / ACME support ---
+    # --- TLS certificate setup ---
     echo "[init-mailcue] [production] Configuring TLS certificates..."
     mkdir -p /etc/ssl/mailcue
     mkdir -p /var/www/acme-challenge
@@ -314,33 +314,18 @@ SMTPS
         echo "[init-mailcue] [production] Using custom TLS cert: ${MAILCUE_TLS_CERT_PATH}"
         ln -sf "${MAILCUE_TLS_CERT_PATH}" /etc/ssl/mailcue/fullchain.pem
         ln -sf "${MAILCUE_TLS_KEY_PATH}" /etc/ssl/mailcue/privkey.pem
+    # If Let's Encrypt certs already exist from a previous run (persisted volume)
+    elif [ -f "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" ]; then
+        echo "[init-mailcue] [production] Found existing Let's Encrypt cert for ${HOSTNAME}"
+        ln -sf "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" /etc/ssl/mailcue/fullchain.pem
+        ln -sf "/etc/letsencrypt/live/${HOSTNAME}/privkey.pem" /etc/ssl/mailcue/privkey.pem
     fi
 
-    # If ACME email is set and no custom cert exists, attempt certbot
-    if [ -n "${MAILCUE_ACME_EMAIL}" ] && [ ! -f /etc/ssl/mailcue/fullchain.pem ]; then
-        if command -v certbot >/dev/null 2>&1; then
-            echo "[init-mailcue] [production] Requesting Let's Encrypt certificate via certbot..."
-            certbot certonly --webroot \
-                -w /var/www/acme-challenge \
-                -d "${HOSTNAME}" \
-                --email "${MAILCUE_ACME_EMAIL}" \
-                --agree-tos --non-interactive \
-                --cert-path /etc/ssl/mailcue/fullchain.pem \
-                --key-path /etc/ssl/mailcue/privkey.pem \
-                || echo "[init-mailcue] [production] WARNING: certbot failed. Using self-signed certificates."
-            # If certbot succeeded, symlink from standard certbot paths
-            if [ -f "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" ]; then
-                ln -sf "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" /etc/ssl/mailcue/fullchain.pem
-                ln -sf "/etc/letsencrypt/live/${HOSTNAME}/privkey.pem" /etc/ssl/mailcue/privkey.pem
-            fi
-        else
-            echo "[init-mailcue] [production] WARNING: certbot not found."
-            echo "[init-mailcue] [production] To obtain a Let's Encrypt certificate, install certbot and run:"
-            echo "  certbot certonly --webroot -w /var/www/acme-challenge -d ${HOSTNAME} --email ${MAILCUE_ACME_EMAIL}"
-        fi
-    fi
+    # Note: If MAILCUE_ACME_EMAIL is set but no cert exists yet, certbot will
+    # run AFTER Nginx starts via the post-start script (acme-setup), because
+    # certbot needs port 80 to be serving the ACME challenge.
 
-    # --- Nginx HTTPS setup ---
+    # --- Nginx HTTPS setup (only if certs already available) ---
     if [ -f /etc/ssl/mailcue/fullchain.pem ] && [ -f /etc/ssl/mailcue/privkey.pem ]; then
         echo "[init-mailcue] [production] Configuring Nginx HTTPS..."
         mkdir -p /etc/nginx/conf.d
@@ -472,8 +457,11 @@ server {
 NGINXHTTPS
         echo "[init-mailcue] [production] Nginx HTTPS configured."
     else
-        echo "[init-mailcue] [production] No TLS cert at /etc/ssl/mailcue/fullchain.pem — HTTPS not configured."
-        echo "[init-mailcue] [production] Set MAILCUE_ACME_EMAIL or provide MAILCUE_TLS_CERT_PATH/MAILCUE_TLS_KEY_PATH."
+        if [ -n "${MAILCUE_ACME_EMAIL}" ]; then
+            echo "[init-mailcue] [production] ACME email set — certbot will run after Nginx starts."
+        else
+            echo "[init-mailcue] [production] No TLS cert found. Set MAILCUE_ACME_EMAIL for automatic Let's Encrypt, or provide MAILCUE_TLS_CERT_PATH/MAILCUE_TLS_KEY_PATH."
+        fi
     fi
 
     echo "[init-mailcue] Production mode hardening complete."

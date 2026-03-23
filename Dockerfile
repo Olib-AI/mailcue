@@ -62,6 +62,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         spamassassin \
         spamc \
         spamd \
+        certbot \
     && rm -rf /var/lib/apt/lists/*
 
 # opendmarc postinst tries to restart the service which fails in Docker.
