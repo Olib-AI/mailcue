@@ -478,17 +478,15 @@ export interface UpdateAliasRequest {
 
 // --- Production Status Types ---
 
-export interface ProductionStatusCheck {
-  name: string;
-  passed: boolean;
-  detail: string;
-}
-
 export interface ProductionStatus {
   mode: string;
-  is_production: boolean;
-  ready: boolean;
-  checks: ProductionStatusCheck[];
+  tls_configured: boolean;
+  domains_configured: number;
+  domains_verified: number;
+  postfix_strict_mode: boolean;
+  dovecot_tls_required: boolean;
+  secure_cookies: boolean;
+  acme_configured: boolean;
 }
 
 // --- API Error ---

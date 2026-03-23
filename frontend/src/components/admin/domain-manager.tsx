@@ -76,11 +76,11 @@ function DnsStatusBadge({
 }
 
 function DomainCard({ domain }: { domain: Domain }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const removeDomain = useRemoveDomain();
   const verifyDns = useVerifyDns();
-  const { data: detail } = useDomainDetail(expanded ? domain.name : null);
+  const { data: detail, isLoading: detailLoading } = useDomainDetail(domain.name);
 
   const handleVerify = () => {
     verifyDns.mutate(domain.name, {
@@ -180,91 +180,99 @@ function DomainCard({ domain }: { domain: Domain }) {
             )}
           </Button>
 
-          {expanded && detail && (
+          {expanded && (
             <div className="space-y-3">
-              {/* DNS records table */}
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="px-3 py-2 text-left font-medium">Type</th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Hostname
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium">Value</th>
-                      <th className="px-3 py-2 text-left font-medium">
-                        Status
-                      </th>
-                      <th className="px-3 py-2 text-left font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detail.dns_records.map((record, idx) => (
-                      <tr key={`${record.record_type}-${record.hostname}-${idx}`} className="border-b last:border-0">
-                        <td className="px-3 py-2">
-                          <Badge variant="outline">{record.record_type}</Badge>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs break-all">
-                          {record.hostname}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="font-mono text-xs break-all max-w-xs">
-                            {record.expected_value}
-                          </div>
-                          {record.purpose && (
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {record.purpose}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {record.record_type === "PTR" || record.record_type === "A" ? (
-                            <span className="text-xs text-muted-foreground">Info</span>
-                          ) : record.verified ? (
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                          ) : (
-                            <XCircle className="h-4 w-4 text-destructive" />
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              copyToClipboard(record.expected_value)
-                            }
-                          >
-                            <Copy className="h-3 w-3" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* DKIM public key */}
-              {detail.dkim_public_key_txt && (
-                <div className="space-y-1.5">
-                  <Label>DKIM Public Key Record</Label>
-                  <textarea
-                    readOnly
-                    value={detail.dkim_public_key_txt}
-                    className="w-full rounded-md border bg-muted p-2 font-mono text-xs resize-none"
-                    rows={4}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      copyToClipboard(detail.dkim_public_key_txt ?? "")
-                    }
-                  >
-                    <Copy className="mr-1.5 h-3 w-3" />
-                    Copy DKIM Record
-                  </Button>
+              {detailLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
-              )}
+              ) : detail ? (
+                <>
+                  {/* DNS records table */}
+                  <div className="overflow-x-auto rounded-md border">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-muted/50">
+                          <th className="px-3 py-2 text-left font-medium">Type</th>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Hostname
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium">Value</th>
+                          <th className="px-3 py-2 text-left font-medium">
+                            Status
+                          </th>
+                          <th className="px-3 py-2 text-left font-medium" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(detail.dns_records ?? []).map((record, idx) => (
+                          <tr key={`${record.record_type}-${record.hostname}-${idx}`} className="border-b last:border-0">
+                            <td className="px-3 py-2">
+                              <Badge variant="outline">{record.record_type}</Badge>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs break-all">
+                              {record.hostname}
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="font-mono text-xs break-all max-w-xs">
+                                {record.expected_value}
+                              </div>
+                              {record.purpose && (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {record.purpose}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {record.record_type === "PTR" || record.record_type === "A" ? (
+                                <span className="text-xs text-muted-foreground">Info</span>
+                              ) : record.verified ? (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <XCircle className="h-4 w-4 text-destructive" />
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  copyToClipboard(record.expected_value)
+                                }
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* DKIM public key */}
+                  {detail.dkim_public_key_txt && (
+                    <div className="space-y-1.5">
+                      <Label>DKIM Public Key Record</Label>
+                      <textarea
+                        readOnly
+                        value={detail.dkim_public_key_txt}
+                        className="w-full rounded-md border bg-muted p-2 font-mono text-xs resize-none"
+                        rows={4}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          copyToClipboard(detail.dkim_public_key_txt ?? "")
+                        }
+                      >
+                        <Copy className="mr-1.5 h-3 w-3" />
+                        Copy DKIM Record
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : null}
             </div>
           )}
         </CardContent>
