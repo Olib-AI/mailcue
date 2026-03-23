@@ -41,7 +41,7 @@ async def _generate_dkim_keys(domain_name: str, selector: str) -> tuple[str, str
                 "-b",
                 "2048",
                 "-h",
-                "rsa-sha256",
+                "sha256",
                 "-d",
                 domain_name,
                 "-s",

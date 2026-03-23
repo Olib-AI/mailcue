@@ -145,7 +145,7 @@ if [ ! -f "${DKIM_DIR}/mail.private" ]; then
     echo "[init-mailcue] Generating DKIM keys for ${DOMAIN}..."
     mkdir -p "${DKIM_DIR}"
 
-    opendkim-genkey -b 2048 -h rsa-sha256 \
+    opendkim-genkey -b 2048 -h sha256 \
         -d "${DOMAIN}" -s mail \
         -D "${DKIM_DIR}/"
 
