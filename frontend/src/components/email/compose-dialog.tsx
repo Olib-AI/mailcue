@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,6 +70,13 @@ function extractRawEmail(address: string): string {
   return match?.[1] ?? address;
 }
 
+const SIGNATURE_SEPARATOR = "<br><br>--<br>";
+
+function buildSignatureHtml(signatureText: string): string {
+  if (!signatureText) return "";
+  return `${SIGNATURE_SEPARATOR}${signatureText.replace(/\n/g, "<br>")}`;
+}
+
 const composeSchema = z.object({
   from_address: z.string().min(1, "Select a sender address"),
   from_name: z.string().optional().default(""),
@@ -118,6 +125,17 @@ function ComposeDialog() {
     [mailboxData?.mailboxes]
   );
 
+  // Track the last "from" address so we can swap signatures on change
+  const lastFromRef = useRef("");
+
+  const getSignatureForAddress = useCallback(
+    (address: string): string => {
+      const mb = mailboxes.find((m) => m.address === address);
+      return mb?.signature ?? "";
+    },
+    [mailboxes]
+  );
+
   // Pre-fill form when compose dialog opens with context
   useEffect(() => {
     const justOpened = composeOpen && !prevOpenRef.current;
@@ -126,7 +144,21 @@ function ComposeDialog() {
     if (!justOpened) return;
 
     if (!composeContext) {
-      reset();
+      // New compose — pre-fill with signature if a default mailbox exists
+      const defaultAddress = mailboxes[0]?.address ?? "";
+      const sig = buildSignatureHtml(getSignatureForAddress(defaultAddress));
+      lastFromRef.current = defaultAddress;
+      reset({
+        from_address: defaultAddress,
+        from_name: "",
+        to_addresses: "",
+        cc_addresses: "",
+        subject: "",
+        body: sig,
+        body_type: "html",
+        sign: false,
+        encrypt: false,
+      });
       return;
     }
 
@@ -137,6 +169,8 @@ function ComposeDialog() {
       )
     );
     const fromAddress = currentMailbox?.address ?? "";
+    lastFromRef.current = fromAddress;
+    const sig = buildSignatureHtml(getSignatureForAddress(fromAddress));
 
     const replyToAddress = extractEmailAddress(originalEmail.from_address);
 
@@ -146,7 +180,7 @@ function ComposeDialog() {
         to_addresses: replyToAddress,
         cc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Re"),
-        body: buildQuotedHtml(originalEmail),
+        body: sig + buildQuotedHtml(originalEmail),
         body_type: "html",
         sign: false,
         encrypt: false,
@@ -166,7 +200,7 @@ function ComposeDialog() {
         to_addresses: replyToAddress,
         cc_addresses: ccAddresses,
         subject: prefixSubject(originalEmail.subject, "Re"),
-        body: buildQuotedHtml(originalEmail),
+        body: sig + buildQuotedHtml(originalEmail),
         body_type: "html",
         sign: false,
         encrypt: false,
@@ -177,13 +211,13 @@ function ComposeDialog() {
         to_addresses: "",
         cc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Fwd"),
-        body: buildForwardHtml(originalEmail),
+        body: sig + buildForwardHtml(originalEmail),
         body_type: "html",
         sign: false,
         encrypt: false,
       });
     }
-  }, [composeOpen, composeContext, reset, mailboxes]);
+  }, [composeOpen, composeContext, reset, mailboxes, getSignatureForAddress]);
 
   const bodyType = watch("body_type");
   const watchedFromAddress = watch("from_address");
@@ -195,6 +229,42 @@ function ComposeDialog() {
     );
     setValue("from_name", selectedMailbox?.display_name ?? "");
   }, [watchedFromAddress, mailboxes, setValue]);
+
+  // Swap signature in body when the "From" address changes
+  const watchedBody = watch("body");
+  useEffect(() => {
+    if (!composeOpen) return;
+    if (!watchedFromAddress) return;
+    if (watchedFromAddress === lastFromRef.current) return;
+
+    const oldSig = buildSignatureHtml(
+      getSignatureForAddress(lastFromRef.current)
+    );
+    const newSig = buildSignatureHtml(
+      getSignatureForAddress(watchedFromAddress)
+    );
+    lastFromRef.current = watchedFromAddress;
+
+    let updatedBody = watchedBody;
+    if (oldSig && updatedBody.includes(oldSig)) {
+      updatedBody = updatedBody.replace(oldSig, newSig);
+    } else if (!oldSig && newSig) {
+      // Previous mailbox had no signature — find quoted content or append
+      const quoteIdx = updatedBody.indexOf(
+        '<div style="border-left: 2px solid #ccc;'
+      );
+      if (quoteIdx > 0) {
+        updatedBody =
+          updatedBody.slice(0, quoteIdx) + newSig + updatedBody.slice(quoteIdx);
+      } else {
+        updatedBody = updatedBody + newSig;
+      }
+    } else if (oldSig && !newSig) {
+      // New mailbox has no signature — just remove old one (already handled by replace above returning empty)
+    }
+
+    setValue("body", updatedBody);
+  }, [watchedFromAddress, composeOpen, watchedBody, getSignatureForAddress, setValue]);
   const { data: senderGpgKey } = useGpgKey(
     watchedFromAddress || undefined
   );

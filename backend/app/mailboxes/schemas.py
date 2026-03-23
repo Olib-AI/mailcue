@@ -40,6 +40,7 @@ class MailboxResponse(BaseModel):
     quota_mb: int = 500
     email_count: int = 0
     unread_count: int = 0
+    signature: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -70,6 +71,12 @@ class FolderInfo(BaseModel):
     name: str
     message_count: int
     unseen_count: int
+
+
+class SignatureUpdateRequest(BaseModel):
+    """Request body for updating a mailbox signature."""
+
+    signature: str = ""
 
 
 # Rebuild MailboxStats now that FolderInfo is defined

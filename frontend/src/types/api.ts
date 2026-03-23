@@ -138,6 +138,7 @@ export interface Mailbox {
   created_at: string;
   email_count: number;
   unread_count: number;
+  signature: string;
 }
 
 export interface CreateMailboxRequest {

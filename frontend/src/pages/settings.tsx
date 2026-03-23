@@ -5,10 +5,11 @@ import { GpgKeyManager } from "@/components/gpg/gpg-key-manager";
 import { CertificateManager } from "@/components/admin/certificate-manager";
 import { MailServerManager } from "@/components/admin/mail-server";
 import { ProductionStatusPanel } from "@/components/admin/production-status";
+import { SignatureManager } from "@/components/admin/signature-manager";
 
 function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTab = searchParams.get("tab") ?? "gpg";
+  const currentTab = searchParams.get("tab") ?? "signatures";
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value }, { replace: true });
@@ -18,12 +19,17 @@ function SettingsPage() {
     <div className="h-full overflow-auto p-6">
       <Tabs value={currentTab} onValueChange={handleTabChange}>
         <TabsList className="mb-6">
+          <TabsTrigger value="signatures">Signatures</TabsTrigger>
           <TabsTrigger value="gpg">GPG Keys</TabsTrigger>
           <TabsTrigger value="certificate">TLS Certificate</TabsTrigger>
           <TabsTrigger value="mail-server">Mail Server</TabsTrigger>
           <TabsTrigger value="domains">Domains</TabsTrigger>
           <TabsTrigger value="production">Production</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="signatures">
+          <SignatureManager />
+        </TabsContent>
 
         <TabsContent value="gpg">
           <GpgKeyManager />

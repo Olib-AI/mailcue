@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import APIKey, User
 from app.auth.schemas import (
+    AdminResetPasswordRequest,
     APIKeyCreatedResponse,
     APIKeyCreateRequest,
     APIKeyResponse,
@@ -289,6 +290,32 @@ async def change_password(
     await db.commit()
     logger.info("Password changed for user '%s'.", current_user.username)
     return {"status": "ok"}
+
+
+# ── Admin password reset ─────────────────────────────────────────
+
+
+@router.put("/admin/reset-password")
+async def admin_reset_password(
+    body: AdminResetPasswordRequest,
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Reset a user's password without knowing the old one. **Admin only.**"""
+    stmt = select(User).where(User.username == body.username)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User '{body.username}' not found",
+        )
+
+    user.hashed_password = hash_password(body.new_password)
+    await db.commit()
+    logger.info("Password reset for user '%s' by admin '%s'.", body.username, _admin.username)
+    return {"message": "Password reset successfully"}
 
 
 # ── TOTP setup / confirm / disable ───────────────────────────────

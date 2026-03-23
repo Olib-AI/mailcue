@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.emails.schemas import (
@@ -26,11 +27,13 @@ from app.emails.service import (
     purge_mailbox,
     set_email_flags,
 )
+from app.exceptions import AuthorizationError
 from app.mailboxes.schemas import (
     MailboxCreateRequest,
     MailboxListResponse,
     MailboxResponse,
     MailboxStats,
+    SignatureUpdateRequest,
 )
 from app.mailboxes.service import (
     _imap_get_folder_stats,
@@ -44,6 +47,20 @@ from app.mailboxes.service import (
 logger = logging.getLogger("mailcue.mailboxes")
 
 router = APIRouter(prefix="/mailboxes", tags=["Mailboxes"])
+
+
+def verify_mailbox_access(mailbox_address: str, current_user: User) -> None:
+    """Verify the user has access to this mailbox. Admins can access any mailbox.
+
+    Compares the decoded mailbox address against the user's canonical address
+    (``username@MAILCUE_DOMAIN``).  Raises ``AuthorizationError`` on mismatch.
+    """
+    if current_user.is_admin:
+        return
+    address_lower = unquote(mailbox_address).lower()
+    user_address = f"{current_user.username}@{settings.domain}".lower()
+    if address_lower != user_address:
+        raise AuthorizationError("You do not have access to this mailbox")
 
 
 @router.get("", response_model=MailboxListResponse)
@@ -65,6 +82,7 @@ async def list_all_mailboxes(
             is_active=m.is_active,
             created_at=m.created_at,
             quota_mb=m.quota_mb,
+            signature=m.signature,
         )
         try:
             folders = await _imap_get_folder_stats(m.address)
@@ -104,6 +122,7 @@ async def create_new_mailbox(
         is_active=mailbox.is_active,
         created_at=mailbox.created_at,
         quota_mb=mailbox.quota_mb,
+        signature=mailbox.signature,
     )
 
 
@@ -169,6 +188,7 @@ async def list_mailbox_emails(
     _user: User = Depends(get_current_user),
 ) -> EmailListResponse:
     """List emails for a specific mailbox (path-based variant)."""
+    verify_mailbox_access(mailbox_address, _user)
     decoded = unquote(mailbox_address)
     return await list_emails(
         mailbox=decoded,
@@ -189,6 +209,7 @@ async def get_mailbox_email(
     db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by UID from a specific mailbox."""
+    verify_mailbox_access(mailbox_address, _user)
     decoded = unquote(mailbox_address)
     return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
 
@@ -204,6 +225,7 @@ async def bulk_delete_mailbox_emails(
     _user: User = Depends(get_current_user),
 ) -> BulkDeleteResponse:
     """Delete multiple emails by UID from a specific mailbox."""
+    verify_mailbox_access(mailbox_address, _user)
     decoded = unquote(mailbox_address)
     return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
 
@@ -218,6 +240,7 @@ async def delete_mailbox_email(
     _user: User = Depends(get_current_user),
 ) -> None:
     """Delete an email by UID from a specific mailbox."""
+    verify_mailbox_access(mailbox_address, _user)
     decoded = unquote(mailbox_address)
     await delete_email(mailbox=decoded, uid=uid, folder=folder)
 
@@ -231,6 +254,30 @@ async def update_email_flags(
     _user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Toggle read/unread status on an email by setting or clearing the \\Seen flag."""
+    verify_mailbox_access(mailbox_address, _user)
     decoded = unquote(mailbox_address)
     await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
     return {"message": "Flags updated"}
+
+
+# ── Signature management ─────────────────────────────────────────
+
+
+@router.put("/{address}/signature")
+async def update_mailbox_signature(
+    address: str,
+    body: SignatureUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Set or update the email signature for a mailbox.
+
+    The user must own the mailbox (or be an admin).
+    """
+    verify_mailbox_access(address, current_user)
+    decoded_address = unquote(address)
+    mailbox = await get_mailbox_by_address(decoded_address, db)
+    mailbox.signature = body.signature
+    await db.commit()
+    logger.info("Signature updated for mailbox '%s'.", decoded_address)
+    return {"message": "Signature updated"}

@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import type {
   MailboxListResponse,
   CreateMailboxRequest,
+  Mailbox,
 } from "@/types/api";
 
 export const mailboxKeys = {
@@ -53,6 +54,27 @@ export function usePurgeMailbox() {
     mutationFn: (address: string) =>
       api.post<{ deleted: number }>(
         `/mailboxes/${encodeURIComponent(address)}/purge`
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function useUpdateSignature() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      address,
+      signature,
+    }: {
+      address: string;
+      signature: string;
+    }) =>
+      api.put<Mailbox>(
+        `/mailboxes/${encodeURIComponent(address)}/signature`,
+        { signature }
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
