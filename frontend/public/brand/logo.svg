@@ -1,27 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 100" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" fill="none">
   <defs>
     <clipPath id="env-clip">
-      <rect x="16" y="10" width="100" height="76" rx="10"/>
+      <rect x="10" y="10" width="100" height="76" rx="10"/>
     </clipPath>
   </defs>
 
   <!-- Envelope base (medium green) -->
-  <rect x="16" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
+  <rect x="10" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
 
   <g clip-path="url(#env-clip)">
     <!-- Front bottom fold (lighter green) -->
-    <path d="M16 86 L16 52 L62 73 Q66 75 70 73 L116 52 L116 86 Z" fill="#52A97C"/>
+    <path d="M10 86 L10 52 L56 73 Q60 75 64 73 L110 52 L110 86 Z" fill="#52A97C"/>
 
-    <!-- Flap (darker green from top, slightly softened vertex) -->
-    <path d="M16 10 L116 10 L116 48 L70 67 Q66 69 62 67 L16 48 Z" fill="#2B5F43"/>
+    <!-- Flap (darker green from top) -->
+    <path d="M10 10 L110 10 L110 48 L64 67 Q60 69 56 67 L10 48 Z" fill="#2B5F43"/>
   </g>
 
   <!-- Checkmark badge -->
-  <circle cx="108" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
-  <path d="M100.5 16.5 L105 21 L115.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-
-  <!-- "MailCue" wordmark -->
-  <text x="144" y="65" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="50" font-weight="700" letter-spacing="-0.5">
-    <tspan fill="#1E293B">Mail</tspan><tspan fill="#3A7D5C">Cue</tspan>
-  </text>
+  <circle cx="102" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
+  <path d="M94.5 16.5 L99 21 L109.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
