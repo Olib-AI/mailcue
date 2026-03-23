@@ -51,11 +51,15 @@ services:
       # They will be symlinked to /etc/ssl/mailcue/fullchain.pem and privkey.pem.
       # - MAILCUE_TLS_CERT_PATH=/etc/ssl/mailcue/custom/fullchain.pem
       # - MAILCUE_TLS_KEY_PATH=/etc/ssl/mailcue/custom/privkey.pem
+    hostname: mail.example.com
     volumes:
       # Let's Encrypt certificate storage (persisted across restarts)
       - letsencrypt-data:/etc/letsencrypt
+      # DKIM keys (persisted so keys don't regenerate on restart)
+      - dkim-data:/etc/opendkim/keys
       # If using custom certs, mount them here:
       # - ./certs:/etc/ssl/mailcue/custom:ro
 
 volumes:
   letsencrypt-data:
+  dkim-data:
