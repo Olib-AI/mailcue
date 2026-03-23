@@ -69,6 +69,7 @@ export interface EmailAttachment {
 export interface EmailSummary {
   uid: string;
   mailbox: string;
+  from_name: string;
   from_address: string;
   to_addresses: string[];
   subject: string;

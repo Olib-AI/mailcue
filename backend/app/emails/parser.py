@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from email import message_from_bytes, policy
 from email.header import decode_header, make_header
 from email.message import EmailMessage
-from email.utils import getaddresses, parsedate_to_datetime
+from email.utils import getaddresses, parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 from io import StringIO
 from typing import Any
@@ -43,7 +43,8 @@ def parse_email(
     msg = message_from_bytes(raw, policy=policy.default)
     assert isinstance(msg, EmailMessage)
 
-    from_addr = _decode_header_str(msg.get("From", ""))
+    from_raw = _decode_header_str(msg.get("From", ""))
+    from_name, from_addr = parseaddr(from_raw)
     to_raw = _decode_header_str(msg.get("To", ""))
     cc_raw = _decode_header_str(msg.get("Cc", ""))
     bcc_raw = _decode_header_str(msg.get("Bcc", ""))
@@ -73,6 +74,7 @@ def parse_email(
         uid=uid,
         mailbox=mailbox,
         from_address=from_addr,
+        from_name=from_name,
         to_addresses=to_addrs,
         subject=subject,
         date=date,
@@ -102,7 +104,8 @@ def parse_email_summary(
     msg = message_from_bytes(raw, policy=policy.default)
     assert isinstance(msg, EmailMessage)
 
-    from_addr = _decode_header_str(msg.get("From", ""))
+    from_raw = _decode_header_str(msg.get("From", ""))
+    from_name, from_addr = parseaddr(from_raw)
     to_raw = _decode_header_str(msg.get("To", ""))
     subject = _decode_header_str(msg.get("Subject", ""))
     date = _parse_date(msg.get("Date"))
@@ -120,6 +123,7 @@ def parse_email_summary(
         uid=uid,
         mailbox=mailbox,
         from_address=from_addr,
+        from_name=from_name,
         to_addresses=to_addrs,
         subject=subject,
         date=date,

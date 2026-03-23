@@ -301,7 +301,10 @@ async def send_email(
     text_body = request.body if request.body_type == "plain" else None
 
     msg = MIMEMultipart("alternative")
-    msg["From"] = request.from_address
+    if request.from_name:
+        msg["From"] = email.utils.formataddr((request.from_name, request.from_address))
+    else:
+        msg["From"] = request.from_address
     msg["To"] = ", ".join(request.to_addresses)
     if request.cc_addresses:
         msg["Cc"] = ", ".join(request.cc_addresses)

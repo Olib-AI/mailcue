@@ -120,7 +120,7 @@ function EmailDetail() {
     );
   }
 
-  const fromDisplay = extractDisplayName(email.from_address);
+  const fromDisplay = email.from_name || extractDisplayName(email.from_address);
 
   return (
     <ScrollArea className="h-full">
@@ -209,8 +209,13 @@ function EmailDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium">
-                {formatEmailAddress(email.from_address)}
+                {fromDisplay}
               </p>
+              {email.from_name && (
+                <p className="text-xs text-muted-foreground">
+                  {email.from_address}
+                </p>
+              )}
               <span className="text-xs text-muted-foreground whitespace-nowrap">
                 {formatFullDate(email.date)}
               </span>

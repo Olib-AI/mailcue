@@ -98,6 +98,16 @@ export function extractDisplayName(addr: string): string {
 }
 
 /**
+ * Extract the bare email address from a string that may contain a display name.
+ * - "John <john@example.com>" -> "john@example.com"
+ * - "john@example.com" -> "john@example.com"
+ */
+export function extractEmailAddress(addr: string): string {
+  const match = /<([^>]+)>/.exec(addr);
+  return match?.[1] ?? addr;
+}
+
+/**
  * Truncate a string to a maximum length with ellipsis.
  */
 export function truncate(str: string, maxLength: number): string {

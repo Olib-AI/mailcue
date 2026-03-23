@@ -24,6 +24,7 @@ class EmailSummary(BaseModel):
     uid: str
     mailbox: str
     from_address: str
+    from_name: str = ""
     to_addresses: list[str]
     subject: str
     date: datetime | None = None
@@ -62,6 +63,7 @@ class SendEmailRequest(BaseModel):
     """Send a new email via SMTP."""
 
     from_address: str
+    from_name: str = ""
     to_addresses: list[str]
     cc_addresses: list[str] = []
     subject: str

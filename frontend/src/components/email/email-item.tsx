@@ -2,7 +2,6 @@ import { Paperclip, Shield, Lock, GitCompareArrows, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatEmailDate,
-  formatEmailAddress,
   extractDisplayName,
   truncate,
 } from "@/lib/utils";
@@ -28,7 +27,7 @@ function EmailItem({
   onCheckChange,
   selectionMode = false,
 }: EmailItemProps) {
-  const fromDisplay = extractDisplayName(email.from_address);
+  const fromDisplay = email.from_name || extractDisplayName(email.from_address);
   const { addEmail, removeEmail, hasEmail } = useCompareStore();
   const selectedFolder = useUIStore((s) => s.selectedFolder);
   const isInCompare = hasEmail(email.mailbox, email.uid);
@@ -84,7 +83,7 @@ function EmailItem({
                 !email.is_read ? "font-semibold" : "font-normal"
               )}
             >
-              {formatEmailAddress(email.from_address)}
+              {fromDisplay}
             </span>
             <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
               {formatEmailDate(email.date)}

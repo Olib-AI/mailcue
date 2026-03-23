@@ -20,7 +20,7 @@ import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useSendEmail } from "@/hooks/use-emails";
 import { useGpgKey } from "@/hooks/use-gpg";
 import type { EmailDetail as EmailDetailType } from "@/types/api";
-import { formatFullDate, formatEmailAddress } from "@/lib/utils";
+import { formatFullDate, formatEmailAddress, extractEmailAddress } from "@/lib/utils";
 
 function buildQuotedHtml(email: EmailDetailType): string {
   const date = formatFullDate(email.date);
@@ -136,10 +136,12 @@ function ComposeDialog() {
     );
     const fromAddress = currentMailbox?.address ?? "";
 
+    const replyToAddress = extractEmailAddress(originalEmail.from_address);
+
     if (mode === "reply") {
       reset({
         from_address: fromAddress,
-        to_addresses: originalEmail.from_address,
+        to_addresses: replyToAddress,
         cc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Re"),
         body: buildQuotedHtml(originalEmail),
@@ -159,7 +161,7 @@ function ComposeDialog() {
 
       reset({
         from_address: fromAddress,
-        to_addresses: originalEmail.from_address,
+        to_addresses: replyToAddress,
         cc_addresses: ccAddresses,
         subject: prefixSubject(originalEmail.subject, "Re"),
         body: buildQuotedHtml(originalEmail),
@@ -205,8 +207,16 @@ function ComposeDialog() {
     const inReplyTo = isReply
       ? composeContext.originalEmail.message_id
       : undefined;
+
+    // Build the full References chain per RFC 2822:
+    // existing References from the original email + the original email's Message-ID
+    const existingRefs = isReply
+      ? (composeContext.originalEmail.raw_headers?.["References"] ?? "")
+          .split(/\s+/)
+          .filter(Boolean)
+      : [];
     const references = isReply
-      ? [composeContext.originalEmail.message_id]
+      ? [...existingRefs, composeContext.originalEmail.message_id]
       : undefined;
 
     sendEmail.mutate(
