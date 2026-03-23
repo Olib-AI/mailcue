@@ -339,6 +339,14 @@ def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
             verified=domain.spf_verified,
             purpose="Authorize this server to send email for the domain (SPF)",
         ),
+        # HELO/EHLO SPF — receiving servers also check SPF for the HELO hostname
+        DnsRecordInfo(
+            record_type="TXT",
+            hostname=hostname,
+            expected_value="v=spf1 a -all",
+            verified=False,
+            purpose="SPF for the mail server hostname (checked during SMTP EHLO handshake)",
+        ),
         DnsRecordInfo(
             record_type="TXT",
             hostname=f"{domain.dkim_selector}._domainkey.{domain.name}",
