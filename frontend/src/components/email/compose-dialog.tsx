@@ -72,6 +72,7 @@ function extractRawEmail(address: string): string {
 
 const composeSchema = z.object({
   from_address: z.string().min(1, "Select a sender address"),
+  from_name: z.string().optional().default(""),
   to_addresses: z.string().min(1, "At least one recipient is required"),
   cc_addresses: z.string().optional(),
   subject: z.string().min(1, "Subject is required"),
@@ -101,6 +102,7 @@ function ComposeDialog() {
     resolver: zodResolver(composeSchema),
     defaultValues: {
       from_address: "",
+      from_name: "",
       to_addresses: "",
       cc_addresses: "",
       subject: "",
@@ -185,6 +187,14 @@ function ComposeDialog() {
 
   const bodyType = watch("body_type");
   const watchedFromAddress = watch("from_address");
+
+  // Sync from_name with the selected mailbox's display_name
+  useEffect(() => {
+    const selectedMailbox = mailboxes.find(
+      (mb) => mb.address === watchedFromAddress
+    );
+    setValue("from_name", selectedMailbox?.display_name ?? "");
+  }, [watchedFromAddress, mailboxes, setValue]);
   const { data: senderGpgKey } = useGpgKey(
     watchedFromAddress || undefined
   );
@@ -222,6 +232,7 @@ function ComposeDialog() {
     sendEmail.mutate(
       {
         from_address: data.from_address,
+        from_name: data.from_name || undefined,
         to_addresses: toList,
         cc_addresses: ccList,
         subject: data.subject,
@@ -271,7 +282,9 @@ function ComposeDialog() {
               <option value="">Select sender...</option>
               {mailboxes.map((mb) => (
                 <option key={mb.address} value={mb.address}>
-                  {mb.address}
+                  {mb.display_name
+                    ? `${mb.display_name} <${mb.address}>`
+                    : mb.address}
                 </option>
               ))}
             </Select>

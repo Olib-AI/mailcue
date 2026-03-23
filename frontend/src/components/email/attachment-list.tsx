@@ -19,8 +19,8 @@ function getAttachmentIcon(contentType: string) {
 function AttachmentList({ attachments, mailbox, uid }: AttachmentListProps) {
   if (attachments.length === 0) return null;
 
-  const handleDownload = (filename: string) => {
-    const url = `/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/attachments/${encodeURIComponent(filename)}`;
+  const handleDownload = (partId: string) => {
+    const url = `/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/attachments/${encodeURIComponent(partId)}`;
     window.open(url, "_blank");
   };
 
@@ -50,7 +50,7 @@ function AttachmentList({ attachments, mailbox, uid }: AttachmentListProps) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={() => handleDownload(attachment.filename)}
+                onClick={() => handleDownload(attachment.part_id)}
                 aria-label={`Download ${attachment.filename}`}
               >
                 <Download className="h-3.5 w-3.5" />

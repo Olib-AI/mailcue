@@ -78,7 +78,7 @@ function EmailRenderer({ html }: EmailRendererProps) {
     const clean = DOMPurify.sanitize(html, {
       USE_PROFILES: { html: true },
       ADD_ATTR: ["target"],
-      FORBID_TAGS: ["style"],
+      FORBID_TAGS: [],
       ALLOW_DATA_ATTR: false,
     });
 

@@ -64,6 +64,7 @@ export interface EmailAttachment {
   content_type: string;
   size: number;
   content_id: string | null;
+  part_id: string;
 }
 
 export interface EmailSummary {
@@ -103,6 +104,7 @@ export interface EmailListResponse {
 
 export interface SendEmailRequest {
   from_address: string;
+  from_name?: string;
   to_addresses: string[];
   cc_addresses?: string[];
   subject: string;
