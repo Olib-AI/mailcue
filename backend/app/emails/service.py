@@ -331,12 +331,21 @@ async def send_email(
         # Wrap in a proper HTML document if not already wrapped
         if "<html" not in html_body.lower():
             html_body = (
-                '<!DOCTYPE html>\n<html lang="en">\n<head>'
-                '<meta charset="utf-8">'
-                '<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-                "</head>\n<body>\n" + html_body + "\n</body>\n</html>"
+                "<!DOCTYPE html>\n"
+                '<html lang="en" xmlns="http://www.w3.org/1999/xhtml">\n'
+                "<head>\n"
+                '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
+                '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
+                "  <title></title>\n"
+                "</head>\n"
+                "<body>\n" + html_body + "\n</body>\n</html>"
             )
         msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    # List-Unsubscribe header (improves deliverability scores)
+    unsub_addr = f"unsubscribe@{settings.domain}"
+    msg["List-Unsubscribe"] = f"<mailto:{unsub_addr}?subject=unsubscribe>"
+    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     all_recipients = list(request.to_addresses) + list(request.cc_addresses)
 
