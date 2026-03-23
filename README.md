@@ -254,10 +254,11 @@ For each domain, configure the following DNS records. The domain management UI (
 | 3 | **TXT** | `example.com` | `v=spf1 mx a:mail.example.com ~all` | SPF — authorizes your server to send email |
 | 4 | **TXT** | `mail.example.com` | `v=spf1 a -all` | HELO SPF — validates the SMTP EHLO hostname |
 | 5 | **TXT** | `mail._domainkey.example.com` | `v=DKIM1; h=rsa-sha256; k=rsa; p=<key>` | DKIM — email signature verification |
-| 6 | **TXT** | `_dmarc.example.com` | `v=DMARC1; p=quarantine; rua=mailto:postmaster@example.com` | DMARC — policy for authentication failures |
-| 7 | **TXT** | `_mta-sts.example.com` | `v=STSv1; id=<timestamp>` | MTA-STS — strict TLS for inbound (optional) |
-| 8 | **TXT** | `_smtp._tls.example.com` | `v=TLSRPTv1; rua=mailto:tls-reports@example.com` | TLS-RPT — TLS failure reporting (optional) |
-| 9 | **PTR** | `<server-ip>` | `mail.example.com` | Reverse DNS — set at your VPS provider. Critical for deliverability. |
+| 6 | **TXT** | `_dmarc.example.com` | `v=DMARC1; p=reject; rua=mailto:postmaster@example.com` | DMARC — reject policy for auth failures (required for BIMI) |
+| 7 | **TXT** | `default._bimi.example.com` | `v=BIMI1; l=https://mail.example.com/brand/logo.svg` | BIMI — brand logo displayed by supporting mailbox providers (optional) |
+| 8 | **TXT** | `_mta-sts.example.com` | `v=STSv1; id=<timestamp>` | MTA-STS — strict TLS for inbound (optional) |
+| 9 | **TXT** | `_smtp._tls.example.com` | `v=TLSRPTv1; rua=mailto:tls-reports@example.com` | TLS-RPT — TLS failure reporting (optional) |
+| 10 | **PTR** | `<server-ip>` | `mail.example.com` | Reverse DNS — set at your VPS provider. Critical for deliverability. |
 
 **Getting the DKIM public key:** After starting MailCue, retrieve your DKIM key with:
 
@@ -268,7 +269,7 @@ docker exec mailcue cat /etc/opendkim/keys/<domain>/mail.txt
 Extract the `p=...` value (concatenate if split across lines) and use it for record #5.
 
 **Important notes:**
-- Records 1-6 and 9 are **required** for production email delivery.
+- Records 1-6 and 10 are **required** for production email delivery.
 - The DKIM key is auto-generated at first startup and persists in the `dkim-data` volume. It will not change across restarts.
 - If your VPS provider blocks outbound port 25 (common on GCP, AWS), you will need a smarthost relay or a provider that allows it (OVH, Hetzner, Vultr).
 
