@@ -321,6 +321,8 @@ function EmailDetail() {
               <EmailRenderer
                 html={email.html_body}
                 mailbox={selectedMailbox ?? undefined}
+                uid={email.uid}
+                attachments={email.attachments}
               />
             </TabsContent>
           )}

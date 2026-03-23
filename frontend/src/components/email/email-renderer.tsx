@@ -1,19 +1,24 @@
 import { useRef, useEffect, useCallback } from "react";
 import DOMPurify from "dompurify";
+import type { EmailAttachment } from "@/types/api";
 
 interface EmailRendererProps {
   html: string;
-  /** Reserved for future CID image resolution. */
+  /** Mailbox address for resolving CID inline image URLs. */
   mailbox?: string;
+  /** Email UID for resolving CID inline image URLs. */
+  uid?: string;
+  /** Attachments containing content_id mappings for CID resolution. */
+  attachments?: EmailAttachment[];
 }
 
 /**
  * Renders sanitized HTML email content inside a sandboxed iframe.
- * - Sanitizes HTML with DOMPurify (strips scripts, event handlers)
  * - Replaces cid: references with attachment download URLs
+ * - Sanitizes HTML with DOMPurify (strips scripts, event handlers)
  * - Isolates email styles from the app via iframe sandboxing
  */
-function EmailRenderer({ html }: EmailRendererProps) {
+function EmailRenderer({ html, mailbox, uid, attachments }: EmailRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const writeToIframe = useCallback(
@@ -74,8 +79,25 @@ function EmailRenderer({ html }: EmailRendererProps) {
   );
 
   useEffect(() => {
+    // Replace cid: references with actual attachment download URLs before
+    // sanitization so DOMPurify sees valid /api/... paths and keeps them.
+    let processedHtml = html;
+    if (mailbox && uid && attachments) {
+      attachments.forEach((att) => {
+        if (att.content_id) {
+          const cidUrl = `/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${uid}/attachments/${att.part_id}`;
+          const cid = att.content_id.replace(/^<|>$/g, "");
+          const escaped = cid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          processedHtml = processedHtml.replace(
+            new RegExp(`cid:${escaped}`, "gi"),
+            cidUrl
+          );
+        }
+      });
+    }
+
     // Sanitize with DOMPurify
-    const clean = DOMPurify.sanitize(html, {
+    const clean = DOMPurify.sanitize(processedHtml, {
       USE_PROFILES: { html: true },
       ADD_ATTR: ["target"],
       FORBID_TAGS: [],
@@ -89,7 +111,7 @@ function EmailRenderer({ html }: EmailRendererProps) {
     );
 
     writeToIframe(withTargets);
-  }, [html, writeToIframe]);
+  }, [html, mailbox, uid, attachments, writeToIframe]);
 
   return (
     <iframe

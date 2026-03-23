@@ -107,6 +107,7 @@ export interface SendEmailRequest {
   from_name?: string;
   to_addresses: string[];
   cc_addresses?: string[];
+  bcc_addresses?: string[];
   subject: string;
   body: string;
   body_type: "html" | "plain";

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -83,6 +83,7 @@ const composeSchema = z.object({
   from_name: z.string().optional().default(""),
   to_addresses: z.string().min(1, "At least one recipient is required"),
   cc_addresses: z.string().optional(),
+  bcc_addresses: z.string().optional(),
   subject: z.string().min(1, "Subject is required"),
   body: z.string().min(1, "Message body is required"),
   body_type: z.enum(["html", "plain"]),
@@ -98,6 +99,7 @@ function ComposeDialog() {
   const sendEmail = useSendEmail();
   const contacts = useContacts(selectedMailbox);
   const prevOpenRef = useRef(false);
+  const [showBcc, setShowBcc] = useState(false);
 
   const {
     register,
@@ -114,6 +116,7 @@ function ComposeDialog() {
       from_name: "",
       to_addresses: "",
       cc_addresses: "",
+      bcc_addresses: "",
       subject: "",
       body: "",
       body_type: "html",
@@ -150,11 +153,13 @@ function ComposeDialog() {
       const defaultAddress = mailboxes[0]?.address ?? "";
       const sig = buildSignatureHtml(getSignatureForAddress(defaultAddress));
       lastFromRef.current = defaultAddress;
+      setShowBcc(false);
       reset({
         from_address: defaultAddress,
         from_name: "",
         to_addresses: "",
         cc_addresses: "",
+        bcc_addresses: "",
         subject: "",
         body: sig,
         body_type: "html",
@@ -176,11 +181,13 @@ function ComposeDialog() {
 
     const replyToAddress = extractEmailAddress(originalEmail.from_address);
 
+    setShowBcc(false);
     if (mode === "reply") {
       reset({
         from_address: fromAddress,
         to_addresses: replyToAddress,
         cc_addresses: "",
+        bcc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Re"),
         body: sig + buildQuotedHtml(originalEmail),
         body_type: "html",
@@ -201,6 +208,7 @@ function ComposeDialog() {
         from_address: fromAddress,
         to_addresses: replyToAddress,
         cc_addresses: ccAddresses,
+        bcc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Re"),
         body: sig + buildQuotedHtml(originalEmail),
         body_type: "html",
@@ -212,6 +220,7 @@ function ComposeDialog() {
         from_address: fromAddress,
         to_addresses: "",
         cc_addresses: "",
+        bcc_addresses: "",
         subject: prefixSubject(originalEmail.subject, "Fwd"),
         body: sig + buildForwardHtml(originalEmail),
         body_type: "html",
@@ -283,6 +292,12 @@ function ComposeDialog() {
           .map((s) => s.trim())
           .filter(Boolean)
       : undefined;
+    const bccList = data.bcc_addresses
+      ? data.bcc_addresses
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
 
     const isReply =
       composeContext?.mode === "reply" || composeContext?.mode === "reply-all";
@@ -307,6 +322,7 @@ function ComposeDialog() {
         from_name: data.from_name || undefined,
         to_addresses: toList,
         cc_addresses: ccList,
+        bcc_addresses: bccList,
         subject: data.subject,
         body: data.body,
         body_type: data.body_type,
@@ -386,7 +402,18 @@ function ComposeDialog() {
 
           {/* CC */}
           <div className="space-y-1.5">
-            <Label htmlFor="cc">CC</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="cc">CC</Label>
+              {!showBcc && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setShowBcc(true)}
+                >
+                  BCC
+                </button>
+              )}
+            </div>
             <Input
               id="cc"
               placeholder="cc@example.com (optional)"
@@ -395,6 +422,20 @@ function ComposeDialog() {
               {...register("cc_addresses")}
             />
           </div>
+
+          {/* BCC (togglable) */}
+          {showBcc && (
+            <div className="space-y-1.5">
+              <Label htmlFor="bcc">BCC</Label>
+              <Input
+                id="bcc"
+                placeholder="bcc@example.com (optional)"
+                list="contact-suggestions"
+                autoComplete="off"
+                {...register("bcc_addresses")}
+              />
+            </div>
+          )}
 
           {/* Contact suggestions datalist */}
           <datalist id="contact-suggestions">
