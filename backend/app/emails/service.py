@@ -309,7 +309,6 @@ async def send_email(
     msg["Date"] = email.utils.formatdate(localtime=True)
     msg["Message-ID"] = email.utils.make_msgid(domain=settings.domain)
     msg["X-Mailer"] = "MailCue/1.0"
-    msg["MIME-Version"] = "1.0"
     if request.reply_to:
         msg["Reply-To"] = request.reply_to
     if request.in_reply_to:
