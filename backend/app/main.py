@@ -111,6 +111,28 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await session.commit()
             logger.info("Registered admin mailbox '%s' in database.", admin_address)
 
+    # Ensure the primary domain is registered in the domains table.
+    # The init script configures Postfix/Dovecot with MAILCUE_DOMAIN,
+    # but the domains table is what the UI and DNS verification use.
+    if settings.is_production:
+        async with AsyncSessionLocal() as session:
+            from app.domains.service import add_domain
+
+            stmt = select(Domain).where(Domain.name == settings.domain)
+            result = await session.execute(stmt)
+            if result.scalar_one_or_none() is None:
+                try:
+                    await add_domain(settings.domain, "mail", session)
+                    logger.info(
+                        "Registered primary domain '%s' in database.",
+                        settings.domain,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Could not auto-register domain '%s' (may already exist).",
+                        settings.domain,
+                    )
+
     # Restore custom TLS certificates from DB to filesystem (the cert
     # directory is not volume-mounted, so certs are lost on restart).
     async with AsyncSessionLocal() as session:
