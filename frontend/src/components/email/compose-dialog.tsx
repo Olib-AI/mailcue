@@ -18,6 +18,7 @@ import {
 import { useUIStore } from "@/stores/ui-store";
 import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useSendEmail } from "@/hooks/use-emails";
+import { useContacts } from "@/hooks/use-contacts";
 import { useGpgKey } from "@/hooks/use-gpg";
 import type { EmailDetail as EmailDetailType } from "@/types/api";
 import { formatFullDate, formatEmailAddress, extractEmailAddress } from "@/lib/utils";
@@ -92,9 +93,10 @@ const composeSchema = z.object({
 type ComposeFormValues = z.infer<typeof composeSchema>;
 
 function ComposeDialog() {
-  const { composeOpen, setComposeOpen, composeContext } = useUIStore();
+  const { composeOpen, setComposeOpen, composeContext, selectedMailbox } = useUIStore();
   const { data: mailboxData } = useMailboxes();
   const sendEmail = useSendEmail();
+  const contacts = useContacts(selectedMailbox);
   const prevOpenRef = useRef(false);
 
   const {
@@ -371,6 +373,8 @@ function ComposeDialog() {
             <Input
               id="to"
               placeholder="recipient@example.com (comma-separated)"
+              list="contact-suggestions"
+              autoComplete="off"
               {...register("to_addresses")}
             />
             {errors.to_addresses && (
@@ -386,9 +390,20 @@ function ComposeDialog() {
             <Input
               id="cc"
               placeholder="cc@example.com (optional)"
+              list="contact-suggestions"
+              autoComplete="off"
               {...register("cc_addresses")}
             />
           </div>
+
+          {/* Contact suggestions datalist */}
+          <datalist id="contact-suggestions">
+            {contacts.map((c) => (
+              <option key={c.email} value={c.email}>
+                {c.name ? `${c.name} (${c.email})` : c.email}
+              </option>
+            ))}
+          </datalist>
 
           {/* Subject */}
           <div className="space-y-1.5">

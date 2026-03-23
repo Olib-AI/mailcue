@@ -253,6 +253,13 @@ function EmailList() {
         )}
       </div>
 
+      {/* Search scope indicator */}
+      {search && (
+        <p className="text-xs text-muted-foreground px-4 py-1.5 border-b bg-muted/30">
+          Searching in: {selectedFolder === "INBOX" ? "Inbox" : selectedFolder}
+        </p>
+      )}
+
       {/* Email list */}
       <ScrollArea className="flex-1">
         {emails.map((email) => (

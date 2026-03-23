@@ -8,6 +8,7 @@ import {
   Monitor,
   LogOut,
   User,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { useUIStore } from "@/stores/ui-store";
 import { useAuth } from "@/hooks/use-auth";
 
-function Header() {
+interface HeaderProps {
+  onMobileMenuToggle?: () => void;
+}
+
+function Header({ onMobileMenuToggle }: HeaderProps) {
   const { theme, setTheme, setComposeOpen } = useUIStore();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -73,6 +78,19 @@ function Header() {
 
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-background px-4">
+      {/* Mobile menu button */}
+      {onMobileMenuToggle && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden shrink-0"
+          onClick={onMobileMenuToggle}
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      )}
+
       {/* Search */}
       <div className="relative flex-1 max-w-md">
         <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
