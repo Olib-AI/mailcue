@@ -133,7 +133,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               (m) => m.address === selectedMailbox
             );
             const unreadCount =
-              folder === "INBOX" ? (selectedMb?.unread_count ?? 0) : 0;
+              folder === "INBOX" ? (selectedMb?.unread_count ?? 0) : null;
 
             return (
               <button
@@ -153,7 +153,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
                     <span className="flex-1 text-left">
                       {FOLDER_LABELS[folder]}
                     </span>
-                    {unreadCount > 0 && (
+                    {unreadCount !== null && unreadCount > 0 && (
                       <span className="text-xs font-semibold text-primary">
                         {unreadCount}
                       </span>

@@ -12,6 +12,7 @@ import type {
   EmailDetail,
   SendEmailRequest,
   InjectEmailRequest,
+  UpdateFlagsRequest,
 } from "@/types/api";
 
 // --- Query Keys ---
@@ -135,6 +136,33 @@ export function useDeleteEmail() {
     }) => api.delete<void>(`/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}?folder=${encodeURIComponent(folder)}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function useToggleReadStatus() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mailbox,
+      uid,
+      seen,
+    }: {
+      mailbox: string;
+      uid: string;
+      seen: boolean;
+    }) =>
+      api.patch<void>(
+        `/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/flags`,
+        { seen } satisfies UpdateFlagsRequest
+      ),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({
+        queryKey: emailKeys.detail(variables.mailbox, variables.uid),
+      });
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
     },
   });

@@ -156,6 +156,7 @@ export interface MailboxListResponse {
 
 export type SSEEventType =
   | "email.received"
+  | "email.sent"
   | "email.deleted"
   | "mailbox.created"
   | "mailbox.deleted"
@@ -490,6 +491,12 @@ export interface ProductionStatus {
   dovecot_tls_required: boolean;
   secure_cookies: boolean;
   acme_configured: boolean;
+}
+
+// --- Flag Types ---
+
+export interface UpdateFlagsRequest {
+  seen: boolean;
 }
 
 // --- API Error ---

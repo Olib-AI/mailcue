@@ -16,6 +16,7 @@ from app.emails.schemas import (
     BulkDeleteResponse,
     EmailDetail,
     EmailListResponse,
+    UpdateFlagsRequest,
 )
 from app.emails.service import (
     bulk_delete_emails,
@@ -23,6 +24,7 @@ from app.emails.service import (
     get_email,
     list_emails,
     purge_mailbox,
+    set_email_flags,
 )
 from app.mailboxes.schemas import (
     MailboxCreateRequest,
@@ -218,3 +220,17 @@ async def delete_mailbox_email(
     """Delete an email by UID from a specific mailbox."""
     decoded = unquote(mailbox_address)
     await delete_email(mailbox=decoded, uid=uid, folder=folder)
+
+
+@router.patch("/{mailbox_address}/emails/{uid}/flags")
+async def update_email_flags(
+    mailbox_address: str,
+    uid: str,
+    body: UpdateFlagsRequest,
+    folder: str = Query("INBOX"),
+    _user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Toggle read/unread status on an email by setting or clearing the \\Seen flag."""
+    decoded = unquote(mailbox_address)
+    await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
+    return {"message": "Flags updated"}

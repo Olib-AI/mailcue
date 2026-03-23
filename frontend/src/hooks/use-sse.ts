@@ -50,6 +50,15 @@ export function useSSE(enabled: boolean): void {
             }
             break;
           }
+          case "email.sent": {
+            void queryClient.invalidateQueries({
+              queryKey: emailKeys.lists(),
+            });
+            void queryClient.invalidateQueries({
+              queryKey: mailboxKeys.list(),
+            });
+            break;
+          }
           case "email.deleted": {
             void queryClient.invalidateQueries({
               queryKey: emailKeys.lists(),

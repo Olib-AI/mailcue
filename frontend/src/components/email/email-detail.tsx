@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronUp,
   Mail,
+  MailOpen,
   Reply,
   ReplyAll,
   Forward,
@@ -31,7 +32,7 @@ import { EmailHeaders } from "./email-headers";
 import { EmailAnalysis } from "./email-analysis";
 import { AttachmentList } from "./attachment-list";
 import { GpgStatusBadge } from "@/components/gpg/gpg-status-badge";
-import { useEmail, useDeleteEmail } from "@/hooks/use-emails";
+import { useEmail, useDeleteEmail, useToggleReadStatus } from "@/hooks/use-emails";
 import { useUIStore } from "@/stores/ui-store";
 import { useCompareStore } from "@/stores/compare-store";
 
@@ -61,6 +62,7 @@ function EmailDetail() {
     selectedFolder
   );
   const deleteEmail = useDeleteEmail();
+  const toggleRead = useToggleReadStatus();
   const { addEmail, removeEmail, hasEmail } = useCompareStore();
   const isInCompare = hasEmail(selectedMailbox ?? "", selectedEmailUid ?? "");
   const [showAllHeaders, setShowAllHeaders] = useState(false);
@@ -81,7 +83,25 @@ function EmailDetail() {
         },
       }
     );
-  }, [selectedMailbox, selectedEmailUid, deleteEmail, setSelectedEmailUid]);
+  }, [selectedMailbox, selectedEmailUid, selectedFolder, deleteEmail, setSelectedEmailUid]);
+
+  const handleMarkUnread = useCallback(() => {
+    if (!selectedMailbox || selectedEmailUid === null) return;
+    toggleRead.mutate(
+      { mailbox: selectedMailbox, uid: selectedEmailUid, seen: false },
+      {
+        onSuccess: () => {
+          toast.success("Marked as unread");
+          setSelectedEmailUid(null);
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to update read status"
+          );
+        },
+      }
+    );
+  }, [selectedMailbox, selectedEmailUid, toggleRead, setSelectedEmailUid]);
 
   // Empty state
   if (!selectedEmailUid) {
@@ -184,6 +204,19 @@ function EmailDetail() {
                 <Check className="h-4 w-4" />
               ) : (
                 <GitCompareArrows className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleMarkUnread}
+              disabled={toggleRead.isPending}
+              aria-label="Mark as unread"
+            >
+              {toggleRead.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MailOpen className="h-4 w-4" />
               )}
             </Button>
             <Button

@@ -111,6 +111,12 @@ class BulkInjectResponse(BaseModel):
     ids: list[str]
 
 
+class UpdateFlagsRequest(BaseModel):
+    """Update IMAP flags on an email (e.g. mark as read/unread)."""
+
+    seen: bool
+
+
 class BulkDeleteRequest(BaseModel):
     """Delete multiple emails from a mailbox."""
 

@@ -562,6 +562,34 @@ async def purge_mailbox(mailbox: str) -> int:
     return total_deleted
 
 
+# ── Flag management ──────────────────────────────────────────
+
+
+async def set_email_flags(
+    mailbox: str,
+    uid: str,
+    *,
+    seen: bool,
+    folder: str = "INBOX",
+) -> None:
+    """Set or clear the ``\\Seen`` flag on an email.
+
+    Uses IMAP ``UID STORE`` with ``+FLAGS`` or ``-FLAGS`` to toggle
+    the read/unread state without modifying other flags.
+    """
+    imap = await _imap_connect(mailbox)
+    try:
+        await imap.select(folder)
+        action = "+FLAGS" if seen else "-FLAGS"
+        await imap.uid("store", uid, action, "(\\Seen)")
+        logger.info(
+            "Email flags updated: %s/%s uid=%s seen=%s",
+            mailbox, folder, uid, seen,
+        )
+    finally:
+        await _imap_disconnect(imap)
+
+
 # ── Search ───────────────────────────────────────────────────────
 
 
