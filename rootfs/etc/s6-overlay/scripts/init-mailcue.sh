@@ -20,6 +20,10 @@ DKIM_DIR="/etc/opendkim/keys/${DOMAIN}"
 VMAIL_BASE="/var/mail/vhosts"
 DOVECOT_USERS="/etc/dovecot/users"
 
+# Set the container's system hostname so SMTP EHLO uses the correct value
+# instead of the Docker container ID (e.g., "1c7faeb9da74").
+hostname "${HOSTNAME}" 2>/dev/null || true
+
 echo "[init-mailcue] Starting initialisation for domain=${DOMAIN}"
 
 # -------------------------------------------------------------------------

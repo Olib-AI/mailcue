@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import contextlib
 import email.utils
+import html as html_module
 import logging
 import re
 import secrets
@@ -316,7 +317,13 @@ async def send_email(
     if request.references:
         msg["References"] = " ".join(request.references)
 
-    if text_body:
+    # Always include both text/plain and text/html for best deliverability.
+    # Gmail and other providers penalize emails that lack a text/plain part.
+    if html_body and not text_body:
+        # Strip HTML tags to generate a plain-text fallback
+        plain = re.sub(r"<[^>]+>", "", html_module.unescape(html_body)).strip()
+        msg.attach(MIMEText(plain, "plain", "utf-8"))
+    elif text_body:
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
     if html_body:
         msg.attach(MIMEText(html_body, "html", "utf-8"))
@@ -340,6 +347,7 @@ async def send_email(
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             recipients=all_recipients,
+            source_address=settings.hostname,
             start_tls=False,
             use_tls=False,
         )
