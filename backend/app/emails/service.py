@@ -584,7 +584,10 @@ async def set_email_flags(
         await imap.uid("store", uid, action, "(\\Seen)")
         logger.info(
             "Email flags updated: %s/%s uid=%s seen=%s",
-            mailbox, folder, uid, seen,
+            mailbox,
+            folder,
+            uid,
+            seen,
         )
     finally:
         await _imap_disconnect(imap)
