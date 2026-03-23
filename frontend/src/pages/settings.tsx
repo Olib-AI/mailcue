@@ -4,6 +4,7 @@ import { DomainManager } from "@/components/admin/domain-manager";
 import { GpgKeyManager } from "@/components/gpg/gpg-key-manager";
 import { CertificateManager } from "@/components/admin/certificate-manager";
 import { MailServerManager } from "@/components/admin/mail-server";
+import { ProductionStatusPanel } from "@/components/admin/production-status";
 
 function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -21,6 +22,7 @@ function SettingsPage() {
           <TabsTrigger value="certificate">TLS Certificate</TabsTrigger>
           <TabsTrigger value="mail-server">Mail Server</TabsTrigger>
           <TabsTrigger value="domains">Domains</TabsTrigger>
+          <TabsTrigger value="production">Production</TabsTrigger>
         </TabsList>
 
         <TabsContent value="gpg">
@@ -37,6 +39,10 @@ function SettingsPage() {
 
         <TabsContent value="domains">
           <DomainManager />
+        </TabsContent>
+
+        <TabsContent value="production">
+          <ProductionStatusPanel />
         </TabsContent>
       </Tabs>
     </div>

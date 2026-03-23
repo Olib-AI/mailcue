@@ -16,6 +16,7 @@ from app.auth.models import User
 from app.database import get_db
 from app.dependencies import require_admin
 from app.system.service import (
+    get_production_status,
     get_server_hostname,
     get_tls_certificate_status,
     set_server_hostname,
@@ -280,3 +281,27 @@ async def upload_tls(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return TlsCertificateStatusResponse(**result)
+
+
+# ── Production status ────────────────────────────────────────────
+
+
+class ProductionStatusResponse(BaseModel):
+    mode: str
+    tls_configured: bool
+    domains_configured: int
+    domains_verified: int
+    postfix_strict_mode: bool
+    dovecot_tls_required: bool
+    secure_cookies: bool
+    acme_configured: bool
+
+
+@router.get("/production-status", response_model=ProductionStatusResponse)
+async def production_status(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> ProductionStatusResponse:
+    """Return the current production readiness status. **Admin only.**"""
+    data = await get_production_status(db)
+    return ProductionStatusResponse(**data)

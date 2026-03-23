@@ -5,6 +5,9 @@
 # =============================================================================
 set -eu
 
+MAILCUE_MODE="${MAILCUE_MODE:-test}"
+echo "MailCue mode: ${MAILCUE_MODE}"
+
 DOMAIN="${MAILCUE_DOMAIN:-mailcue.local}"
 HOSTNAME="${MAILCUE_HOSTNAME:-mail.${DOMAIN}}"
 ADMIN_USER="${MAILCUE_ADMIN_USER:-admin}"
@@ -228,6 +231,252 @@ RELAY
     postmap /etc/postfix/sasl_passwd
     chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
     echo "[init-mailcue] Smarthost relay configured."
+fi
+
+# -------------------------------------------------------------------------
+# 3d. Production mode hardening (if MAILCUE_MODE=production)
+# -------------------------------------------------------------------------
+if [ "$MAILCUE_MODE" = "production" ]; then
+    echo "[init-mailcue] Applying production mode hardening..."
+
+    # --- Postfix production hardening ---
+    echo "[init-mailcue] [production] Hardening Postfix..."
+    postconf -e "smtpd_reject_unlisted_recipient=yes"
+    postconf -e "mynetworks=127.0.0.0/8"
+    postconf -e "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes"
+
+    # Create empty virtual_mailboxes and postmap it
+    touch /etc/postfix/virtual_mailboxes
+    postmap /etc/postfix/virtual_mailboxes
+
+    # Add SPF policy check to smtpd_recipient_restrictions
+    postconf -e "smtpd_recipient_restrictions=permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, check_policy_service unix:private/policyd-spf"
+
+    # Switch virtual_mailbox_domains from regexp catchall to hash table
+    postconf -e "virtual_mailbox_domains=hash:/etc/postfix/virtual_domains"
+
+    # Create virtual_domains with just the configured domain and postmap it
+    echo "${DOMAIN}    OK" > /etc/postfix/virtual_domains
+    postmap /etc/postfix/virtual_domains
+
+    # --- Port 465 (SMTPS) — implicit TLS on port 465 ---
+    echo "[init-mailcue] [production] Adding SMTPS (port 465) to master.cf..."
+    cat >> /etc/postfix/master.cf << 'SMTPS'
+
+# ---- Port 465 — SMTPS (implicit TLS, production mode) --------------------
+smtps     inet  n       -       n       -       -       smtpd
+  -o syslog_name=postfix/smtps
+  -o smtpd_tls_wrappermode=yes
+  -o smtpd_sasl_auth_enable=yes
+  -o smtpd_tls_auth_only=yes
+  -o smtpd_reject_unlisted_recipient=yes
+  -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+  -o milter_macro_daemon_name=ORIGINATING
+  -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_milters=unix:/var/run/opendkim/opendkim.sock
+  -o non_smtpd_milters=unix:/var/run/opendkim/opendkim.sock
+SMTPS
+
+    # --- Dovecot production hardening ---
+    echo "[init-mailcue] [production] Hardening Dovecot..."
+
+    # Remove/comment out the catch-all static passdb (nopassword=y)
+    sed -i '/^# Catch-all passdb:/,/^}/ s/^/#/' /etc/dovecot/dovecot.conf
+
+    # Remove/comment out the catch-all fallback userdb (allow_all_users=yes)
+    sed -i '/^# Catch-all fallback userdb:/,/^}/ s/^/#/' /etc/dovecot/dovecot.conf
+
+    # Set ssl = required instead of ssl = yes
+    sed -i 's/^ssl = yes$/ssl = required/' /etc/dovecot/dovecot.conf
+
+    # Set disable_plaintext_auth = yes
+    sed -i '/^ssl = required$/a disable_plaintext_auth = yes' /etc/dovecot/dovecot.conf
+
+    # Enable quota plugin in imap and lmtp protocol sections
+    sed -i '/^protocol imap {/a\  mail_plugins = $mail_plugins quota' /etc/dovecot/dovecot.conf
+    sed -i '/^protocol lmtp {/a\  mail_plugins = $mail_plugins quota' /etc/dovecot/dovecot.conf
+
+    # --- OpenDMARC production hardening ---
+    echo "[init-mailcue] [production] Hardening OpenDMARC..."
+    sed -i 's/^RejectFailures          false$/RejectFailures          true/' /etc/opendmarc/opendmarc.conf
+
+    # --- Let's Encrypt / ACME support ---
+    echo "[init-mailcue] [production] Configuring TLS certificates..."
+    mkdir -p /etc/ssl/mailcue
+    mkdir -p /var/www/acme-challenge
+
+    MAILCUE_TLS_CERT_PATH="${MAILCUE_TLS_CERT_PATH:-}"
+    MAILCUE_TLS_KEY_PATH="${MAILCUE_TLS_KEY_PATH:-}"
+    MAILCUE_ACME_EMAIL="${MAILCUE_ACME_EMAIL:-}"
+
+    # If custom TLS cert/key paths are provided, symlink them into place
+    if [ -n "${MAILCUE_TLS_CERT_PATH}" ] && [ -n "${MAILCUE_TLS_KEY_PATH}" ]; then
+        echo "[init-mailcue] [production] Using custom TLS cert: ${MAILCUE_TLS_CERT_PATH}"
+        ln -sf "${MAILCUE_TLS_CERT_PATH}" /etc/ssl/mailcue/fullchain.pem
+        ln -sf "${MAILCUE_TLS_KEY_PATH}" /etc/ssl/mailcue/privkey.pem
+    fi
+
+    # If ACME email is set and no custom cert exists, attempt certbot
+    if [ -n "${MAILCUE_ACME_EMAIL}" ] && [ ! -f /etc/ssl/mailcue/fullchain.pem ]; then
+        if command -v certbot >/dev/null 2>&1; then
+            echo "[init-mailcue] [production] Requesting Let's Encrypt certificate via certbot..."
+            certbot certonly --webroot \
+                -w /var/www/acme-challenge \
+                -d "${HOSTNAME}" \
+                --email "${MAILCUE_ACME_EMAIL}" \
+                --agree-tos --non-interactive \
+                --cert-path /etc/ssl/mailcue/fullchain.pem \
+                --key-path /etc/ssl/mailcue/privkey.pem \
+                || echo "[init-mailcue] [production] WARNING: certbot failed. Using self-signed certificates."
+            # If certbot succeeded, symlink from standard certbot paths
+            if [ -f "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" ]; then
+                ln -sf "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" /etc/ssl/mailcue/fullchain.pem
+                ln -sf "/etc/letsencrypt/live/${HOSTNAME}/privkey.pem" /etc/ssl/mailcue/privkey.pem
+            fi
+        else
+            echo "[init-mailcue] [production] WARNING: certbot not found."
+            echo "[init-mailcue] [production] To obtain a Let's Encrypt certificate, install certbot and run:"
+            echo "  certbot certonly --webroot -w /var/www/acme-challenge -d ${HOSTNAME} --email ${MAILCUE_ACME_EMAIL}"
+        fi
+    fi
+
+    # --- Nginx HTTPS setup ---
+    if [ -f /etc/ssl/mailcue/fullchain.pem ] && [ -f /etc/ssl/mailcue/privkey.pem ]; then
+        echo "[init-mailcue] [production] Configuring Nginx HTTPS..."
+        mkdir -p /etc/nginx/conf.d
+
+        cat > /etc/nginx/conf.d/https.conf << 'NGINXHTTPS'
+# =============================================================================
+# Nginx HTTPS — MailCue Production Mode (auto-generated by init-mailcue)
+# =============================================================================
+
+# Redirect HTTP to HTTPS (except ACME challenge)
+server {
+    listen 80;
+    server_name _;
+
+    # Allow ACME challenge over HTTP for cert renewal
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme-challenge;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS server block
+server {
+    listen 443 ssl http2;
+    server_name _;
+
+    ssl_certificate     /etc/ssl/mailcue/fullchain.pem;
+    ssl_certificate_key /etc/ssl/mailcue/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # HSTS
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+
+    root /var/www/mailcue;
+    index index.html;
+
+    # --- API proxy ---
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    60s;
+        proxy_send_timeout    60s;
+    }
+
+    # --- Sandbox proxy ---
+    location /sandbox/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    60s;
+        proxy_send_timeout    60s;
+    }
+
+    # --- HTTP Bin proxy ---
+    location /httpbin/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    60s;
+        proxy_send_timeout    60s;
+    }
+
+    # --- SSE stream ---
+    location /api/v1/events/stream {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection        "";
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding off;
+        proxy_read_timeout 3600s;
+        add_header X-Accel-Buffering no;
+    }
+
+    # --- Well-known paths ---
+    location /.well-known/acme-challenge/ {
+        root /var/www/acme-challenge;
+        try_files $uri =404;
+    }
+
+    location /.well-known/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # --- Static frontend ---
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+}
+NGINXHTTPS
+        echo "[init-mailcue] [production] Nginx HTTPS configured."
+    else
+        echo "[init-mailcue] [production] No TLS cert at /etc/ssl/mailcue/fullchain.pem — HTTPS not configured."
+        echo "[init-mailcue] [production] Set MAILCUE_ACME_EMAIL or provide MAILCUE_TLS_CERT_PATH/MAILCUE_TLS_KEY_PATH."
+    fi
+
+    echo "[init-mailcue] Production mode hardening complete."
 fi
 
 # -------------------------------------------------------------------------

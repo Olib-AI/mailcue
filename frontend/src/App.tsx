@@ -13,6 +13,7 @@ import { DevToolsPage } from "@/pages/dev-tools";
 import { MessagingPage } from "@/pages/messaging";
 import { HttpBinPage } from "@/pages/http-bin";
 import { ForwardingRulesPage } from "@/pages/forwarding-rules";
+import { AliasesPage } from "@/pages/aliases";
 import { useAuth } from "@/hooks/use-auth";
 
 const queryClient = new QueryClient({
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/messaging" element={<MessagingPage />} />
                 <Route path="/http-bin" element={<HttpBinPage />} />
                 <Route path="/forwarding-rules" element={<ForwardingRulesPage />} />
+                <Route path="/aliases" element={<AliasesPage />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/mail" replace />} />

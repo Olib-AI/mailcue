@@ -6,7 +6,14 @@ A ``.env`` file in the working directory is loaded automatically when present.
 
 from __future__ import annotations
 
+import secrets
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _default_secret_key() -> str:
+    """Generate a random secret key when none is provided via environment."""
+    return secrets.token_urlsafe(32)
 
 
 class Settings(BaseSettings):
@@ -19,12 +26,20 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    # ── Mode ─────────────────────────────────────────────────────
+    mode: str = "test"  # "test" or "production"
+
     # ── Application ──────────────────────────────────────────────
     domain: str = "mailcue.local"
-    secret_key: str = "change-me-in-production"
+    secret_key: str = _default_secret_key()
     admin_user: str = "admin"
     admin_password: str = "mailcue"
     debug: bool = False
+
+    # ── TLS / ACME ───────────────────────────────────────────────
+    acme_email: str = ""
+    tls_cert_path: str = ""
+    tls_key_path: str = ""
 
     # ── Database ─────────────────────────────────────────────────
     database_url: str = "sqlite+aiosqlite:////var/lib/mailcue/mailcue.db"
@@ -33,6 +48,7 @@ class Settings(BaseSettings):
     # ── Mail server ──────────────────────────────────────────────
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 25
+    smtp_tls: bool = False
     imap_host: str = "127.0.0.1"
     imap_port: int = 143
 
@@ -80,6 +96,11 @@ class Settings(BaseSettings):
     sandbox_enabled: bool = True
     sandbox_webhook_timeout_seconds: int = 10
     sandbox_webhook_max_retries: int = 3
+
+    @property
+    def is_production(self) -> bool:
+        """Return ``True`` when the server is running in production mode."""
+        return self.mode == "production"
 
 
 settings = Settings()

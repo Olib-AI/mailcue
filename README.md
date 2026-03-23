@@ -51,9 +51,13 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 | **Two-Factor Auth** | TOTP-based 2FA with authenticator app support. Setup wizard with QR code in the profile page. |
 | **API Keys** | Programmatic `X-API-Key` authentication for CI/CD and automation alongside JWT for the web UI. Manage keys from the profile page. |
 | **Domain Management** | Add custom email domains with automatic DKIM key generation. DNS verification dashboard for MX, SPF, DKIM, DMARC, MTA-STS, and TLS-RPT records. |
+| **Production Mode** | Switch from catch-all test server to a fully hardened production email server with `MAILCUE_MODE=production`. Enforces strict virtual domains, TLS-required Dovecot, DMARC rejection, SPF enforcement, and secure cookies. |
+| **Let's Encrypt / ACME** | Automatic TLS certificate provisioning via Certbot in production mode. Also supports externally mounted certs via `MAILCUE_TLS_CERT_PATH` / `MAILCUE_TLS_KEY_PATH`. |
+| **Email Aliases** | Create aliases (e.g., `info@domain.com` → `admin@domain.com`) with optional catch-all support. Managed via the admin UI and REST API. |
+| **Production Readiness Dashboard** | Settings page shows a checklist of production readiness: TLS status, domain verification, Postfix/Dovecot hardening, and more. |
 | **Smarthost Relay** | Optional outbound relay via external SMTP services (SendGrid, Mailgun, AWS SES) when port 25 is blocked. Configured via `MAILCUE_RELAY_*` env vars. |
 | **Server Configuration** | Configure server hostname and upload custom TLS certificates from the admin UI. Certs persist across container restarts. |
-| **Admin Panel** | Create and delete mailboxes, inject test emails, manage domains, configure mail server -- all from the browser. |
+| **Admin Panel** | Create and delete mailboxes, manage aliases, inject test emails, manage domains, configure mail server -- all from the browser. |
 | **Single Container** | One `docker run` command. No external databases, no Redis, no message queues. |
 | **Persistent Storage** | SQLite (with optional SQLCipher AES-256 encryption) and Maildir storage survive container restarts via Docker volumes. |
 
@@ -210,6 +214,46 @@ curl -X POST http://localhost:8088/api/v1/emails/inject \
   }'
 ```
 
+## Production Deployment
+
+MailCue can run as a fully hardened production email server. Set `MAILCUE_MODE=production` to switch from the default catch-all test mode to production mode.
+
+### What changes in production mode
+
+- **Postfix**: Strict virtual domain/mailbox maps (no catch-all), `mynetworks` restricted to loopback, SPF policy enforcement, SMTPS on port 465
+- **Dovecot**: Password-less catch-all auth disabled, `ssl = required`, `disable_plaintext_auth = yes`, quota enforcement enabled
+- **OpenDMARC**: `RejectFailures` set to `true` -- DMARC policy `p=reject` is honored
+- **Nginx**: HTTPS server block generated when TLS certs are available, HTTP-to-HTTPS redirect
+- **MTA-STS**: Policy switches from `mode: testing` to `mode: enforce`
+- **Cookies**: Secure flag enabled, SameSite set to `strict`
+- **Mailboxes**: Domain validation enforced -- mailboxes can only be created for registered domains
+
+### Docker Compose (production)
+
+```bash
+# Edit docker-compose.production.yml with your domain, secrets, and ACME email
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+```
+
+### TLS Certificates
+
+Production mode supports three approaches:
+
+1. **Let's Encrypt (automatic)**: Set `MAILCUE_ACME_EMAIL=you@example.com` and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup.
+2. **External certificates**: Set `MAILCUE_TLS_CERT_PATH` and `MAILCUE_TLS_KEY_PATH` to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning.
+3. **Upload via API**: Use `PUT /api/v1/system/tls` to upload certificate and key through the admin UI or API.
+
+### DNS Requirements
+
+For each domain, configure the following DNS records (the domain management UI provides exact values):
+
+- **MX** record pointing to your server hostname
+- **SPF** TXT record (`v=spf1 mx -all`)
+- **DKIM** TXT record (auto-generated when you add the domain)
+- **DMARC** TXT record (`v=DMARC1; p=reject; ...`)
+- **MTA-STS** TXT and HTTPS policy
+- **PTR / rDNS** on your server IP (required for direct delivery)
+
 ## Development Setup
 
 ### Prerequisites
@@ -266,6 +310,7 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 
 | Variable | Default | Description |
 |---|---|---|
+| `MAILCUE_MODE` | `test` | Server mode: `test` (catch-all, no auth required) or `production` (strict domains, hardened security) |
 | `MAILCUE_DOMAIN` | `mailcue.local` | Primary email domain (e.g., `user@<domain>`) |
 | `MAILCUE_HOSTNAME` | `mail.mailcue.local` | SMTP/IMAP hostname for TLS certificates |
 | `MAILCUE_ADMIN_USER` | `admin` | Default admin username |
@@ -287,6 +332,10 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_RELAY_PORT` | `587` | Smarthost relay port |
 | `MAILCUE_RELAY_USER` | *(empty)* | Smarthost SASL username |
 | `MAILCUE_RELAY_PASSWORD` | *(empty)* | Smarthost SASL password |
+| `MAILCUE_ACME_EMAIL` | *(empty)* | Email for Let's Encrypt certificate provisioning (production mode) |
+| `MAILCUE_TLS_CERT_PATH` | *(empty)* | Path to externally mounted TLS certificate (PEM) |
+| `MAILCUE_TLS_KEY_PATH` | *(empty)* | Path to externally mounted TLS private key (PEM) |
+| `MAILCUE_SMTP_TLS` | `false` | Enable TLS for outbound SMTP connections |
 | `MAILCUE_CORS_ORIGINS` | `["*"]` | Allowed CORS origins (JSON array) |
 | `MAILCUE_DEBUG` | `false` | Enable debug logging |
 
@@ -295,7 +344,9 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | Port | Protocol | Description |
 |---|---|---|
 | **80** | HTTP | Web UI + API (Nginx reverse proxy) |
+| **443** | HTTPS | Web UI + API with TLS (production mode) |
 | **25** | SMTP | Inbound mail (MTA-to-MTA, no auth required) |
+| **465** | SMTPS | Submission over implicit TLS (production mode) |
 | **587** | SMTP | Submission (STARTTLS + SASL authentication) |
 | **143** | IMAP | IMAP with STARTTLS |
 | **993** | IMAPS | IMAP over implicit TLS |
@@ -379,6 +430,16 @@ POST   /api/v1/gpg/keys/:address/publish   # Publish to keys.openpgp.org
 DELETE /api/v1/gpg/keys/:address          # Delete keys for address
 ```
 
+### Aliases
+
+```
+GET    /api/v1/aliases              # List all aliases (admin only)
+POST   /api/v1/aliases              # Create alias (admin only)
+GET    /api/v1/aliases/:id          # Get alias detail (admin only)
+PUT    /api/v1/aliases/:id          # Update alias (admin only)
+DELETE /api/v1/aliases/:id          # Delete alias (admin only)
+```
+
 ### Domains
 
 ```
@@ -399,6 +460,7 @@ GET  /api/v1/system/settings              # Server settings (admin only)
 PUT  /api/v1/system/settings              # Update server settings (admin only)
 GET  /api/v1/system/tls                   # Custom TLS cert status (admin only)
 PUT  /api/v1/system/tls                   # Upload custom TLS cert (admin only)
+GET  /api/v1/system/production-status     # Production readiness checklist (admin only)
 ```
 
 ### Events & Health

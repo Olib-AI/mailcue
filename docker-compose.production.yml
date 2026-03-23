@@ -1,0 +1,61 @@
+# =============================================================================
+# MailCue — Production Mode Compose Override
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
+#
+# This file extends the base docker-compose.yml with production-specific
+# settings. It enables production mode hardening via MAILCUE_MODE=production,
+# exposes HTTPS (443) and SMTPS (465) ports, and adds a volume for
+# Let's Encrypt certificates.
+#
+# Before deploying, update the placeholder environment variables below
+# with your actual domain, hostname, passwords, and secret key.
+# =============================================================================
+
+services:
+  mailcue:
+    ports:
+      # HTTPS — Nginx reverse proxy with TLS
+      - "443:443"
+      # SMTPS — implicit TLS on port 465 (added to Postfix master.cf at runtime)
+      - "465:465"
+    environment:
+      # --- Production mode (required) ---
+      # Enables all production hardening: restricted Postfix networks,
+      # Dovecot catch-all disabled, SSL required, DMARC rejection, etc.
+      - MAILCUE_MODE=production
+
+      # --- Domain and hostname (required) ---
+      # MAILCUE_DOMAIN: your email domain (e.g., example.com)
+      - MAILCUE_DOMAIN=example.com
+      # MAILCUE_HOSTNAME: the FQDN of this mail server (e.g., mail.example.com)
+      - MAILCUE_HOSTNAME=mail.example.com
+
+      # --- Admin credentials (required — change these!) ---
+      - MAILCUE_ADMIN_USER=admin
+      - MAILCUE_ADMIN_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+
+      # --- Application secret key (required — generate a strong random key) ---
+      # Used for JWT tokens, TOTP secrets, etc. Generate with:
+      #   openssl rand -hex 32
+      - MAILCUE_SECRET_KEY=CHANGE_ME_GENERATE_WITH_OPENSSL_RAND
+
+      # --- Let's Encrypt / ACME (optional) ---
+      # Set your email to automatically request a Let's Encrypt certificate.
+      # Requires port 80 to be publicly reachable for HTTP-01 validation.
+      - MAILCUE_ACME_EMAIL=
+
+      # --- Custom TLS certificates (optional) ---
+      # If you have your own TLS certificates, set these paths (inside the container).
+      # They will be symlinked to /etc/ssl/mailcue/fullchain.pem and privkey.pem.
+      # - MAILCUE_TLS_CERT_PATH=/etc/ssl/mailcue/custom/fullchain.pem
+      # - MAILCUE_TLS_KEY_PATH=/etc/ssl/mailcue/custom/privkey.pem
+    volumes:
+      # Let's Encrypt certificate storage (persisted across restarts)
+      - letsencrypt-data:/etc/letsencrypt
+      # If using custom certs, mount them here:
+      # - ./certs:/etc/ssl/mailcue/custom:ro
+
+volumes:
+  letsencrypt-data:

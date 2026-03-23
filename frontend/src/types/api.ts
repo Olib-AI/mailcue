@@ -444,6 +444,53 @@ export interface TestForwardingRuleResponse {
   details: string;
 }
 
+// --- Alias Types ---
+
+export interface Alias {
+  id: string;
+  source_address: string;
+  destination_address: string;
+  domain: string;
+  is_catch_all: boolean;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AliasListResponse {
+  aliases: Alias[];
+  total: number;
+}
+
+export interface CreateAliasRequest {
+  source_address: string;
+  destination_address: string;
+  is_catch_all?: boolean;
+  enabled?: boolean;
+}
+
+export interface UpdateAliasRequest {
+  source_address?: string;
+  destination_address?: string;
+  is_catch_all?: boolean;
+  enabled?: boolean;
+}
+
+// --- Production Status Types ---
+
+export interface ProductionStatusCheck {
+  name: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface ProductionStatus {
+  mode: string;
+  is_production: boolean;
+  ready: boolean;
+  checks: ProductionStatusCheck[];
+}
+
 // --- API Error ---
 
 export interface APIError {

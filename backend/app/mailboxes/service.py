@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -115,6 +116,18 @@ async def create_mailbox(
     local_part = body.username.lower()
     address = f"{local_part}@{domain}"
 
+    # In production mode, validate that the domain exists in managed domains
+    if settings.is_production:
+        from app.domains.models import Domain
+
+        domain_stmt = select(Domain).where(Domain.name == domain)
+        domain_result = await db.execute(domain_stmt)
+        if domain_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Domain '{domain}' is not registered. Add it via /api/v1/domains first.",
+            )
+
     # Check uniqueness
     stmt = select(Mailbox).where(Mailbox.address == address)
     result = await db.execute(stmt)
@@ -143,7 +156,13 @@ async def create_mailbox(
             f"Failed to provision mailbox '{address}' on the mail server"
         ) from exc
 
-    # 4. SSE event
+    # 4. Rebuild Postfix virtual mailbox maps in production mode
+    if settings.is_production:
+        from app.domains.service import rebuild_postfix_virtual_mailboxes
+
+        await rebuild_postfix_virtual_mailboxes(db)
+
+    # 5. SSE event
     await event_bus.publish(
         "mailbox.created",
         {
@@ -195,7 +214,13 @@ async def delete_mailbox(
         except Exception:
             logger.exception("Failed to remove Maildir for %s", address)
 
-    # 4. SSE event
+    # 4. Rebuild Postfix virtual mailbox maps in production mode
+    if settings.is_production:
+        from app.domains.service import rebuild_postfix_virtual_mailboxes
+
+        await rebuild_postfix_virtual_mailboxes(db)
+
+    # 5. SSE event
     await event_bus.publish(
         "mailbox.deleted",
         {

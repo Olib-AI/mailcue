@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Globe,
   ArrowRightLeft,
+  AtSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MailCueLogo } from "@/components/mailcue-logo";
@@ -68,6 +69,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
   const isMessagingPage = location.pathname.startsWith("/messaging");
   const isHttpBinPage = location.pathname.startsWith("/http-bin");
   const isForwardingRulesPage = location.pathname.startsWith("/forwarding-rules");
+  const isAliasesPage = location.pathname.startsWith("/aliases");
 
   // Auto-select first mailbox if none selected
   if (!selectedMailbox && mailboxes.length > 0 && mailboxes[0]) {
@@ -126,7 +128,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
         <div className="px-2 space-y-0.5">
           {FOLDERS.map((folder) => {
             const Icon = FOLDER_ICONS[folder];
-            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage && !isMessagingPage && !isHttpBinPage && !isForwardingRulesPage;
+            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage && !isMessagingPage && !isHttpBinPage && !isForwardingRulesPage && !isAliasesPage;
             const selectedMb = mailboxes.find(
               (m) => m.address === selectedMailbox
             );
@@ -290,6 +292,19 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
           >
             <ArrowRightLeft className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Forwarding</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => void navigate("/aliases")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+              isAliasesPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <AtSign className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>Aliases</span>}
           </button>
           <button
             type="button"

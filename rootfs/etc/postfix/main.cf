@@ -21,9 +21,14 @@ local_recipient_maps =
 local_transport = error:local delivery is disabled
 
 # --- Catch-all virtual mailbox setup (testing server) ------------------------
-# Accept ALL domains and ALL recipients.  This makes MailCue work like
-# Mailhog / Mailpit: any email sent to any address will be accepted and
-# delivered to Dovecot.
+# NOTE: This section is for TEST MODE ONLY. In production mode, the init
+# script (init-mailcue.sh) overrides these settings at runtime:
+#   - virtual_mailbox_domains is switched to hash:/etc/postfix/virtual_domains
+#   - virtual_mailbox_maps is set to hash:/etc/postfix/virtual_mailboxes
+#   - smtpd_reject_unlisted_recipient is set to yes
+#   - mynetworks is restricted to 127.0.0.0/8
+# The defaults below make MailCue work like Mailhog/Mailpit in test mode:
+# accept ALL domains and ALL recipients.
 virtual_transport = lmtp:unix:private/dovecot-lmtp
 
 # Accept any domain via a regexp match-all table.
@@ -33,11 +38,13 @@ virtual_mailbox_domains = regexp:/etc/postfix/virtual_domains_catchall
 # virtual_mailbox_maps is intentionally omitted for catch-all behaviour.
 
 # --- Relay / recipient control -----------------------------------------------
-# MailCue is a CATCH-ALL testing server (like Mailhog/Mailpit).
-# Accept ALL mail from local networks regardless of recipient domain/user.
+# TEST MODE: MailCue is a CATCH-ALL testing server (like Mailhog/Mailpit).
+# Accept ALL mail from local/private networks regardless of recipient domain/user.
+# In production mode, the init script restricts mynetworks to 127.0.0.0/8.
 mynetworks = 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
 
-# Do NOT reject recipients missing from virtual_mailbox_maps (we don't use it)
+# TEST MODE: Do NOT reject recipients missing from virtual_mailbox_maps.
+# In production mode, the init script sets this to yes.
 smtpd_reject_unlisted_recipient = no
 
 # relay_domains is empty — we don't relay externally.

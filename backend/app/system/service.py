@@ -260,6 +260,52 @@ async def upload_tls_certificate(
     }
 
 
+async def get_production_status(db: AsyncSession) -> dict:
+    """Compute a production-readiness report from config and filesystem state."""
+    from app.domains.models import Domain
+
+    # Count domains
+    stmt = select(Domain)
+    result = await db.execute(stmt)
+    all_domains = list(result.scalars().all())
+    domains_configured = len(all_domains)
+    domains_verified = sum(
+        1
+        for d in all_domains
+        if all(
+            [
+                d.mx_verified,
+                d.spf_verified,
+                d.dkim_verified,
+                d.dmarc_verified,
+                d.mta_sts_verified,
+                d.tls_rpt_verified,
+            ]
+        )
+    )
+
+    # TLS check: external cert paths or uploaded cert on disk
+    has_external_cert = bool(
+        settings.tls_cert_path
+        and settings.tls_key_path
+        and Path(settings.tls_cert_path).exists()
+        and Path(settings.tls_key_path).exists()
+    )
+    has_uploaded_cert = FULL_CHAIN_CERT.exists() and SERVER_KEY.exists()
+    tls_configured = has_external_cert or has_uploaded_cert
+
+    return {
+        "mode": settings.mode,
+        "tls_configured": tls_configured,
+        "domains_configured": domains_configured,
+        "domains_verified": domains_verified,
+        "postfix_strict_mode": settings.is_production,
+        "dovecot_tls_required": settings.is_production and tls_configured,
+        "secure_cookies": settings.is_production,
+        "acme_configured": bool(settings.acme_email),
+    }
+
+
 async def restore_custom_certs(db: AsyncSession) -> None:
     """Restore custom TLS certificates from DB to disk on startup."""
     stmt = select(TlsCertificate).where(TlsCertificate.id == 1)

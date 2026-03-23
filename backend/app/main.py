@@ -19,6 +19,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.aliases.models import Alias  # noqa: F401 — imported for table creation
+from app.aliases.router import router as aliases_router
 from app.auth.router import router as auth_router
 from app.auth.service import create_default_admin
 from app.config import settings
@@ -158,6 +160,12 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # ── Middleware ────────────────────────────────────────────────
+    if settings.is_production and settings.cors_origins == ["*"]:
+        logger.warning(
+            "Wildcard CORS origins ('*') are configured in production mode. "
+            "Set MAILCUE_CORS_ORIGINS to restrict allowed origins."
+        )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -178,6 +186,7 @@ def create_app() -> FastAPI:
     app.include_router(domains_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(forwarding_router, prefix="/api/v1")
+    app.include_router(aliases_router, prefix="/api/v1")
 
     # ── HTTP Bin ──────────────────────────────────────────────────
     app.include_router(httpbin_management_router, prefix="/api/v1")
@@ -207,10 +216,21 @@ def create_app() -> FastAPI:
         db: AsyncSession = Depends(get_db),
     ) -> str:
         """Serve MTA-STS policy at the RFC-mandated path."""
+        from pathlib import Path
+
         from app.system.service import get_server_hostname
 
         hostname = await get_server_hostname(db)
-        return f"version: STSv1\nmode: testing\nmx: {hostname}\nmax_age: 86400\n"
+
+        # Use enforce mode in production when a real TLS cert is configured
+        sts_mode = "testing"
+        if settings.is_production:
+            has_external_cert = bool(settings.tls_cert_path and settings.tls_key_path)
+            has_uploaded_cert = Path("/etc/ssl/mailcue/server.crt").exists()
+            if has_external_cert or has_uploaded_cert:
+                sts_mode = "enforce"
+
+        return f"version: STSv1\nmode: {sts_mode}\nmx: {hostname}\nmax_age: 86400\n"
 
     return app
 

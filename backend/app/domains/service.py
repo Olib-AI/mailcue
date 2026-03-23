@@ -13,6 +13,7 @@ import dns.resolver
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.domains.models import Domain
 from app.domains.schemas import DnsCheckResponse, DnsRecordInfo
 
@@ -220,6 +221,9 @@ async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
 
     When domains are managed, switch from catch-all regexp to explicit hash.
     When zero domains, restore catch-all mode.
+
+    In production mode, additionally configures ``virtual_mailbox_maps``
+    and enables ``smtpd_reject_unlisted_recipient`` for strict delivery.
     """
     active_domains = [d for d in domains if d.is_active]
 
@@ -250,6 +254,19 @@ async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
                     "hash:/etc/postfix/virtual_domains",
                 )
                 main_cf.write_text(content)
+
+            # Production-only: enable strict recipient checking and mailbox maps
+            if settings.is_production:
+                subprocess.run(
+                    ["postconf", "-e", "smtpd_reject_unlisted_recipient=yes"],
+                    check=False,
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["postconf", "-e", "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes"],
+                    check=False,
+                    capture_output=True,
+                )
         else:
             # Restore catch-all regexp mode
             if "hash:/etc/postfix/virtual_domains" in content:
@@ -260,6 +277,36 @@ async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
                 main_cf.write_text(content)
 
     await asyncio.to_thread(_write)
+
+
+async def rebuild_postfix_virtual_mailboxes(db: AsyncSession) -> None:
+    """Query all mailboxes and regenerate ``/etc/postfix/virtual_mailboxes``.
+
+    Each line maps an address to its Maildir path so Postfix knows which
+    recipients are valid.  After writing, ``postmap`` is invoked to build
+    the hash DB.
+    """
+    from app.mailboxes.models import Mailbox
+
+    stmt = select(Mailbox).where(Mailbox.is_active.is_(True))
+    result = await db.execute(stmt)
+    mailboxes = list(result.scalars().all())
+
+    def _write() -> None:
+        vmap_path = Path("/etc/postfix/virtual_mailboxes")
+        lines: list[str] = []
+        for mb in mailboxes:
+            local_part, domain = mb.address.split("@", maxsplit=1)
+            lines.append(f"{mb.address}    {domain}/{local_part}/")
+        vmap_path.write_text("\n".join(lines) + "\n")
+        subprocess.run(
+            ["postmap", str(vmap_path)],
+            check=False,
+            capture_output=True,
+        )
+
+    await asyncio.to_thread(_write)
+    logger.info("Rebuilt /etc/postfix/virtual_mailboxes with %d entries.", len(mailboxes))
 
 
 async def _reload_mail_services() -> None:
@@ -367,6 +414,8 @@ async def add_domain(name: str, selector: str, db: AsyncSession) -> Domain:
         all_domains = await _list_domains_internal(db)
         await _rebuild_opendkim_tables(all_domains)
         await _rebuild_postfix_virtual_domains(all_domains)
+        if settings.is_production:
+            await rebuild_postfix_virtual_mailboxes(db)
         await _reload_mail_services()
 
     logger.info("Domain '%s' added with DKIM selector '%s'.", name, selector)
@@ -390,6 +439,8 @@ async def remove_domain(name: str, db: AsyncSession) -> None:
         all_domains = await _list_domains_internal(db)
         await _rebuild_opendkim_tables(all_domains)
         await _rebuild_postfix_virtual_domains(all_domains)
+        if settings.is_production:
+            await rebuild_postfix_virtual_mailboxes(db)
         await _reload_mail_services()
 
     logger.info("Domain '%s' removed.", name)

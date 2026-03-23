@@ -117,8 +117,8 @@ async def login(
         key="refresh_token",
         value=refresh,
         httponly=True,
-        samesite="lax",
-        secure=False,  # Set True behind HTTPS in production
+        samesite="strict" if settings.is_production else "lax",
+        secure=settings.is_production,
         max_age=60 * 60 * 24 * 7,  # 7 days
         path="/api/v1/auth/refresh",
     )
@@ -208,8 +208,8 @@ async def login_2fa(
         key="refresh_token",
         value=refresh,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="strict" if settings.is_production else "lax",
+        secure=settings.is_production,
         max_age=60 * 60 * 24 * 7,
         path="/api/v1/auth/refresh",
     )
@@ -509,8 +509,8 @@ async def refresh(
         key="refresh_token",
         value=new_refresh,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="strict" if settings.is_production else "lax",
+        secure=settings.is_production,
         max_age=60 * 60 * 24 * 7,
         path="/api/v1/auth/refresh",
     )
