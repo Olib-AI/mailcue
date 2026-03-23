@@ -328,7 +328,9 @@ async def send_email(
     elif text_body:
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
     if html_body:
-        # Wrap in a proper HTML document if not already wrapped
+        # Close void HTML elements for XHTML compliance (<br>, <hr>, <img>)
+        html_body = re.sub(r"<(br|hr|img)(\s[^>]*)?\s*/?>", r"<\1\2 />", html_body)
+        # Wrap in a proper XHTML document if not already wrapped
         if "<html" not in html_body.lower():
             html_body = (
                 "<!DOCTYPE html>\n"
