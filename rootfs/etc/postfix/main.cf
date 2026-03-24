@@ -107,10 +107,10 @@ non_smtpd_milters = unix:/var/run/opendkim/opendkim.sock
 # smtp_sasl_security_options = noanonymous
 # smtp_tls_security_level = encrypt
 
-# --- SpamAssassin milter integration ------------------------------------------
-# spamass-milter connects spamd to Postfix via the milter protocol.
-# It adds X-Spam-* headers without requiring a re-injection loop.
-# The milter socket is added to smtpd_milters by the init script.
+# --- SpamAssassin content filter -----------------------------------------------
+# After-queue filter: Postfix pipes through spamc which adds X-Spam-* headers,
+# then re-injects on 127.0.0.1:10025 (which has content_filter= empty).
+content_filter = spamfilter:dummy
 
 # --- Size limits -------------------------------------------------------------
 message_size_limit = 52428800
