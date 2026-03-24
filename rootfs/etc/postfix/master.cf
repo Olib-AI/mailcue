@@ -57,6 +57,18 @@ policyd-spf  unix  -       n       n       -       0       spawn
   user=policyd-spf argv=/usr/bin/policyd-spf
 
 # ---- SpamAssassin content filter -------------------------------------------
-spamassassin unix -     n       n       -       -       pipe
-  flags=DRhu user=debian-spamd argv=/usr/bin/spamc -f -e /usr/sbin/sendmail -oi -f ${sender} ${recipient}
+# Scans via spamc, re-injects on 10025 (no content_filter = no loop)
+spamassassin unix -     n       n       -       5       pipe
+  flags=Rq user=debian-spamd
+  argv=/etc/s6-overlay/scripts/spamfilter.sh ${sender} ${recipient}
+
+# Re-injection after spam scan — content_filter empty prevents loop
+127.0.0.1:10025 inet n  -       n       -       -       smtpd
+  -o content_filter=
+  -o smtpd_delay_reject=no
+  -o smtpd_client_restrictions=permit_mynetworks,reject
+  -o smtpd_recipient_restrictions=permit_mynetworks,reject
+  -o mynetworks=127.0.0.0/8
+  -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks,no_milters
+  -o smtpd_milters=
 
