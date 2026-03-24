@@ -40,6 +40,7 @@ class MailboxResponse(BaseModel):
     quota_mb: int = 500
     email_count: int = 0
     unread_count: int = 0
+    junk_count: int = 0
     signature: str = ""
 
     model_config = {"from_attributes": True}

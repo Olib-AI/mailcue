@@ -139,6 +139,7 @@ export interface Mailbox {
   created_at: string;
   email_count: number;
   unread_count: number;
+  junk_count: number;
   signature: string;
 }
 

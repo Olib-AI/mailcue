@@ -136,7 +136,11 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               (m) => m.address === selectedMailbox
             );
             const unreadCount =
-              folder === "INBOX" ? (selectedMb?.unread_count ?? 0) : null;
+              folder === "INBOX"
+                ? (selectedMb?.unread_count ?? 0)
+                : folder === "Junk"
+                  ? (selectedMb?.junk_count ?? 0)
+                  : null;
 
             return (
               <button
