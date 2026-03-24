@@ -44,6 +44,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         dovecot-imapd \
         dovecot-pop3d \
         dovecot-lmtpd \
+        dovecot-sieve \
+        dovecot-managesieved \
         opendkim \
         opendkim-tools \
         openssl \
