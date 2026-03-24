@@ -1,0 +1,3 @@
+#!/command/execlineb -P
+with-contenv
+/bin/sh /etc/s6-overlay/scripts/acme-renew.sh
