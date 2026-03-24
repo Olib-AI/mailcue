@@ -120,7 +120,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
             stmt = select(Domain).where(Domain.name == settings.domain)
             result = await session.execute(stmt)
-            if result.scalar_one_or_none() is None:
+            existing_domain = result.scalar_one_or_none()
+            if existing_domain is None:
                 try:
                     await add_domain(settings.domain, "mail", session)
                     logger.info(
@@ -132,6 +133,19 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                         "Could not auto-register domain '%s' (may already exist).",
                         settings.domain,
                     )
+            elif existing_domain.dkim_public_key_txt and (
+                "IN\tTXT" in existing_domain.dkim_public_key_txt
+                or '" "' in existing_domain.dkim_public_key_txt
+            ):
+                # Clean up raw opendkim-genkey format stored from before
+                # the parser fix.
+                raw = existing_domain.dkim_public_key_txt
+                txt_part = raw.split("(", 1)[-1].rsplit(")", 1)[0]
+                txt_part = txt_part.replace('"', "").replace("\t", " ")
+                txt_part = " ".join(txt_part.split())
+                existing_domain.dkim_public_key_txt = txt_part.strip()
+                await session.commit()
+                logger.info("Cleaned up DKIM public key for '%s'.", settings.domain)
 
     # Restore custom TLS certificates from DB to filesystem (the cert
     # directory is not volume-mounted, so certs are lost on restart).
