@@ -60,9 +60,15 @@ async def _generate_dkim_keys(domain_name: str, selector: str) -> tuple[str, str
         public_key_txt: str | None = None
         if txt_file.exists():
             raw = txt_file.read_text()
-            # Extract the p= value from the TXT record
-            # Format: selector._domainkey\tIN\tTXT\t( "v=DKIM1; h=...; k=rsa; p=..." )
-            public_key_txt = raw
+            # Parse the opendkim-genkey output into a clean single-line
+            # DNS TXT value.  The raw format looks like:
+            #   mail._domainkey\tIN\tTXT\t( "v=DKIM1; ..." \n\t"p=MIIB..." ) ; comment
+            # Strip the zone-file wrapper, comments, quotes, and whitespace
+            # to produce: v=DKIM1; h=sha256; k=rsa; p=MIIB...
+            txt_part = raw.split("(", 1)[-1].rsplit(")", 1)[0]  # between ( )
+            txt_part = txt_part.replace('"', "").replace("\t", " ")
+            txt_part = " ".join(txt_part.split())  # collapse whitespace
+            public_key_txt = txt_part.strip()
 
         # Fix ownership for OpenDKIM
         for path in key_dir.iterdir():
