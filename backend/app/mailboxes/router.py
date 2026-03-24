@@ -91,7 +91,9 @@ async def list_all_mailboxes(
         try:
             folders = await _imap_get_folder_stats(m.address)
             mb_resp.email_count = sum(f.message_count for f in folders)
-            mb_resp.unread_count = sum(f.unseen_count for f in folders)
+            # Only count INBOX unseen for the unread badge — Junk/Trash don't count
+            inbox_folders = [f for f in folders if f.name == "INBOX"]
+            mb_resp.unread_count = inbox_folders[0].unseen_count if inbox_folders else 0
         except Exception:
             logger.warning("Failed to fetch IMAP stats for %s", m.address, exc_info=True)
         responses.append(mb_resp)
