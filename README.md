@@ -230,8 +230,24 @@ MailCue can run as a fully hardened production email server. Set `MAILCUE_MODE=p
 
 ### Docker Compose (production)
 
+The easiest way to deploy is the standalone [`docker-compose.deploy.yml`](docker-compose.deploy.yml):
+
 ```bash
-# Edit docker-compose.production.yml with your domain, secrets, and ACME email
+# 1. Download the deploy file to your server
+curl -O https://raw.githubusercontent.com/Olib-AI/mailcue/main/docker-compose.deploy.yml
+
+# 2. Replace the placeholder values
+sed -i 's/CHANGE_ME_DOMAIN/yourdomain.com/g' docker-compose.deploy.yml
+sed -i 's/CHANGE_ME_PASSWORD/your-strong-password/g' docker-compose.deploy.yml
+sed -i 's/CHANGE_ME_EMAIL/you@example.com/g' docker-compose.deploy.yml
+
+# 3. Deploy
+docker compose -f docker-compose.deploy.yml up -d
+```
+
+Alternatively, use the override pattern with the base compose file:
+
+```bash
 docker compose -f docker-compose.yml -f docker-compose.production.yml up -d
 ```
 
