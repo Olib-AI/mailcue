@@ -19,6 +19,8 @@
 
 MailCue is an all-in-one email testing server that packages **Postfix**, **Dovecot**, **OpenDKIM**, **OpenDMARC**, **SpamAssassin**, a **FastAPI** REST API, and a **React** web UI into a single Docker container managed by **s6-overlay**. Unlike simple SMTP catchers, MailCue provides a fully-featured mail stack -- complete with IMAP/POP3 access, DKIM signing, DMARC verification, spam filtering, TLS, GPG encryption, and a modern web interface -- so you can test email workflows exactly as they will behave in production.
 
+**[Features](#features)** · **[Quick Start](#quick-start)** · **[Production Deployment](#production-deployment)** · **[Configuration](#configuration)** · **[API Reference](#api-reference)** · **[CI/CD](#using-in-cicd)** · **[Contributing](#contributing)**
+
 <p align="center">
   <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
 </p>
