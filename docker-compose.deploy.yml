@@ -1,0 +1,71 @@
+# =============================================================================
+# MailCue — Production Deployment (standalone)
+# =============================================================================
+# A single-file compose for deploying MailCue in production mode.
+# Uses the pre-built image from GHCR — no local build required.
+#
+# Usage:
+#   1. Copy this file to your server
+#   2. Replace all CHANGE_ME values with your actual settings
+#   3. Run: docker compose -f docker-compose.deploy.yml up -d
+#
+# Required DNS records (see README for full list):
+#   A     mail.yourdomain.com  →  <server-ip>
+#   MX    yourdomain.com       →  10 mail.yourdomain.com.
+#   TXT   yourdomain.com       →  v=spf1 mx a:mail.yourdomain.com ~all
+#   TXT   mail.yourdomain.com  →  v=spf1 a -all
+#   TXT   mail._domainkey....  →  (DKIM key — run: docker exec mailcue cat /etc/opendkim/keys/yourdomain.com/mail.txt)
+#   TXT   _dmarc.yourdomain..  →  v=DMARC1; p=reject; rua=mailto:postmaster@yourdomain.com
+#   PTR   <server-ip>          →  mail.yourdomain.com (set at your VPS provider)
+# =============================================================================
+
+services:
+  mailcue:
+    image: ghcr.io/olib-ai/mailcue:latest
+    container_name: mailcue
+    # Set hostname to your mail server FQDN — used in SMTP EHLO greeting
+    hostname: mail.CHANGE_ME_DOMAIN
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP (Nginx + ACME challenge)
+      - "443:443"     # HTTPS (Nginx with TLS)
+      - "25:25"       # SMTP (inbound MTA-to-MTA)
+      - "465:465"     # SMTPS (submission over implicit TLS)
+      - "587:587"     # SMTP Submission (STARTTLS + SASL)
+      - "143:143"     # IMAP (STARTTLS)
+      - "993:993"     # IMAPS (implicit TLS)
+      - "110:110"     # POP3 (STARTTLS)
+      - "995:995"     # POP3S (implicit TLS)
+    environment:
+      # --- Required settings ---
+      - MAILCUE_MODE=production
+      - MAILCUE_DOMAIN=CHANGE_ME_DOMAIN
+      - MAILCUE_HOSTNAME=mail.CHANGE_ME_DOMAIN
+      - MAILCUE_ADMIN_PASSWORD=CHANGE_ME_PASSWORD
+
+      # --- Let's Encrypt (recommended) ---
+      # Set your email for automatic TLS certificate provisioning.
+      # Port 80 must be publicly reachable for HTTP-01 validation.
+      - MAILCUE_ACME_EMAIL=CHANGE_ME_EMAIL
+
+      # --- Optional settings ---
+      # - MAILCUE_ADMIN_USER=admin
+      # - MAILCUE_SECRET_KEY=              # Auto-generated if empty
+      # - MAILCUE_CORS_ORIGINS=["https://mail.CHANGE_ME_DOMAIN"]
+      # - MAILCUE_TLS_CERT_PATH=           # For externally mounted certs
+      # - MAILCUE_TLS_KEY_PATH=
+      # - MAILCUE_RELAY_HOST=              # Smarthost if port 25 is blocked
+      # - MAILCUE_RELAY_PORT=587
+      # - MAILCUE_RELAY_USER=
+      # - MAILCUE_RELAY_PASSWORD=
+    volumes:
+      - mailcue-data:/var/mail/vhosts          # Email storage (Maildir)
+      - mailcue-db:/var/lib/mailcue            # Database + GPG keys
+      - letsencrypt-data:/etc/letsencrypt      # TLS certificates
+      - dkim-data:/etc/opendkim/keys           # DKIM signing keys
+
+volumes:
+  mailcue-data:
+  mailcue-db:
+  letsencrypt-data:
+  dkim-data:
