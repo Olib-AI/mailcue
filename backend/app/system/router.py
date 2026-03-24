@@ -27,6 +27,8 @@ router = APIRouter(prefix="/system", tags=["System"])
 
 CA_CERT_PATH = Path("/etc/ssl/mailcue/ca.crt")
 SERVER_CERT_PATH = Path("/etc/ssl/mailcue/server-only.crt")
+# Let's Encrypt / ACME certificate (production mode)
+ACME_CERT_PATH = Path("/etc/ssl/mailcue/fullchain.pem")
 # Fallback for legacy single-cert setups (pre-CA split)
 LEGACY_CERT_PATH = Path("/etc/ssl/mailcue/server.crt")
 
@@ -168,19 +170,30 @@ async def get_certificate_info(
     _admin: User = Depends(require_admin),
 ) -> dict:
     """Return metadata for both the server and CA certificates. **Admin only.**"""
-    # Prefer split CA/server certs; fall back to legacy single cert
+    # Prefer ACME/Let's Encrypt cert in production
+    if ACME_CERT_PATH.exists():
+        cert = _parse_cert(ACME_CERT_PATH)
+        return {
+            "server": _cert_metadata(cert),
+            "ca": None,  # Let's Encrypt chain is in fullchain.pem
+            "source": "letsencrypt",
+        }
+
+    # Split CA/server certs (test mode self-signed)
     if CA_CERT_PATH.exists() and SERVER_CERT_PATH.exists():
         ca_cert = _parse_cert(CA_CERT_PATH)
         server_cert = _parse_cert(SERVER_CERT_PATH)
         return {
             "server": _cert_metadata(server_cert),
             "ca": _cert_metadata(ca_cert),
+            "source": "self-signed",
         }
 
     cert = _parse_cert(LEGACY_CERT_PATH)
     return {
         "server": _cert_metadata(cert),
         "ca": None,
+        "source": "self-signed",
     }
 
 
