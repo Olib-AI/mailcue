@@ -73,6 +73,12 @@ class FolderInfo(BaseModel):
     unseen_count: int
 
 
+class DisplayNameUpdateRequest(BaseModel):
+    """Request body for updating a mailbox display name."""
+
+    display_name: str
+
+
 class SignatureUpdateRequest(BaseModel):
     """Request body for updating a mailbox signature."""
 

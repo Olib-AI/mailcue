@@ -61,6 +61,27 @@ export function usePurgeMailbox() {
   });
 }
 
+export function useUpdateDisplayName() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      address,
+      display_name,
+    }: {
+      address: string;
+      display_name: string;
+    }) =>
+      api.put<Mailbox>(
+        `/mailboxes/${encodeURIComponent(address)}/display-name`,
+        { display_name }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
 export function useUpdateSignature() {
   const queryClient = useQueryClient();
 

@@ -31,6 +31,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
+import { useMailboxes, useUpdateDisplayName } from "@/hooks/use-mailboxes";
 import { useApiKeys, useCreateApiKey, useRevokeApiKey } from "@/hooks/use-api-keys";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { TOTPSetupDialog } from "@/components/auth/totp-setup-dialog";
@@ -51,6 +52,35 @@ function ProfilePage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKeyValue, setCreatedKeyValue] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Display name
+  const { data: mailboxData } = useMailboxes();
+  const updateDisplayName = useUpdateDisplayName();
+  const userMailbox = mailboxData?.mailboxes?.find(
+    (mb) => mb.address === user?.email
+  );
+  const [displayName, setDisplayName] = useState("");
+  const [displayNameDirty, setDisplayNameDirty] = useState(false);
+
+  // Sync display name from mailbox data
+  const currentDisplayName = userMailbox?.display_name ?? "";
+  if (!displayNameDirty && displayName !== currentDisplayName && currentDisplayName) {
+    setDisplayName(currentDisplayName);
+  }
+
+  const handleSaveDisplayName = () => {
+    if (!userMailbox) return;
+    updateDisplayName.mutate(
+      { address: userMailbox.address, display_name: displayName },
+      {
+        onSuccess: () => {
+          toast.success("Display name updated");
+          setDisplayNameDirty(false);
+        },
+        onError: () => toast.error("Failed to update display name"),
+      }
+    );
+  };
 
   const handleCreateKey = () => {
     if (!newKeyName.trim()) return;
@@ -129,6 +159,41 @@ function ProfilePage() {
             <Badge variant={user.is_admin ? "default" : "secondary"}>
               {user.is_admin ? "Admin" : "User"}
             </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Display Name */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Display Name
+          </CardTitle>
+          <CardDescription>
+            This name appears in the &quot;From&quot; field when you send emails.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              value={displayName}
+              onChange={(e) => {
+                setDisplayName(e.target.value);
+                setDisplayNameDirty(true);
+              }}
+              placeholder="Your full name"
+            />
+            <Button
+              onClick={handleSaveDisplayName}
+              disabled={!displayNameDirty || updateDisplayName.isPending}
+            >
+              {updateDisplayName.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                "Save"
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>

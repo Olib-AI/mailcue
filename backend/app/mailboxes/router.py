@@ -29,6 +29,7 @@ from app.emails.service import (
 )
 from app.exceptions import AuthorizationError
 from app.mailboxes.schemas import (
+    DisplayNameUpdateRequest,
     MailboxCreateRequest,
     MailboxListResponse,
     MailboxResponse,
@@ -258,6 +259,29 @@ async def update_email_flags(
     decoded = unquote(mailbox_address)
     await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
     return {"message": "Flags updated"}
+
+
+# ── Display name management ──────────────────────────────────────
+
+
+@router.put("/{address}/display-name")
+async def update_mailbox_display_name(
+    address: str,
+    body: DisplayNameUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Set or update the display name for a mailbox.
+
+    The user must own the mailbox (or be an admin).
+    """
+    verify_mailbox_access(address, current_user)
+    decoded_address = unquote(address)
+    mailbox = await get_mailbox_by_address(decoded_address, db)
+    mailbox.display_name = body.display_name
+    await db.commit()
+    logger.info("Display name updated for mailbox '%s'.", decoded_address)
+    return {"message": "Display name updated"}
 
 
 # ── Signature management ─────────────────────────────────────────
