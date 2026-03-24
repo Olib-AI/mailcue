@@ -10,6 +10,8 @@ import {
   Server,
   ExternalLink,
   Loader2,
+  Download,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -723,6 +725,85 @@ function EnvironmentTab() {
 // ---------------------------------------------------------------------------
 // Page Root
 // ---------------------------------------------------------------------------
+// Integrations Tab
+// ---------------------------------------------------------------------------
+
+function IntegrationsTab() {
+  const copy = useClipboard();
+  const skillUrl = `${getOrigin()}/api/v1/integrations/openclaw/skill`;
+  const curlCommand = `curl -o SKILL.md ${skillUrl}`;
+
+  const handleDownload = () => {
+    const link = document.createElement("a");
+    link.href = skillUrl;
+    link.download = "SKILL.md";
+    link.click();
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bot className="h-5 w-5" />
+            OpenClaw Skill
+          </CardTitle>
+          <CardDescription>
+            Use MailCue with OpenClaw AI agent. The skill file is dynamically
+            generated with your server URL and domain pre-configured.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleDownload} className="gap-2">
+              <Download className="h-4 w-4" />
+              Download SKILL.md
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => copy(skillUrl, "Skill URL")}
+            >
+              <Copy className="h-4 w-4" />
+              Copy URL
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Install via CLI</p>
+            <CodeBlock code={curlCommand} language="bash" />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">What it supports</p>
+            <div className="grid grid-cols-2 gap-1 text-sm text-muted-foreground">
+              <span>Send, reply, forward emails</span>
+              <span>Search and list emails</span>
+              <span>Mark read/unread, delete</span>
+              <span>Download attachments</span>
+              <span>Manage mailboxes</span>
+              <span>Manage aliases</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Required environment variable</p>
+            <CopyField label="MAILCUE_API_KEY" value="mc_..." mono />
+            <p className="text-xs text-muted-foreground">
+              Create an API key from your{" "}
+              <a href="/profile" className="underline">
+                Profile page
+              </a>
+              .
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 
 function DevToolsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -759,6 +840,10 @@ function DevToolsPage() {
             <Server className="mr-1.5 h-3.5 w-3.5" />
             Environment
           </TabsTrigger>
+          <TabsTrigger value="integrations">
+            <Bot className="mr-1.5 h-3.5 w-3.5" />
+            Integrations
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="connection">
@@ -775,6 +860,10 @@ function DevToolsPage() {
 
         <TabsContent value="environment">
           <EnvironmentTab />
+        </TabsContent>
+
+        <TabsContent value="integrations">
+          <IntegrationsTab />
         </TabsContent>
       </Tabs>
     </div>
