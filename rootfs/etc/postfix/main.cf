@@ -107,6 +107,11 @@ non_smtpd_milters = unix:/var/run/opendkim/opendkim.sock
 # smtp_sasl_security_options = noanonymous
 # smtp_tls_security_level = encrypt
 
+# --- SpamAssassin content filter ---------------------------------------------
+# Pass all inbound mail through the spamassassin pipe transport before delivery.
+# This runs AFTER milters (OpenDKIM, OpenDMARC), so DKIM/DMARC headers are preserved.
+content_filter = spamassassin:dummy
+
 # --- Size limits -------------------------------------------------------------
 message_size_limit = 52428800
 mailbox_size_limit = 0

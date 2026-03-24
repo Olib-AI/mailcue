@@ -55,3 +55,7 @@ postlog   unix-dgram n  -       n       -       1       postlogd
 # ---- SPF policy server (postfix-policyd-spf-python) -------------------------
 policyd-spf  unix  -       n       n       -       0       spawn
   user=policyd-spf argv=/usr/bin/policyd-spf
+
+# ---- SpamAssassin content filter -------------------------------------------
+spamassassin unix -     n       n       -       -       pipe
+  flags=DRhu user=debian-spamd argv=/usr/bin/spamc -f -e /usr/sbin/sendmail -oi -f ${sender} ${recipient}

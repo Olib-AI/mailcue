@@ -615,6 +615,64 @@ async def set_email_flags(
 # ── Search ───────────────────────────────────────────────────────
 
 
+async def move_email_to_folder(
+    mailbox: str,
+    uid: str,
+    source_folder: str,
+    target_folder: str,
+) -> None:
+    """Move an email between IMAP folders via COPY + DELETE.
+
+    Selects the *source_folder*, copies the message identified by *uid*
+    to *target_folder*, marks the original as ``\\Deleted``, and expunges.
+    The target folder is created if it does not already exist.
+    """
+    imap = await _imap_connect(mailbox)
+    try:
+        await imap.select(source_folder)
+
+        # Ensure the target folder exists
+        with contextlib.suppress(Exception):
+            await imap.create(target_folder)
+
+        await imap.uid("copy", uid, target_folder)
+        await imap.uid("store", uid, "+FLAGS", "(\\Deleted)")
+        await imap.expunge()
+
+        logger.info(
+            "Email moved: %s uid=%s %s -> %s",
+            mailbox,
+            uid,
+            source_folder,
+            target_folder,
+        )
+    finally:
+        await _imap_disconnect(imap)
+
+
+async def train_spam(
+    mailbox: str,
+    uid: str,
+    folder: str,
+    *,
+    is_spam: bool,
+) -> None:
+    """Placeholder for SpamAssassin ``sa-learn`` training.
+
+    In a production deployment this would fetch the raw RFC 822 message
+    and pipe it through ``sa-learn --spam`` or ``sa-learn --ham``.
+    For now the action is only logged.
+    """
+    action = "spam" if is_spam else "ham"
+    logger.info(
+        "Spam training requested (no-op): mailbox=%s uid=%s folder=%s action=%s",
+        mailbox,
+        uid,
+        folder,
+        action,
+    )
+
+
 async def search_emails(
     mailbox: str,
     query: str,

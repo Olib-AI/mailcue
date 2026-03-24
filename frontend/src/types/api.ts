@@ -188,13 +188,14 @@ export interface MailboxEvent {
 
 // --- Folder Types ---
 
-export type FolderName = "INBOX" | "Sent" | "Drafts" | "Trash";
+export type FolderName = "INBOX" | "Sent" | "Drafts" | "Trash" | "Junk";
 
 export const FOLDERS: { name: FolderName; label: string }[] = [
   { name: "INBOX", label: "Inbox" },
   { name: "Sent", label: "Sent" },
   { name: "Drafts", label: "Drafts" },
   { name: "Trash", label: "Trash" },
+  { name: "Junk", label: "Junk" },
 ];
 
 // --- GPG Types ---
@@ -499,6 +500,12 @@ export interface ProductionStatus {
 
 export interface UpdateFlagsRequest {
   seen: boolean;
+}
+
+// --- Spam Types ---
+
+export interface SpamActionRequest {
+  folder: string;
 }
 
 // --- API Error ---

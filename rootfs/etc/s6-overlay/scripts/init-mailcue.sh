@@ -210,6 +210,18 @@ sed -i \
     /etc/opendmarc/opendmarc.conf 2>/dev/null || true
 
 # -------------------------------------------------------------------------
+# 3b2. Compile Sieve scripts & prepare SpamAssassin directories
+# -------------------------------------------------------------------------
+echo "[init-mailcue] Compiling Sieve scripts..."
+if [ -f /etc/dovecot/sieve/before.d/spam-to-junk.sieve ]; then
+    sievec /etc/dovecot/sieve/before.d/spam-to-junk.sieve || true
+fi
+
+# Ensure SpamAssassin Bayes database directory exists
+mkdir -p /var/lib/spamassassin
+chown debian-spamd:debian-spamd /var/lib/spamassassin 2>/dev/null || true
+
+# -------------------------------------------------------------------------
 # 3c. Configure smarthost relay (if MAILCUE_RELAY_HOST is set)
 # -------------------------------------------------------------------------
 RELAY_HOST="${MAILCUE_RELAY_HOST:-}"

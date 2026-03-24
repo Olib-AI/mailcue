@@ -4,6 +4,7 @@ import {
   Send,
   FileText,
   Trash2,
+  ShieldAlert,
   LayoutGrid,
   Settings,
   Syringe,
@@ -33,6 +34,7 @@ const FOLDER_ICONS: Record<FolderName, typeof Inbox> = {
   Sent: Send,
   Drafts: FileText,
   Trash: Trash2,
+  Junk: ShieldAlert,
 };
 
 const FOLDER_LABELS: Record<FolderName, string> = {
@@ -40,9 +42,10 @@ const FOLDER_LABELS: Record<FolderName, string> = {
   Sent: "Sent",
   Drafts: "Drafts",
   Trash: "Trash",
+  Junk: "Junk",
 };
 
-const FOLDERS: FolderName[] = ["INBOX", "Sent", "Drafts", "Trash"];
+const FOLDERS: FolderName[] = ["INBOX", "Sent", "Drafts", "Trash", "Junk"];
 
 interface SidebarProps {
   onOpenShortcuts: () => void;

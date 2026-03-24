@@ -128,3 +128,9 @@ class BulkDeleteResponse(BaseModel):
 
     deleted: int
     failed: int
+
+
+class SpamActionRequest(BaseModel):
+    """Request body for spam / not-spam actions (source folder)."""
+
+    folder: str = "INBOX"

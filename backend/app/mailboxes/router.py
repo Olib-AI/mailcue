@@ -17,6 +17,7 @@ from app.emails.schemas import (
     BulkDeleteResponse,
     EmailDetail,
     EmailListResponse,
+    SpamActionRequest,
     UpdateFlagsRequest,
 )
 from app.emails.service import (
@@ -24,8 +25,10 @@ from app.emails.service import (
     delete_email,
     get_email,
     list_emails,
+    move_email_to_folder,
     purge_mailbox,
     set_email_flags,
+    train_spam,
 )
 from app.exceptions import AuthorizationError
 from app.mailboxes.schemas import (
@@ -259,6 +262,48 @@ async def update_email_flags(
     decoded = unquote(mailbox_address)
     await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
     return {"message": "Flags updated"}
+
+
+# ── Spam management ───────────────────────────────────────────────
+
+
+@router.post("/{mailbox_address}/emails/{uid}/spam")
+async def mark_email_as_spam(
+    mailbox_address: str,
+    uid: str,
+    body: SpamActionRequest,
+    _user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Mark an email as spam by moving it from the source folder to Junk."""
+    verify_mailbox_access(mailbox_address, _user)
+    decoded = unquote(mailbox_address)
+    await move_email_to_folder(
+        mailbox=decoded,
+        uid=uid,
+        source_folder=body.folder,
+        target_folder="Junk",
+    )
+    await train_spam(mailbox=decoded, uid=uid, folder=body.folder, is_spam=True)
+    return {"message": "Email marked as spam"}
+
+
+@router.post("/{mailbox_address}/emails/{uid}/not-spam")
+async def mark_email_as_not_spam(
+    mailbox_address: str,
+    uid: str,
+    _user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Mark an email as not spam by moving it from Junk back to INBOX."""
+    verify_mailbox_access(mailbox_address, _user)
+    decoded = unquote(mailbox_address)
+    await move_email_to_folder(
+        mailbox=decoded,
+        uid=uid,
+        source_folder="Junk",
+        target_folder="INBOX",
+    )
+    await train_spam(mailbox=decoded, uid=uid, folder="Junk", is_spam=False)
+    return {"message": "Email marked as not spam"}
 
 
 # ── Display name management ──────────────────────────────────────

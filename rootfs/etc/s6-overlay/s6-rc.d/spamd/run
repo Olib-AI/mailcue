@@ -1,4 +1,5 @@
 #!/bin/sh
 exec 2>&1
 
-exec /usr/sbin/spamd --nouser-config --max-children=2 --listen=127.0.0.1:783
+MAX_CHILDREN="${MAILCUE_SPAMD_MAX_CHILDREN:-5}"
+exec /usr/sbin/spamd --nouser-config --max-children="${MAX_CHILDREN}" --listen=127.0.0.1:783

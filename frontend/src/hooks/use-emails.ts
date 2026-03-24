@@ -13,6 +13,7 @@ import type {
   SendEmailRequest,
   InjectEmailRequest,
   UpdateFlagsRequest,
+  SpamActionRequest,
 } from "@/types/api";
 
 // --- Query Keys ---
@@ -184,6 +185,51 @@ export function useBulkDeleteEmails() {
       api.post<{ deleted: number; failed: number }>(
         `/mailboxes/${encodeURIComponent(mailbox)}/emails/bulk-delete?folder=${encodeURIComponent(folder)}`,
         { uids }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function useMarkAsSpam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mailbox,
+      uid,
+      folder,
+    }: {
+      mailbox: string;
+      uid: string;
+      folder: string;
+    }) =>
+      api.post<void>(
+        `/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/spam`,
+        { folder } satisfies SpamActionRequest
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
+      void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+    },
+  });
+}
+
+export function useMarkAsNotSpam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      mailbox,
+      uid,
+    }: {
+      mailbox: string;
+      uid: string;
+    }) =>
+      api.post<void>(
+        `/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/not-spam`
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });

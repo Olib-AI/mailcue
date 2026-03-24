@@ -12,6 +12,8 @@ import {
   Forward,
   GitCompareArrows,
   Check,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
@@ -32,7 +34,7 @@ import { EmailHeaders } from "./email-headers";
 import { EmailAnalysis } from "./email-analysis";
 import { AttachmentList } from "./attachment-list";
 import { GpgStatusBadge } from "@/components/gpg/gpg-status-badge";
-import { useEmail, useDeleteEmail, useToggleReadStatus } from "@/hooks/use-emails";
+import { useEmail, useDeleteEmail, useToggleReadStatus, useMarkAsSpam, useMarkAsNotSpam } from "@/hooks/use-emails";
 import { useUIStore } from "@/stores/ui-store";
 import { useCompareStore } from "@/stores/compare-store";
 
@@ -63,6 +65,8 @@ function EmailDetail() {
   );
   const deleteEmail = useDeleteEmail();
   const toggleRead = useToggleReadStatus();
+  const markAsSpam = useMarkAsSpam();
+  const markAsNotSpam = useMarkAsNotSpam();
   const { addEmail, removeEmail, hasEmail } = useCompareStore();
   const isInCompare = hasEmail(selectedMailbox ?? "", selectedEmailUid ?? "");
   const [showAllHeaders, setShowAllHeaders] = useState(false);
@@ -102,6 +106,43 @@ function EmailDetail() {
       }
     );
   }, [selectedMailbox, selectedEmailUid, toggleRead, setSelectedEmailUid]);
+
+  const isJunkFolder = selectedFolder === "Junk";
+
+  const handleSpamAction = useCallback(() => {
+    if (!selectedMailbox || selectedEmailUid === null) return;
+    if (isJunkFolder) {
+      markAsNotSpam.mutate(
+        { mailbox: selectedMailbox, uid: selectedEmailUid },
+        {
+          onSuccess: () => {
+            toast.success("Moved to Inbox");
+            setSelectedEmailUid(null);
+          },
+          onError: (err) => {
+            toast.error(
+              err instanceof Error ? err.message : "Failed to mark as not spam"
+            );
+          },
+        }
+      );
+    } else {
+      markAsSpam.mutate(
+        { mailbox: selectedMailbox, uid: selectedEmailUid, folder: selectedFolder },
+        {
+          onSuccess: () => {
+            toast.success("Moved to Junk");
+            setSelectedEmailUid(null);
+          },
+          onError: (err) => {
+            toast.error(
+              err instanceof Error ? err.message : "Failed to mark as spam"
+            );
+          },
+        }
+      );
+    }
+  }, [selectedMailbox, selectedEmailUid, selectedFolder, isJunkFolder, markAsSpam, markAsNotSpam, setSelectedEmailUid]);
 
   // Empty state
   if (!selectedEmailUid) {
@@ -217,6 +258,23 @@ function EmailDetail() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <MailOpen className="h-4 w-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSpamAction}
+              disabled={markAsSpam.isPending || markAsNotSpam.isPending}
+              className={isJunkFolder ? "text-green-600 hover:text-green-600" : "text-orange-500 hover:text-orange-500"}
+              aria-label={isJunkFolder ? "Not spam" : "Mark as spam"}
+              title={isJunkFolder ? "Not Spam" : "Mark as Spam"}
+            >
+              {markAsSpam.isPending || markAsNotSpam.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isJunkFolder ? (
+                <ShieldCheck className="h-4 w-4" />
+              ) : (
+                <ShieldAlert className="h-4 w-4" />
               )}
             </Button>
             <Button

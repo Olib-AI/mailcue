@@ -1,4 +1,4 @@
-import { Paperclip, Shield, Lock, GitCompareArrows, Check } from "lucide-react";
+import { Paperclip, Shield, Lock, GitCompareArrows, Check, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatEmailDate,
@@ -112,6 +112,12 @@ function EmailItem({
             )}
             {email.has_attachments && (
               <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+            )}
+            {selectedFolder === "Junk" && (
+              <span title="Spam" className="inline-flex items-center gap-0.5 rounded bg-orange-500/10 px-1 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 shrink-0">
+                <ShieldAlert className="h-2.5 w-2.5" />
+                Spam
+              </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate mt-0.5">
