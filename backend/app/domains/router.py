@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -112,7 +113,20 @@ async def get_domain(
         ) from exc
 
     hostname = await get_server_hostname(db)
-    dns_records = _build_dns_records(domain, hostname)
+
+    # Run quick checks for records not persisted in the domain model
+    from app.domains.service import _check_bimi, _check_helo_spf
+
+    helo_result, bimi_result = await asyncio.gather(
+        _check_helo_spf(hostname),
+        _check_bimi(domain.name),
+    )
+    dns_records = _build_dns_records(
+        domain,
+        hostname,
+        helo_spf_verified=helo_result[0],
+        bimi_verified=bimi_result[0],
+    )
 
     return DomainDetailResponse(
         id=domain.id,
