@@ -160,6 +160,39 @@ async def _check_dmarc(domain_name: str) -> tuple[bool, str | None]:
         return False, None
 
 
+async def _check_helo_spf(hostname: str) -> tuple[bool, str | None]:
+    """Check if the mail server hostname has its own SPF TXT record."""
+    try:
+        answers = await asyncio.to_thread(dns.resolver.resolve, hostname, "TXT")
+        for rdata in answers:
+            txt = str(rdata).strip('"')
+            if txt.startswith("v=spf1"):
+                return True, txt
+        return False, None
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, None
+    except Exception as exc:
+        logger.debug("HELO SPF check for %s failed: %s", hostname, exc)
+        return False, None
+
+
+async def _check_bimi(domain_name: str) -> tuple[bool, str | None]:
+    """Check if BIMI TXT record exists."""
+    bimi_domain = f"default._bimi.{domain_name}"
+    try:
+        answers = await asyncio.to_thread(dns.resolver.resolve, bimi_domain, "TXT")
+        for rdata in answers:
+            txt = str(rdata).strip('"')
+            if txt.startswith("v=BIMI1"):
+                return True, txt
+        return False, None
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, None
+    except Exception as exc:
+        logger.debug("BIMI check for %s failed: %s", bimi_domain, exc)
+        return False, None
+
+
 async def _check_mta_sts(domain_name: str) -> tuple[bool, str | None]:
     """Check if _mta-sts TXT record exists."""
     mta_sts_domain = f"_mta-sts.{domain_name}"
@@ -328,7 +361,13 @@ async def _reload_mail_services() -> None:
 # ── High-level API ───────────────────────────────────────────────
 
 
-def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
+def _build_dns_records(
+    domain: Domain,
+    hostname: str,
+    *,
+    helo_spf_verified: bool = False,
+    bimi_verified: bool = False,
+) -> list[DnsRecordInfo]:
     """Build the list of required DNS records for a domain."""
     records: list[DnsRecordInfo] = [
         DnsRecordInfo(
@@ -350,7 +389,7 @@ def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
             record_type="TXT",
             hostname=hostname,
             expected_value="v=spf1 a -all",
-            verified=False,
+            verified=helo_spf_verified,
             purpose="SPF for the mail server hostname (checked during SMTP EHLO handshake)",
         ),
         DnsRecordInfo(
@@ -372,7 +411,7 @@ def _build_dns_records(domain: Domain, hostname: str) -> list[DnsRecordInfo]:
             record_type="TXT",
             hostname=f"default._bimi.{domain.name}",
             expected_value=f"v=BIMI1; l=https://{hostname}/brand/logo.svg",
-            verified=False,
+            verified=bimi_verified,
             purpose="BIMI — publish a brand logo displayed by supporting mailbox providers (requires DMARC p=reject)",
         ),
         # MTA-STS policy record (RFC 8461)
@@ -485,15 +524,19 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
     (
         mx_result,
         spf_result,
+        helo_spf_result,
         dkim_result,
         dmarc_result,
+        bimi_result,
         mta_sts_result,
         tls_rpt_result,
     ) = await asyncio.gather(
         _check_mx(domain.name, hostname),
         _check_spf(domain.name),
+        _check_helo_spf(hostname),
         _check_dkim(domain.name, domain.dkim_selector, domain.dkim_public_key_txt),
         _check_dmarc(domain.name),
+        _check_bimi(domain.name),
         _check_mta_sts(domain.name),
         _check_tls_rpt(domain.name),
     )
@@ -508,14 +551,22 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
     await db.commit()
 
     # Build DNS records with current values
-    records = _build_dns_records(domain, hostname)
+    records = _build_dns_records(
+        domain,
+        hostname,
+        helo_spf_verified=helo_spf_result[0],
+        bimi_verified=bimi_result[0],
+    )
     # Attach current values from the check results
-    # Order matches _build_dns_records: MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, PTR, A
+    # Order matches _build_dns_records: MX, SPF, HELO SPF, DKIM, DMARC, BIMI,
+    #   MTA-STS, TLS-RPT, PTR, A
     current_values: list[str | None] = [
         mx_result[1],
         spf_result[1],
+        helo_spf_result[1],
         dkim_result[1],
         dmarc_result[1],
+        bimi_result[1],
         mta_sts_result[1],
         tls_rpt_result[1],
         None,  # PTR — informational only
