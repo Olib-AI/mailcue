@@ -12,7 +12,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -267,6 +267,194 @@ def create_app() -> FastAPI:
                 sts_mode = "enforce"
 
         return f"version: STSv1\nmode: {sts_mode}\nmx: {hostname}\nmax_age: 86400\n"
+
+    # ── OpenClaw Skill (dynamic) ─────────────────────────────────
+    @app.get(
+        "/api/v1/integrations/openclaw/skill",
+        response_class=PlainTextResponse,
+        tags=["Integrations"],
+    )
+    async def openclaw_skill(request: Request) -> str:
+        """Dynamically generated OpenClaw SKILL.md for this MailCue instance."""
+        base_url = str(request.base_url).rstrip("/")
+        domain = settings.domain
+
+        return f'''---
+name: mailcue
+description: "MailCue email operations for {domain}: send, receive, reply, forward, delete, search emails. Use when sending/reading/replying to emails, searching mailbox, or managing aliases."
+metadata: {{"openclaw": {{"emoji": "📧", "requires": {{"env": ["MAILCUE_API_KEY"]}}}}}}
+---
+
+# MailCue Email Skill — {domain}
+
+Interact with MailCue at `{base_url}` for the domain `{domain}`.
+
+## Setup
+
+Set the API key environment variable:
+
+```bash
+export MAILCUE_API_KEY="mc_..."
+```
+
+Create an API key at `{base_url}/profile` under **API Keys**, or via the API:
+
+```bash
+TOKEN=$(curl -s -X POST {base_url}/api/v1/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d \'{{"username":"admin","password":"yourpassword"}}\' | jq -r .access_token)
+
+API_KEY=$(curl -s -X POST {base_url}/api/v1/auth/api-keys \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d \'{{"name":"openclaw"}}\' | jq -r .key)
+```
+
+## Authentication
+
+All requests use: `X-API-Key: $MAILCUE_API_KEY`
+
+---
+
+## Send an email
+
+```bash
+curl -s -X POST {base_url}/api/v1/emails/send \\
+  -H "X-API-Key: $MAILCUE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d \'{{
+    "from_address": "user@{domain}",
+    "from_name": "Display Name",
+    "to_addresses": ["recipient@example.com"],
+    "cc_addresses": [],
+    "bcc_addresses": [],
+    "subject": "Subject line",
+    "body": "<p>HTML body</p>",
+    "body_type": "html"
+  }}\'
+```
+
+## Reply to an email
+
+First read the original email, then send with threading headers:
+
+```bash
+ORIGINAL=$(curl -s "{base_url}/api/v1/mailboxes/user@{domain}/emails/{{uid}}" \\
+  -H "X-API-Key: $MAILCUE_API_KEY")
+
+curl -s -X POST {base_url}/api/v1/emails/send \\
+  -H "X-API-Key: $MAILCUE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d \'{{
+    "from_address": "user@{domain}",
+    "to_addresses": ["original-sender@example.com"],
+    "subject": "Re: Original Subject",
+    "body": "<p>Reply content</p>",
+    "body_type": "html",
+    "in_reply_to": "<message-id-from-original>",
+    "references": ["<message-id-from-original>"]
+  }}\'
+```
+
+Key threading fields:
+- `in_reply_to` — the `message_id` of the email being replied to
+- `references` — array of ancestor `message_id` values + the parent\'s ID
+- Prefix subject with `Re: ` for replies, `Fwd: ` for forwards
+
+## List emails
+
+```bash
+curl -s "{base_url}/api/v1/mailboxes/user@{domain}/emails?folder=INBOX&page_size=20" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+Parameters: `folder` (INBOX/Sent/Trash/Spam), `search` (text search), `page`, `page_size`
+
+## Read an email
+
+```bash
+curl -s "{base_url}/api/v1/mailboxes/user@{domain}/emails/{{uid}}" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+Returns: `html_body`, `text_body`, `from_name`, `from_address`, `to_addresses`, `subject`, `date`, `attachments[]`, `message_id`, `raw_headers`
+
+## Forward an email
+
+Read the original, then send to a new recipient with `Fwd: ` subject prefix and the original body included.
+
+## Delete an email
+
+```bash
+curl -s -X DELETE "{base_url}/api/v1/mailboxes/user@{domain}/emails/{{uid}}" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+First delete moves to Trash. Deleting from Trash permanently removes it.
+
+## Mark as read / unread
+
+```bash
+curl -s -X PATCH "{base_url}/api/v1/mailboxes/user@{domain}/emails/{{uid}}/flags" \\
+  -H "X-API-Key: $MAILCUE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d \'{{"seen": true}}\'
+```
+
+Set `seen` to `false` to mark as unread.
+
+## Search emails
+
+```bash
+curl -s "{base_url}/api/v1/mailboxes/user@{domain}/emails?search=meeting" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+Search is scoped to the specified folder (default: INBOX).
+
+## List mailboxes
+
+```bash
+curl -s "{base_url}/api/v1/mailboxes" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+## List aliases (admin)
+
+```bash
+curl -s "{base_url}/api/v1/aliases" \\
+  -H "X-API-Key: $MAILCUE_API_KEY"
+```
+
+## Create alias (admin)
+
+```bash
+curl -s -X POST "{base_url}/api/v1/aliases" \\
+  -H "X-API-Key: $MAILCUE_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d \'{{"source_address": "info@{domain}", "destination_address": "admin@{domain}", "domain": "{domain}"}}\'
+```
+
+## Download attachment
+
+```bash
+curl -s "{base_url}/api/v1/mailboxes/user@{domain}/emails/{{uid}}/attachments/{{part_id}}" \\
+  -H "X-API-Key: $MAILCUE_API_KEY" -o file.pdf
+```
+
+## Health check
+
+```bash
+curl -s {base_url}/api/v1/health
+```
+
+## Tips
+
+- Always use `body_type: "html"` for rich emails — a text/plain fallback is auto-generated
+- Threading requires `in_reply_to` and `references` — without these, replies appear as new conversations
+- Emails are identified by `uid` within a mailbox
+- Admin API keys can access all mailboxes; regular keys access only the owner\'s mailbox
+'''
 
     return app
 
