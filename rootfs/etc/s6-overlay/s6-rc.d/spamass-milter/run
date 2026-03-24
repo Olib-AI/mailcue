@@ -1,3 +1,3 @@
 #!/command/execlineb -P
 with-contenv
-/usr/sbin/spamass-milter -p /var/run/spamass/spamass.sock -f -u debian-spamd -- -s 127.0.0.1:783
+/usr/sbin/spamass-milter -p inet:10028@127.0.0.1 -f -u debian-spamd -m -- -s 127.0.0.1:783

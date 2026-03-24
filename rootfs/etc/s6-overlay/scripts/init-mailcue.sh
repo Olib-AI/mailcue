@@ -226,7 +226,7 @@ mkdir -p /var/run/spamass
 chown debian-spamd:debian-spamd /var/run/spamass
 
 # Add spamass-milter to Postfix milter chain (after OpenDKIM)
-postconf -e "smtpd_milters=unix:/var/run/opendkim/opendkim.sock, unix:/var/run/spamass/spamass.sock"
+postconf -e "smtpd_milters=unix:/var/run/opendkim/opendkim.sock, inet:127.0.0.1:10028"
 postconf -e "non_smtpd_milters=unix:/var/run/opendkim/opendkim.sock"
 
 # -------------------------------------------------------------------------
