@@ -64,6 +64,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         spamassassin \
         spamc \
         spamd \
+        spamass-milter \
         certbot \
     && rm -rf /var/lib/apt/lists/*
 
