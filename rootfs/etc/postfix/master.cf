@@ -56,19 +56,7 @@ postlog   unix-dgram n  -       n       -       1       postlogd
 policyd-spf  unix  -       n       n       -       0       spawn
   user=policyd-spf argv=/usr/bin/policyd-spf
 
-# ---- SpamAssassin content filter (after-queue) --------------------------------
-# Pipes through spamc which adds X-Spam-* headers, then re-injects on 10025.
-spamfilter  unix  -       n       n       -       5       pipe
-  flags=Rq user=debian-spamd
-  argv=/usr/bin/spamc -f -e /usr/sbin/sendmail -G -i -o receive_override_options=no_address_mappings -f ${sender} -- ${recipient}
-
-# Re-injection listener — no content_filter to break the loop
-127.0.0.1:10025 inet n  -       n       -       -       smtpd
-  -o content_filter=
-  -o smtpd_delay_reject=no
-  -o smtpd_client_restrictions=permit_mynetworks,reject
-  -o smtpd_recipient_restrictions=permit_mynetworks,reject
-  -o mynetworks=127.0.0.0/8
-  -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks,no_milters
-  -o smtpd_milters=
+# ---- SpamAssassin content filter -------------------------------------------
+spamassassin unix -     n       n       -       -       pipe
+  flags=DRhu user=debian-spamd argv=/usr/bin/spamc -f -e /usr/sbin/sendmail -oi -f ${sender} ${recipient}
 

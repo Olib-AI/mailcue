@@ -108,9 +108,7 @@ non_smtpd_milters = unix:/var/run/opendkim/opendkim.sock
 # smtp_tls_security_level = encrypt
 
 # --- SpamAssassin content filter -----------------------------------------------
-# After-queue filter: Postfix pipes through spamc which adds X-Spam-* headers,
-# then re-injects on 127.0.0.1:10025 (which has content_filter= empty).
-content_filter = spamfilter:dummy
+content_filter = spamassassin:dummy
 
 # --- Size limits -------------------------------------------------------------
 message_size_limit = 52428800

@@ -221,8 +221,6 @@ fi
 mkdir -p /var/lib/spamassassin
 chown debian-spamd:debian-spamd /var/lib/spamassassin 2>/dev/null || true
 
-# Ensure debian-spamd user can write to Postfix queue for re-injection
-usermod -a -G postdrop debian-spamd 2>/dev/null || true
 
 # -------------------------------------------------------------------------
 # 3c. Configure smarthost relay (if MAILCUE_RELAY_HOST is set)
