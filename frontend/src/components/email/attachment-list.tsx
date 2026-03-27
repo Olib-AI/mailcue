@@ -1,6 +1,7 @@
 import { Download, FileText, Image, File } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatFileSize } from "@/lib/utils";
+import { getAccessToken } from "@/lib/api";
 import type { EmailAttachment } from "@/types/api";
 
 interface AttachmentListProps {
@@ -19,9 +20,23 @@ function getAttachmentIcon(contentType: string) {
 function AttachmentList({ attachments, mailbox, uid }: AttachmentListProps) {
   if (attachments.length === 0) return null;
 
-  const handleDownload = (partId: string) => {
-    const url = `/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/attachments/${encodeURIComponent(partId)}`;
-    window.open(url, "_blank");
+  const handleDownload = async (partId: string, filename: string) => {
+    const url = `/api/v1/emails/${encodeURIComponent(uid)}/attachments/${encodeURIComponent(partId)}?mailbox=${encodeURIComponent(mailbox)}`;
+    const token = getAccessToken();
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(blobUrl);
   };
 
   return (
@@ -50,7 +65,9 @@ function AttachmentList({ attachments, mailbox, uid }: AttachmentListProps) {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0"
-                onClick={() => handleDownload(attachment.part_id)}
+                onClick={() =>
+                  handleDownload(attachment.part_id, attachment.filename)
+                }
                 aria-label={`Download ${attachment.filename}`}
               >
                 <Download className="h-3.5 w-3.5" />

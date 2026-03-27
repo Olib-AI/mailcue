@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Paperclip, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,16 @@ import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useSendEmail } from "@/hooks/use-emails";
 import { useContacts } from "@/hooks/use-contacts";
 import { useGpgKey } from "@/hooks/use-gpg";
-import type { EmailDetail as EmailDetailType } from "@/types/api";
-import { formatFullDate, formatEmailAddress, extractEmailAddress } from "@/lib/utils";
+import type {
+  EmailDetail as EmailDetailType,
+  SendAttachment,
+} from "@/types/api";
+import {
+  formatFullDate,
+  formatEmailAddress,
+  extractEmailAddress,
+  formatFileSize,
+} from "@/lib/utils";
 
 function buildQuotedHtml(email: EmailDetailType): string {
   const date = formatFullDate(email.date);
@@ -94,12 +102,16 @@ const composeSchema = z.object({
 type ComposeFormValues = z.infer<typeof composeSchema>;
 
 function ComposeDialog() {
-  const { composeOpen, setComposeOpen, composeContext, selectedMailbox } = useUIStore();
+  const { composeOpen, setComposeOpen, composeContext, selectedMailbox } =
+    useUIStore();
   const { data: mailboxData } = useMailboxes();
   const sendEmail = useSendEmail();
   const contacts = useContacts(selectedMailbox);
   const prevOpenRef = useRef(false);
+  const [showCc, setShowCc] = useState(false);
   const [showBcc, setShowBcc] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -127,7 +139,7 @@ function ComposeDialog() {
 
   const mailboxes = useMemo(
     () => mailboxData?.mailboxes ?? [],
-    [mailboxData?.mailboxes]
+    [mailboxData?.mailboxes],
   );
 
   // Track the last "from" address so we can swap signatures on change
@@ -138,7 +150,7 @@ function ComposeDialog() {
       const mb = mailboxes.find((m) => m.address === address);
       return mb?.signature ?? "";
     },
-    [mailboxes]
+    [mailboxes],
   );
 
   // Pre-fill form when compose dialog opens with context
@@ -153,7 +165,9 @@ function ComposeDialog() {
       const defaultAddress = mailboxes[0]?.address ?? "";
       const sig = buildSignatureHtml(getSignatureForAddress(defaultAddress));
       lastFromRef.current = defaultAddress;
+      setShowCc(false);
       setShowBcc(false);
+      setAttachments([]);
       reset({
         from_address: defaultAddress,
         from_name: "",
@@ -172,8 +186,9 @@ function ComposeDialog() {
     const { mode, originalEmail } = composeContext;
     const currentMailbox = mailboxes.find((mb) =>
       originalEmail.to_addresses.some(
-        (addr) => extractRawEmail(addr).toLowerCase() === mb.address.toLowerCase()
-      )
+        (addr) =>
+          extractRawEmail(addr).toLowerCase() === mb.address.toLowerCase(),
+      ),
     );
     const fromAddress = currentMailbox?.address ?? "";
     lastFromRef.current = fromAddress;
@@ -181,6 +196,8 @@ function ComposeDialog() {
 
     const replyToAddress = extractEmailAddress(originalEmail.from_address);
 
+    setAttachments([]);
+    setShowCc(mode === "reply-all");
     setShowBcc(false);
     if (mode === "reply") {
       reset({
@@ -201,7 +218,11 @@ function ComposeDialog() {
         ...originalEmail.cc_addresses,
       ]
         .filter((addr) => extractRawEmail(addr).toLowerCase() !== currentRaw)
-        .filter((addr) => extractRawEmail(addr).toLowerCase() !== extractRawEmail(originalEmail.from_address).toLowerCase())
+        .filter(
+          (addr) =>
+            extractRawEmail(addr).toLowerCase() !==
+            extractRawEmail(originalEmail.from_address).toLowerCase(),
+        )
         .join(", ");
 
       reset({
@@ -236,7 +257,7 @@ function ComposeDialog() {
   // Sync from_name with the selected mailbox's display_name
   useEffect(() => {
     const selectedMailbox = mailboxes.find(
-      (mb) => mb.address === watchedFromAddress
+      (mb) => mb.address === watchedFromAddress,
     );
     setValue("from_name", selectedMailbox?.display_name ?? "");
   }, [watchedFromAddress, mailboxes, setValue]);
@@ -249,10 +270,10 @@ function ComposeDialog() {
     if (watchedFromAddress === lastFromRef.current) return;
 
     const oldSig = buildSignatureHtml(
-      getSignatureForAddress(lastFromRef.current)
+      getSignatureForAddress(lastFromRef.current),
     );
     const newSig = buildSignatureHtml(
-      getSignatureForAddress(watchedFromAddress)
+      getSignatureForAddress(watchedFromAddress),
     );
     lastFromRef.current = watchedFromAddress;
 
@@ -262,7 +283,7 @@ function ComposeDialog() {
     } else if (!oldSig && newSig) {
       // Previous mailbox had no signature — find quoted content or append
       const quoteIdx = updatedBody.indexOf(
-        '<div style="border-left: 2px solid #ccc;'
+        '<div style="border-left: 2px solid #ccc;',
       );
       if (quoteIdx > 0) {
         updatedBody =
@@ -275,13 +296,54 @@ function ComposeDialog() {
     }
 
     setValue("body", updatedBody);
-  }, [watchedFromAddress, composeOpen, watchedBody, getSignatureForAddress, setValue]);
-  const { data: senderGpgKey } = useGpgKey(
-    watchedFromAddress || undefined
-  );
+  }, [
+    watchedFromAddress,
+    composeOpen,
+    watchedBody,
+    getSignatureForAddress,
+    setValue,
+  ]);
+  const { data: senderGpgKey } = useGpgKey(watchedFromAddress || undefined);
   const hasSenderKey = !!senderGpgKey;
 
-  const onSubmit = (data: ComposeFormValues) => {
+  const handleAttach = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    // Reset input so the same file can be re-added
+    e.target.value = "";
+    if (files.length > 0) {
+      setAttachments((prev) => [...prev, ...files]);
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const filesToBase64 = async (files: File[]): Promise<SendAttachment[]> => {
+    return Promise.all(
+      files.map(
+        (file) =>
+          new Promise<SendAttachment>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(",")[1] ?? "";
+              resolve({
+                filename: file.name,
+                content_type: file.type || "application/octet-stream",
+                data: base64,
+              });
+            };
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
+  };
+
+  const onSubmit = async (data: ComposeFormValues) => {
     const toList = data.to_addresses
       .split(",")
       .map((s) => s.trim())
@@ -316,6 +378,8 @@ function ComposeDialog() {
       ? [...existingRefs, composeContext.originalEmail.message_id]
       : undefined;
 
+    const attachmentPayload = await filesToBase64(attachments);
+
     sendEmail.mutate(
       {
         from_address: data.from_address,
@@ -326,6 +390,8 @@ function ComposeDialog() {
         subject: data.subject,
         body: data.body,
         body_type: data.body_type,
+        attachments:
+          attachmentPayload.length > 0 ? attachmentPayload : undefined,
         sign: data.sign || undefined,
         encrypt: data.encrypt || undefined,
         in_reply_to: inReplyTo,
@@ -335,14 +401,15 @@ function ComposeDialog() {
         onSuccess: () => {
           toast.success("Email sent successfully");
           reset();
+          setAttachments([]);
           setComposeOpen(false);
         },
         onError: (err) => {
           toast.error(
-            err instanceof Error ? err.message : "Failed to send email"
+            err instanceof Error ? err.message : "Failed to send email",
           );
         },
-      }
+      },
     );
   };
 
@@ -400,10 +467,18 @@ function ComposeDialog() {
             )}
           </div>
 
-          {/* CC */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="cc">CC</Label>
+          {/* CC / BCC toggle links */}
+          {(!showCc || !showBcc) && (
+            <div className="flex gap-2">
+              {!showCc && (
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setShowCc(true)}
+                >
+                  CC
+                </button>
+              )}
               {!showBcc && (
                 <button
                   type="button"
@@ -414,14 +489,21 @@ function ComposeDialog() {
                 </button>
               )}
             </div>
-            <Input
-              id="cc"
-              placeholder="cc@example.com (optional)"
-              list="contact-suggestions"
-              autoComplete="off"
-              {...register("cc_addresses")}
-            />
-          </div>
+          )}
+
+          {/* CC (togglable) */}
+          {showCc && (
+            <div className="space-y-1.5">
+              <Label htmlFor="cc">CC</Label>
+              <Input
+                id="cc"
+                placeholder="cc@example.com (optional)"
+                list="contact-suggestions"
+                autoComplete="off"
+                {...register("cc_addresses")}
+              />
+            </div>
+          )}
 
           {/* BCC (togglable) */}
           {showBcc && (
@@ -478,9 +560,50 @@ function ComposeDialog() {
               )}
             />
             {errors.body && (
-              <p className="text-xs text-destructive">
-                {errors.body.message}
-              </p>
+              <p className="text-xs text-destructive">{errors.body.message}</p>
+            )}
+          </div>
+
+          {/* Attachments */}
+          <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleAttach}
+            >
+              <Paperclip className="mr-1.5 h-4 w-4" />
+              Attach files
+            </Button>
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((file, index) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    className="flex items-center gap-1.5 rounded-md border bg-muted/30 px-2.5 py-1.5 text-sm"
+                  >
+                    <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="max-w-[150px] truncate">{file.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {formatFileSize(file.size)}
+                    </span>
+                    <button
+                      type="button"
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => removeAttachment(index)}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -502,17 +625,13 @@ function ComposeDialog() {
               />
               <span
                 className={
-                  hasSenderKey
-                    ? "text-foreground"
-                    : "text-muted-foreground"
+                  hasSenderKey ? "text-foreground" : "text-muted-foreground"
                 }
               >
                 Sign
               </span>
               {!hasSenderKey && watchedFromAddress && (
-                <span className="text-xs text-muted-foreground">
-                  (no key)
-                </span>
+                <span className="text-xs text-muted-foreground">(no key)</span>
               )}
             </label>
             <label className="flex items-center gap-2 text-sm">
@@ -532,6 +651,7 @@ function ComposeDialog() {
               variant="outline"
               onClick={() => {
                 reset();
+                setAttachments([]);
                 setComposeOpen(false);
               }}
             >

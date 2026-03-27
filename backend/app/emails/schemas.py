@@ -59,6 +59,14 @@ class EmailListResponse(BaseModel):
     has_more: bool = False
 
 
+class SendAttachment(BaseModel):
+    """Base64-encoded file attachment for outgoing emails."""
+
+    filename: str
+    content_type: str
+    data: str  # base64-encoded content
+
+
 class SendEmailRequest(BaseModel):
     """Send a new email via SMTP."""
 
@@ -69,6 +77,7 @@ class SendEmailRequest(BaseModel):
     subject: str
     body: str = ""
     body_type: str = "plain"
+    attachments: list[SendAttachment] = []
     sign: bool = False
     encrypt: bool = False
     reply_to: str | None = None

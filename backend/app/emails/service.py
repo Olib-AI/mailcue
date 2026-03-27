@@ -15,6 +15,8 @@ import logging
 import re
 import secrets
 import time
+from email import encoders
+from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
@@ -300,7 +302,47 @@ async def send_email(
     html_body = request.body if request.body_type == "html" else None
     text_body = request.body if request.body_type == "plain" else None
 
-    msg = MIMEMultipart("alternative")
+    body_part = MIMEMultipart("alternative")
+
+    # Always include both text/plain and text/html for best deliverability.
+    # Gmail and other providers penalize emails that lack a text/plain part.
+    if html_body and not text_body:
+        # Strip HTML tags to generate a plain-text fallback
+        plain = re.sub(r"<[^>]+>", "", html_module.unescape(html_body)).strip()
+        body_part.attach(MIMEText(plain, "plain", "utf-8"))
+    elif text_body:
+        body_part.attach(MIMEText(text_body, "plain", "utf-8"))
+    if html_body:
+        # Close void HTML elements for XHTML compliance (<br>, <hr>, <img>)
+        html_body = re.sub(r"<(br|hr|img)(\s[^>]*)?\s*/?>", r"<\1\2 />", html_body)
+        # Wrap in a proper XHTML document if not already wrapped
+        if "<html" not in html_body.lower():
+            html_body = (
+                "<!DOCTYPE html>\n"
+                '<html lang="en" xmlns="http://www.w3.org/1999/xhtml">\n'
+                "<head>\n"
+                '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
+                '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
+                "  <title></title>\n"
+                "</head>\n"
+                "<body>\n" + html_body + "\n</body>\n</html>"
+            )
+        body_part.attach(MIMEText(html_body, "html", "utf-8"))
+
+    # Wrap in mixed container if there are attachments
+    if request.attachments:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body_part)
+        for att in request.attachments:
+            maintype, _, subtype = att.content_type.partition("/")
+            mime_att = MIMEBase(maintype, subtype or "octet-stream")
+            mime_att.set_payload(base64.b64decode(att.data))
+            encoders.encode_base64(mime_att)
+            mime_att.add_header("Content-Disposition", "attachment", filename=att.filename)
+            msg.attach(mime_att)
+    else:
+        msg = body_part
+
     if request.from_name:
         msg["From"] = email.utils.formataddr((request.from_name, request.from_address))
     else:
@@ -318,31 +360,6 @@ async def send_email(
         msg["In-Reply-To"] = request.in_reply_to
     if request.references:
         msg["References"] = " ".join(request.references)
-
-    # Always include both text/plain and text/html for best deliverability.
-    # Gmail and other providers penalize emails that lack a text/plain part.
-    if html_body and not text_body:
-        # Strip HTML tags to generate a plain-text fallback
-        plain = re.sub(r"<[^>]+>", "", html_module.unescape(html_body)).strip()
-        msg.attach(MIMEText(plain, "plain", "utf-8"))
-    elif text_body:
-        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-    if html_body:
-        # Close void HTML elements for XHTML compliance (<br>, <hr>, <img>)
-        html_body = re.sub(r"<(br|hr|img)(\s[^>]*)?\s*/?>", r"<\1\2 />", html_body)
-        # Wrap in a proper XHTML document if not already wrapped
-        if "<html" not in html_body.lower():
-            html_body = (
-                "<!DOCTYPE html>\n"
-                '<html lang="en" xmlns="http://www.w3.org/1999/xhtml">\n'
-                "<head>\n"
-                '  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
-                '  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n'
-                "  <title></title>\n"
-                "</head>\n"
-                "<body>\n" + html_body + "\n</body>\n</html>"
-            )
-        msg.attach(MIMEText(html_body, "html", "utf-8"))
 
     # List-Unsubscribe header (improves deliverability scores)
     unsub_addr = f"unsubscribe@{settings.domain}"

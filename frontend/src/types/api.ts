@@ -52,9 +52,11 @@ export interface TwoFactorVerifyRequest {
 }
 
 export function isLoginStepResponse(
-  data: LoginResponse | LoginStepResponse
+  data: LoginResponse | LoginStepResponse,
 ): data is LoginStepResponse {
-  return "requires_2fa" in data && (data as LoginStepResponse).requires_2fa === true;
+  return (
+    "requires_2fa" in data && (data as LoginStepResponse).requires_2fa === true
+  );
 }
 
 // --- Email Types ---
@@ -102,6 +104,12 @@ export interface EmailListResponse {
   has_more: boolean;
 }
 
+export interface SendAttachment {
+  filename: string;
+  content_type: string;
+  data: string; // base64-encoded
+}
+
 export interface SendEmailRequest {
   from_address: string;
   from_name?: string;
@@ -111,6 +119,7 @@ export interface SendEmailRequest {
   subject: string;
   body: string;
   body_type: "html" | "plain";
+  attachments?: SendAttachment[];
   sign?: boolean;
   encrypt?: boolean;
   in_reply_to?: string;
@@ -201,7 +210,12 @@ export const FOLDERS: { name: FolderName; label: string }[] = [
 
 // --- GPG Types ---
 
-export type SignatureStatus = "valid" | "invalid" | "no_public_key" | "expired_key" | "error";
+export type SignatureStatus =
+  | "valid"
+  | "invalid"
+  | "no_public_key"
+  | "expired_key"
+  | "error";
 
 export interface GpgEmailInfo {
   is_signed: boolean;
