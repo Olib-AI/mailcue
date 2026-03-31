@@ -88,7 +88,7 @@ function buildSignatureHtml(signatureText: string): string {
 
 const composeSchema = z.object({
   from_address: z.string().min(1, "Select a sender address"),
-  from_name: z.string().optional().default(""),
+  from_name: z.string(),
   to_addresses: z.string().min(1, "At least one recipient is required"),
   cc_addresses: z.string().optional(),
   bcc_addresses: z.string().optional(),
@@ -123,18 +123,6 @@ function ComposeDialog() {
     formState: { errors },
   } = useForm<ComposeFormValues>({
     resolver: zodResolver(composeSchema),
-    defaultValues: {
-      from_address: "",
-      from_name: "",
-      to_addresses: "",
-      cc_addresses: "",
-      bcc_addresses: "",
-      subject: "",
-      body: "",
-      body_type: "html",
-      sign: false,
-      encrypt: false,
-    },
   });
 
   const mailboxes = useMemo(
