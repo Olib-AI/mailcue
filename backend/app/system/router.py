@@ -198,8 +198,10 @@ async def get_certificate_info(
 
 
 @router.get("/certificate/download")
-async def download_certificate() -> Response:
-    """Download the CA certificate as a PEM file."""
+async def download_certificate(
+    _admin: User = Depends(require_admin),
+) -> Response:
+    """Download the CA certificate as a PEM file. **Admin only.**"""
     # Prefer the dedicated CA cert; fall back to legacy single cert
     path = CA_CERT_PATH if CA_CERT_PATH.exists() else LEGACY_CERT_PATH
     if not path.exists():

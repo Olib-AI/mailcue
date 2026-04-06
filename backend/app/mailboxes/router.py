@@ -9,9 +9,8 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
-from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import get_current_user
 from app.emails.schemas import (
     BulkDeleteRequest,
     BulkDeleteResponse,
@@ -43,6 +42,7 @@ from app.mailboxes.service import (
     _imap_get_folder_stats,
     create_mailbox,
     delete_mailbox,
+    get_mailbox,
     get_mailbox_by_address,
     get_mailbox_stats,
     list_mailboxes,
@@ -53,17 +53,17 @@ logger = logging.getLogger("mailcue.mailboxes")
 router = APIRouter(prefix="/mailboxes", tags=["Mailboxes"])
 
 
-def verify_mailbox_access(mailbox_address: str, current_user: User) -> None:
-    """Verify the user has access to this mailbox. Admins can access any mailbox.
+async def verify_mailbox_access(
+    mailbox_address: str, current_user: User, db: AsyncSession
+) -> None:
+    """Verify the user owns this mailbox.
 
-    Compares the decoded mailbox address against the user's canonical address
-    (``username@MAILCUE_DOMAIN``).  Raises ``AuthorizationError`` on mismatch.
+    Every user -- including admins -- can only access their own
+    mailboxes.  Raises ``AuthorizationError`` on mismatch.
     """
-    if current_user.is_admin:
-        return
-    address_lower = unquote(mailbox_address).lower()
-    user_address = f"{current_user.username}@{settings.domain}".lower()
-    if address_lower != user_address:
+    decoded = unquote(mailbox_address).lower()
+    mailbox = await get_mailbox_by_address(decoded, db)
+    if mailbox.user_id != current_user.id:
         raise AuthorizationError("You do not have access to this mailbox")
 
 
@@ -72,8 +72,11 @@ async def list_all_mailboxes(
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MailboxListResponse:
-    """List all active mailboxes with email/unread counts."""
-    mailboxes = await list_mailboxes(db)
+    """List active mailboxes with email/unread counts.
+
+    Non-admin users only see their own mailboxes.
+    """
+    mailboxes = await list_mailboxes(db, user=_current_user)
     responses: list[MailboxResponse] = []
     for m in mailboxes:
         local_part = m.address.split("@", maxsplit=1)[0] if "@" in m.address else m.address
@@ -87,6 +90,7 @@ async def list_all_mailboxes(
             created_at=m.created_at,
             quota_mb=m.quota_mb,
             signature=m.signature,
+            owner_id=m.user_id,
         )
         try:
             folders = await _imap_get_folder_stats(m.address)
@@ -109,15 +113,14 @@ async def list_all_mailboxes(
 )
 async def create_new_mailbox(
     body: MailboxCreateRequest,
-    _admin: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MailboxResponse:
     """Create a new mailbox and provision it on the mail server.
 
-    **Admin only.** This creates a Dovecot virtual user entry and
-    the corresponding Maildir directory structure.
+    Any authenticated user can create mailboxes up to their quota.
     """
-    mailbox = await create_mailbox(body, db)
+    mailbox = await create_mailbox(body, db, user_id=current_user.id)
     local_part = (
         mailbox.address.split("@", maxsplit=1)[0] if "@" in mailbox.address else mailbox.address
     )
@@ -131,6 +134,7 @@ async def create_new_mailbox(
         created_at=mailbox.created_at,
         quota_mb=mailbox.quota_mb,
         signature=mailbox.signature,
+        owner_id=mailbox.user_id,
     )
 
 
@@ -141,14 +145,15 @@ async def create_new_mailbox(
 )
 async def delete_existing_mailbox(
     address: str,
-    _admin: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete (deactivate) a mailbox by address and remove it from Dovecot.
 
-    **Admin only.** The Maildir data is preserved by default.
-    The ``address`` path parameter is URL-decoded automatically.
+    Admins can delete any mailbox; users can delete their own.
+    The Maildir data is preserved by default.
     """
+    await verify_mailbox_access(address, current_user, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     await delete_mailbox(mailbox.id, db)
@@ -165,18 +170,23 @@ async def mailbox_stats(
     Falls back to zeroed stats when the mail server is unreachable
     (common in local development without Docker).
     """
+    mailbox = await get_mailbox(mailbox_id, db)
+    if mailbox.user_id != _current_user.id:
+        raise AuthorizationError("You do not have access to this mailbox")
     return await get_mailbox_stats(mailbox_id, db)
 
 
 @router.post("/{address}/purge")
 async def purge_mailbox_emails(
     address: str,
-    _admin: User = Depends(require_admin),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Delete all emails from a mailbox across all folders.
 
-    **Admin only.** The mailbox itself is preserved.
+    Admins can purge any mailbox; users can purge their own.
     """
+    await verify_mailbox_access(address, current_user, db)
     decoded = unquote(address)
     deleted = await purge_mailbox(decoded)
     return {"deleted": deleted}
@@ -194,9 +204,10 @@ async def list_mailbox_emails(
     search: str | None = Query(None),
     sort: str = Query("date_desc"),
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
     """List emails for a specific mailbox (path-based variant)."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     return await list_emails(
         mailbox=decoded,
@@ -217,7 +228,7 @@ async def get_mailbox_email(
     db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by UID from a specific mailbox."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
 
@@ -231,9 +242,10 @@ async def bulk_delete_mailbox_emails(
     body: BulkDeleteRequest,
     folder: str = Query("INBOX"),
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> BulkDeleteResponse:
     """Delete multiple emails by UID from a specific mailbox."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
 
@@ -246,9 +258,10 @@ async def delete_mailbox_email(
     uid: str,
     folder: str = Query("INBOX"),
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete an email by UID from a specific mailbox."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     await delete_email(mailbox=decoded, uid=uid, folder=folder)
 
@@ -260,9 +273,10 @@ async def update_email_flags(
     body: UpdateFlagsRequest,
     folder: str = Query("INBOX"),
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Toggle read/unread status on an email by setting or clearing the \\Seen flag."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
     return {"message": "Flags updated"}
@@ -277,9 +291,10 @@ async def mark_email_as_spam(
     uid: str,
     body: SpamActionRequest,
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Mark an email as spam by moving it from the source folder to Junk."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     await move_email_to_folder(
         mailbox=decoded,
@@ -296,9 +311,10 @@ async def mark_email_as_not_spam(
     mailbox_address: str,
     uid: str,
     _user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Mark an email as not spam by moving it from Junk back to INBOX."""
-    verify_mailbox_access(mailbox_address, _user)
+    await verify_mailbox_access(mailbox_address, _user, db)
     decoded = unquote(mailbox_address)
     await move_email_to_folder(
         mailbox=decoded,
@@ -324,7 +340,7 @@ async def update_mailbox_display_name(
 
     The user must own the mailbox (or be an admin).
     """
-    verify_mailbox_access(address, current_user)
+    await verify_mailbox_access(address, current_user, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     mailbox.display_name = body.display_name
@@ -347,7 +363,7 @@ async def update_mailbox_signature(
 
     The user must own the mailbox (or be an admin).
     """
-    verify_mailbox_access(address, current_user)
+    await verify_mailbox_access(address, current_user, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     mailbox.signature = body.signature

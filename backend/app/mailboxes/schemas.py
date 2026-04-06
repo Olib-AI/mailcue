@@ -42,6 +42,7 @@ class MailboxResponse(BaseModel):
     unread_count: int = 0
     junk_count: int = 0
     signature: str = ""
+    owner_id: str | None = None
 
     model_config = {"from_attributes": True}
 

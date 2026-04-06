@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.mailboxes.models import Mailbox
 
 
 def _utcnow() -> datetime:
@@ -42,8 +46,15 @@ class User(Base):
         DateTime(timezone=True), nullable=True, default=None
     )
 
+    # ── Mailbox quota ──────────────────────────────────────────────
+    max_mailboxes: Mapped[int] = mapped_column(Integer, default=5)
+
     api_keys: Mapped[list[APIKey]] = relationship(
         "APIKey", back_populates="user", cascade="all, delete-orphan"
+    )
+
+    mailboxes: Mapped[list[Mailbox]] = relationship(
+        "Mailbox", back_populates="owner", foreign_keys="[Mailbox.user_id]"
     )
 
 

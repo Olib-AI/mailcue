@@ -160,6 +160,12 @@ function ProfilePage() {
               {user.is_admin ? "Admin" : "User"}
             </Badge>
           </div>
+          <div className="flex justify-between">
+            <span className="text-sm text-muted-foreground">Mailbox Quota</span>
+            <span className="text-sm font-medium">
+              {mailboxData?.mailboxes.length ?? 0} / {user.max_mailboxes} mailboxes
+            </span>
+          </div>
         </CardContent>
       </Card>
 

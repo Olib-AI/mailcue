@@ -7,8 +7,10 @@ export interface User {
   username: string;
   email: string;
   is_admin: boolean;
+  is_active: boolean;
   created_at: string;
   totp_enabled: boolean;
+  max_mailboxes: number;
 }
 
 export interface LoginRequest {
@@ -150,6 +152,7 @@ export interface Mailbox {
   unread_count: number;
   junk_count: number;
   signature: string;
+  owner_id: string | null;
 }
 
 export interface CreateMailboxRequest {
@@ -162,6 +165,27 @@ export interface CreateMailboxRequest {
 export interface MailboxListResponse {
   mailboxes: Mailbox[];
   total: number;
+}
+
+// --- User Management Types ---
+
+export interface UserListResponse {
+  users: User[];
+  total: number;
+}
+
+export interface RegisterUserRequest {
+  username: string;
+  email: string;
+  password: string;
+  is_admin?: boolean;
+  max_mailboxes?: number;
+}
+
+export interface UpdateUserRequest {
+  max_mailboxes?: number;
+  is_active?: boolean;
+  is_admin?: boolean;
 }
 
 // --- SSE Event Types ---

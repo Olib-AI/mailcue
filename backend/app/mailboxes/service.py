@@ -11,9 +11,11 @@ import subprocess
 from pathlib import Path
 
 from fastapi import HTTPException, status
+from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.models import User
 from app.config import settings
 from app.events.bus import event_bus
 from app.exceptions import ConflictError, MailServerError, NotFoundError
@@ -73,11 +75,17 @@ async def sync_filesystem_mailboxes(db: AsyncSession) -> None:
         logger.info("Auto-discovered %d mailbox(es) from filesystem.", new_count)
 
 
-async def list_mailboxes(db: AsyncSession) -> list[Mailbox]:
-    """Return all active mailboxes ordered by creation date."""
+async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mailbox]:
+    """Return active mailboxes owned by the given user.
+
+    Every user -- including admins -- only sees their own mailboxes.
+    Pass ``user=None`` only for internal/system calls that need all.
+    """
     # Sync filesystem-discovered mailboxes first (catch-all support)
     await sync_filesystem_mailboxes(db)
     stmt = select(Mailbox).where(Mailbox.is_active.is_(True)).order_by(Mailbox.created_at.desc())
+    if user is not None:
+        stmt = stmt.where(Mailbox.user_id == user.id)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -103,6 +111,7 @@ async def get_mailbox_by_address(address: str, db: AsyncSession) -> Mailbox:
 async def create_mailbox(
     body: MailboxCreateRequest,
     db: AsyncSession,
+    user_id: str | None = None,
 ) -> Mailbox:
     """Create a mailbox in the database and provision it on the mail server.
 
@@ -128,6 +137,23 @@ async def create_mailbox(
                 detail=f"Domain '{domain}' is not registered. Add it via /api/v1/domains first.",
             )
 
+    # Enforce per-user mailbox quota
+    if user_id is not None:
+        user = await db.get(User, user_id)
+        if user is not None and not user.is_admin:
+            count_stmt = (
+                select(sa_func.count())
+                .select_from(Mailbox)
+                .where(Mailbox.user_id == user_id, Mailbox.is_active.is_(True))
+            )
+            count_result = await db.execute(count_stmt)
+            current_count = count_result.scalar() or 0
+            if current_count >= user.max_mailboxes:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Mailbox quota exceeded. You have {current_count}/{user.max_mailboxes} mailboxes.",
+                )
+
     # Check uniqueness
     stmt = select(Mailbox).where(Mailbox.address == address)
     result = await db.execute(stmt)
@@ -139,6 +165,7 @@ async def create_mailbox(
         address=address,
         display_name=body.display_name or local_part,
         domain=domain,
+        user_id=user_id,
     )
     db.add(mailbox)
     await db.commit()

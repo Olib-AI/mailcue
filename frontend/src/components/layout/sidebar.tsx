@@ -18,6 +18,7 @@ import {
   Globe,
   ArrowRightLeft,
   AtSign,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MailCueLogo } from "@/components/mailcue-logo";
@@ -27,6 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUIStore } from "@/stores/ui-store";
 import { useMailboxes } from "@/hooks/use-mailboxes";
+import { useAuth } from "@/hooks/use-auth";
 import type { FolderName } from "@/types/api";
 
 const FOLDER_ICONS: Record<FolderName, typeof Inbox> = {
@@ -62,6 +64,9 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
     selectedFolder,
     setSelectedFolder,
   } = useUIStore();
+
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.is_admin ?? false;
 
   const { data: mailboxData, isLoading: mailboxesLoading } = useMailboxes();
   const mailboxes = mailboxData?.mailboxes ?? [];
@@ -228,11 +233,11 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
 
         <Separator className="my-3 mx-2" />
 
-        {/* Admin Links */}
+        {/* Navigation Links */}
         <div className="px-2 space-y-0.5">
           {!sidebarCollapsed && (
             <span className="px-2.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Admin
+              {isAdmin ? "Admin" : "Menu"}
             </span>
           )}
           <button
@@ -240,7 +245,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             onClick={() => void navigate("/admin")}
             className={cn(
               "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors mt-1",
-              isAdminPage && !location.search.includes("inject")
+              isAdminPage && !location.search.includes("inject") && !location.search.includes("users")
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
@@ -248,71 +253,96 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             <LayoutGrid className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Mailboxes</span>}
           </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/admin?tab=inject")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isAdminPage && location.search.includes("inject")
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <Syringe className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>Inject Email</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/messaging")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isMessagingPage
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <MessageSquare className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>Messaging</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/http-bin")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isHttpBinPage
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <Globe className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>HTTP Bin</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/forwarding-rules")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isForwardingRulesPage
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <ArrowRightLeft className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>Forwarding</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/aliases")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isAliasesPage
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <AtSign className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>Aliases</span>}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/admin?tab=users")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isAdminPage && location.search.includes("users")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <User className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Users</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/admin?tab=inject")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isAdminPage && location.search.includes("inject")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Syringe className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Inject Email</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/messaging")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isMessagingPage
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <MessageSquare className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Messaging</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/http-bin")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isHttpBinPage
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Globe className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>HTTP Bin</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/forwarding-rules")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isForwardingRulesPage
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <ArrowRightLeft className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Forwarding</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/aliases")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isAliasesPage
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <AtSign className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Aliases</span>}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void navigate("/settings")}
@@ -326,19 +356,21 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             <Settings className="h-4 w-4 shrink-0" />
             {!sidebarCollapsed && <span>Settings</span>}
           </button>
-          <button
-            type="button"
-            onClick={() => void navigate("/dev-tools")}
-            className={cn(
-              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
-              isDevToolsPage
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-            )}
-          >
-            <Terminal className="h-4 w-4 shrink-0" />
-            {!sidebarCollapsed && <span>Dev Tools</span>}
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/dev-tools")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isDevToolsPage
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Terminal className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Dev Tools</span>}
+            </button>
+          )}
         </div>
       </ScrollArea>
 

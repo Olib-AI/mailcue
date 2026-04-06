@@ -25,7 +25,9 @@ from app.auth.schemas import (
     TOTPDisableRequest,
     TOTPSetupResponse,
     TwoFactorVerifyRequest,
+    UserListResponse,
     UserResponse,
+    UserUpdateRequest,
 )
 from app.auth.service import (
     api_key_prefix,
@@ -252,6 +254,7 @@ async def register(
         email=body.email,
         hashed_password=hash_password(body.password),
         is_admin=body.is_admin,
+        max_mailboxes=body.max_mailboxes,
     )
     db.add(user)
     await db.commit()
@@ -632,3 +635,93 @@ async def revoke_api_key(
     api_key.is_active = False
     await db.commit()
     logger.info("API key '%s' revoked by user '%s'.", api_key.name, current_user.username)
+
+
+# ── User management (admin) ────────────────────────────────────
+
+
+@router.get("/users", response_model=UserListResponse)
+async def list_users(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserListResponse:
+    """List all users. **Admin only.**"""
+    stmt = select(User).order_by(User.created_at.desc())
+    result = await db.execute(stmt)
+    users = list(result.scalars().all())
+    return UserListResponse(
+        users=[UserResponse.model_validate(u, from_attributes=True) for u in users],
+        total=len(users),
+    )
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: str,
+    body: UserUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """Update a user's admin-editable fields. **Admin only.**"""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Prevent admin from removing their own admin role
+    if body.is_admin is False and user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot remove your own admin privileges",
+        )
+
+    if body.max_mailboxes is not None:
+        user.max_mailboxes = body.max_mailboxes
+    if body.is_active is not None:
+        if not body.is_active and user.id == admin.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate your own account",
+            )
+        user.is_active = body.is_active
+    if body.is_admin is not None:
+        user.is_admin = body.is_admin
+
+    await db.commit()
+    await db.refresh(user)
+    logger.info("User '%s' updated by admin '%s'.", user.username, admin.username)
+    return UserResponse.model_validate(user, from_attributes=True)
+
+
+@router.delete(
+    "/users/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+)
+async def deactivate_user(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Deactivate a user account. **Admin only.**
+
+    The user's mailboxes are preserved but become orphaned.
+    """
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate your own account",
+        )
+
+    user.is_active = False
+    await db.commit()
+    logger.info("User '%s' deactivated by admin '%s'.", user.username, admin.username)

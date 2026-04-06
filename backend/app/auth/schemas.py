@@ -23,6 +23,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     is_admin: bool = False
+    max_mailboxes: int = 5
 
     @field_validator("password")
     @classmethod
@@ -109,8 +110,24 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     totp_enabled: bool = False
+    max_mailboxes: int = 5
 
     model_config = {"from_attributes": True}
+
+
+class UserListResponse(BaseModel):
+    """Wrapper for the user listing endpoint."""
+
+    users: list[UserResponse]
+    total: int
+
+
+class UserUpdateRequest(BaseModel):
+    """Admin-editable user fields."""
+
+    max_mailboxes: int | None = None
+    is_active: bool | None = None
+    is_admin: bool | None = None
 
 
 class TokenResponse(BaseModel):

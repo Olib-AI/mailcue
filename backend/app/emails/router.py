@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.emails.schemas import (
     BulkInjectRequest,
     BulkInjectResponse,
@@ -27,6 +27,7 @@ from app.emails.service import (
     list_emails,
     send_email,
 )
+from app.mailboxes.router import verify_mailbox_access
 
 router = APIRouter(prefix="/emails", tags=["Emails"])
 
@@ -40,12 +41,14 @@ async def list_all_emails(
     search: str | None = Query(None, description="Full-text search query"),
     sort: str = Query("date_desc", description="Sort order (date_asc, date_desc)"),
     _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
     """List emails in a mailbox with pagination, search, and sorting.
 
     Emails are fetched directly from IMAP. The ``search`` parameter
     maps to IMAP ``TEXT`` search which covers subject and body.
     """
+    await verify_mailbox_access(mailbox, _current_user, db)
     return await list_emails(
         mailbox=mailbox,
         folder=folder,
@@ -65,6 +68,7 @@ async def get_single_email(
     db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by its IMAP UID with full body and headers."""
+    await verify_mailbox_access(mailbox, _current_user, db)
     return await get_email(mailbox=mailbox, uid=uid, folder=folder, db=db)
 
 
@@ -74,8 +78,10 @@ async def get_raw_email(
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
     _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download the raw RFC 5322 source of an email as a ``.eml`` file."""
+    await verify_mailbox_access(mailbox, _current_user, db)
     raw = await get_email_raw(mailbox=mailbox, uid=uid, folder=folder)
     return Response(
         content=raw,
@@ -91,8 +97,10 @@ async def download_attachment(
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
     _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download a specific MIME attachment identified by its part ID."""
+    await verify_mailbox_access(mailbox, _current_user, db)
     data, content_type, filename = await get_attachment(
         mailbox=mailbox, uid=uid, part_id=part_id, folder=folder
     )
@@ -111,9 +119,10 @@ async def send_new_email(
 ) -> dict[str, str]:
     """Send an email via the local SMTP server (Postfix).
 
-    Returns HTTP 202 (Accepted) because SMTP delivery is asynchronous --
-    the message has been accepted for delivery but not yet delivered.
+    The sender address (``from_address``) must belong to the
+    authenticated user's mailbox (admins may send from any).
     """
+    await verify_mailbox_access(body.from_address, _current_user, db)
     message_id = await send_email(body, db=db, sign=body.sign, encrypt=body.encrypt)
     return {"message": "Email accepted for delivery", "message_id": message_id}
 
@@ -121,13 +130,13 @@ async def send_new_email(
 @router.post("/inject", status_code=status.HTTP_201_CREATED)
 async def inject_single_email(
     body: InjectEmailRequest,
-    _current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Inject an email directly into a mailbox via IMAP APPEND.
 
-    Bypasses SMTP delivery entirely -- the email appears in the target
-    mailbox immediately. Ideal for test data setup.
+    **Admin only.** Bypasses SMTP delivery entirely -- the email
+    appears in the target mailbox immediately. Ideal for test data setup.
     """
     uid = await inject_email(body, db=db, sign=body.sign, encrypt=body.encrypt)
     return {"uid": uid, "mailbox": body.mailbox}
@@ -140,13 +149,13 @@ async def inject_single_email(
 )
 async def bulk_inject_emails(
     body: BulkInjectRequest,
-    _current_user: User = Depends(get_current_user),
+    _admin: User = Depends(require_admin),
 ) -> BulkInjectResponse:
     """Inject multiple emails into mailboxes in a single request.
 
-    Each email in the ``emails`` array is injected independently.
-    Partial failures are reported in the response without aborting
-    the entire batch.
+    **Admin only.** Each email in the ``emails`` array is injected
+    independently. Partial failures are reported in the response
+    without aborting the entire batch.
     """
     return await bulk_inject(body)
 
@@ -157,6 +166,8 @@ async def delete_single_email(
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
     _current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete an email by UID (sets \\Deleted flag and expunges)."""
+    await verify_mailbox_access(mailbox, _current_user, db)
     await delete_email(mailbox=mailbox, uid=uid, folder=folder)

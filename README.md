@@ -59,7 +59,8 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 | **Production Readiness Dashboard** | Settings page shows a checklist of production readiness: TLS status, domain verification, Postfix/Dovecot hardening, and more. |
 | **Smarthost Relay** | Optional outbound relay via external SMTP services (SendGrid, Mailgun, AWS SES) when port 25 is blocked. Configured via `MAILCUE_RELAY_*` env vars. |
 | **Server Configuration** | Configure server hostname and upload custom TLS certificates from the admin UI. Certs persist across container restarts. |
-| **Admin Panel** | Create and delete mailboxes, manage aliases, inject test emails, manage domains, configure mail server -- all from the browser. |
+| **Multi-User** | Admin can create users with per-user mailbox quotas. Each user has fully isolated mailboxes, emails, GPG keys, and API keys -- no user can access another's data. |
+| **Admin Panel** | Create and delete mailboxes, manage users, manage aliases, inject test emails, manage domains, configure mail server -- all from the browser. |
 | **Single Container** | One `docker run` command. No external databases, no Redis, no message queues. |
 | **Persistent Storage** | SQLite (with optional SQLCipher AES-256 encryption) and Maildir storage survive container restarts via Docker volumes. |
 

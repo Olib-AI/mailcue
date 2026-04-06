@@ -6,9 +6,12 @@ import { CertificateManager } from "@/components/admin/certificate-manager";
 import { MailServerManager } from "@/components/admin/mail-server";
 import { ProductionStatusPanel } from "@/components/admin/production-status";
 import { SignatureManager } from "@/components/admin/signature-manager";
+import { useAuth } from "@/hooks/use-auth";
 
 function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const isAdmin = user?.is_admin ?? false;
   const currentTab = searchParams.get("tab") ?? "signatures";
 
   const handleTabChange = (value: string) => {
@@ -21,10 +24,10 @@ function SettingsPage() {
         <TabsList className="mb-6">
           <TabsTrigger value="signatures">Signatures</TabsTrigger>
           <TabsTrigger value="gpg">GPG Keys</TabsTrigger>
-          <TabsTrigger value="certificate">TLS Certificate</TabsTrigger>
-          <TabsTrigger value="mail-server">Mail Server</TabsTrigger>
-          <TabsTrigger value="domains">Domains</TabsTrigger>
-          <TabsTrigger value="production">Production</TabsTrigger>
+          {isAdmin && <TabsTrigger value="certificate">TLS Certificate</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="mail-server">Mail Server</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="domains">Domains</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="production">Production</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="signatures">
@@ -35,21 +38,29 @@ function SettingsPage() {
           <GpgKeyManager />
         </TabsContent>
 
-        <TabsContent value="certificate">
-          <CertificateManager />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="certificate">
+            <CertificateManager />
+          </TabsContent>
+        )}
 
-        <TabsContent value="mail-server">
-          <MailServerManager />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="mail-server">
+            <MailServerManager />
+          </TabsContent>
+        )}
 
-        <TabsContent value="domains">
-          <DomainManager />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="domains">
+            <DomainManager />
+          </TabsContent>
+        )}
 
-        <TabsContent value="production">
-          <ProductionStatusPanel />
-        </TabsContent>
+        {isAdmin && (
+          <TabsContent value="production">
+            <ProductionStatusPanel />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
