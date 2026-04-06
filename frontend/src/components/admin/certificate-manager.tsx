@@ -257,8 +257,21 @@ function CertificateManager() {
   const { data, isLoading, isError, refetch } = useCertificateInfo();
   const [showInstructions, setShowInstructions] = useState(false);
 
-  const handleDownload = () => {
-    window.open("/api/v1/system/certificate/download", "_blank");
+  const handleDownload = async () => {
+    const token = localStorage.getItem("access_token");
+    const res = await fetch("/api/v1/system/certificate/download", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mailcue-ca.crt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
