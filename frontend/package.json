@@ -20,7 +20,7 @@
     "@tiptap/extension-text-style": "^3.22.2",
     "@tiptap/extension-underline": "^3.22.3",
     "@tiptap/pm": "^3.21.0",
-    "@tiptap/react": "^3.22.2",
+    "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
