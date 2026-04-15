@@ -21,7 +21,7 @@
     "@tiptap/extension-underline": "^3.22.2",
     "@tiptap/pm": "^3.21.0",
     "@tiptap/react": "^3.22.2",
-    "@tiptap/starter-kit": "^3.21.0",
+    "@tiptap/starter-kit": "^3.22.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.3.3",
