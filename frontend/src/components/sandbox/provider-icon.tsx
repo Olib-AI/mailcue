@@ -9,6 +9,10 @@ const PROVIDER_ICONS: Record<ProviderType, typeof MessageSquare> = {
   twilio: Phone,
   whatsapp: MessageCircle,
   discord: Gamepad2,
+  bandwidth: Phone,
+  vonage: Phone,
+  plivo: Phone,
+  telnyx: Phone,
 };
 
 interface ProviderIconProps {

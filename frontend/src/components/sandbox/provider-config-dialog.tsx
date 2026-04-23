@@ -44,6 +44,26 @@ const CREDENTIAL_FIELDS: Record<ProviderType, { key: string; label: string; plac
     { key: "bot_token", label: "Bot Token", placeholder: "MTI3..." },
     { key: "application_id", label: "Application ID", placeholder: "1234567890..." },
   ],
+  bandwidth: [
+    { key: "account_id", label: "Account ID", placeholder: "bw-acc-12345" },
+    { key: "username", label: "Username", placeholder: "api-user" },
+    { key: "password", label: "Password", placeholder: "api-secret" },
+    { key: "application_id", label: "Messaging Application ID", placeholder: "msg-app-1" },
+    { key: "voice_application_id", label: "Voice Application ID", placeholder: "voice-app-1" },
+  ],
+  vonage: [
+    { key: "api_key", label: "API Key", placeholder: "abc123" },
+    { key: "api_secret", label: "API Secret", placeholder: "def456" },
+    { key: "application_id", label: "Application ID", placeholder: "app-id-1" },
+    { key: "messages_token", label: "Messages Bearer Token", placeholder: "eyJ..." },
+  ],
+  plivo: [
+    { key: "auth_id", label: "Auth ID", placeholder: "MAXXXXXXXXXXX" },
+    { key: "auth_token", label: "Auth Token", placeholder: "secret-token" },
+  ],
+  telnyx: [
+    { key: "api_key", label: "API Key", placeholder: "KEY..." },
+  ],
 };
 
 const PROVIDER_LABELS: Record<ProviderType, string> = {
@@ -53,6 +73,10 @@ const PROVIDER_LABELS: Record<ProviderType, string> = {
   twilio: "Twilio",
   whatsapp: "WhatsApp",
   discord: "Discord",
+  bandwidth: "Bandwidth",
+  vonage: "Vonage",
+  plivo: "Plivo",
+  telnyx: "Telnyx",
 };
 
 interface ProviderConfigDialogProps {
@@ -94,7 +118,7 @@ function ProviderConfigDialog({
     }
   }, [open, provider]);
 
-  const credentialFields = CREDENTIAL_FIELDS[providerType];
+  const credentialFields = CREDENTIAL_FIELDS[providerType] ?? [];
 
   const handleCredentialChange = (key: string, value: string) => {
     setCredentials((prev) => ({ ...prev, [key]: value }));

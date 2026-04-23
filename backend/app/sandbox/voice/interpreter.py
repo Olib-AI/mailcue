@@ -12,14 +12,14 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from xml.etree import ElementTree as ET
 
 logger = logging.getLogger("mailcue.sandbox.voice")
 
 
-class VoiceActionType(str, Enum):
+class VoiceActionType(StrEnum):
     """The set of call-control verbs supported by the sandbox."""
 
     SAY = "say"  # Text-to-speech (Say / SpeakSentence / talk / Speak)
