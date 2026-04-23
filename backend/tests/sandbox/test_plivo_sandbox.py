@@ -168,3 +168,29 @@ async def test_invalid_auth(client: AsyncClient, plivo_provider: dict):
         headers={"Authorization": basic_auth_header("wrong", "wrong")},
     )
     assert resp.status_code == 401
+
+
+# ── Account resource fetch (verify_credentials probe) ────────────────
+
+
+async def test_account_fetch(client: AsyncClient, plivo_provider: dict):
+    auth_id = _acc(plivo_provider)
+    resp = await client.get(
+        f"/sandbox/plivo/v1/Account/{auth_id}/",
+        headers=_auth(plivo_provider),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["auth_id"] == auth_id
+    assert data["account_type"] == "standard"
+    assert data["billing_mode"] == "prepaid"
+    assert data["resource_uri"] == f"/v1/Account/{auth_id}/"
+
+
+async def test_account_fetch_unauth(client: AsyncClient, plivo_provider: dict):
+    auth_id = _acc(plivo_provider)
+    resp = await client.get(
+        f"/sandbox/plivo/v1/Account/{auth_id}/",
+        headers={"Authorization": basic_auth_header(auth_id, "wrong")},
+    )
+    assert resp.status_code == 401

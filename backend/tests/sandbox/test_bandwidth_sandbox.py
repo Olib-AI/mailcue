@@ -122,8 +122,8 @@ async def test_list_and_fetch_call(client: AsyncClient, bandwidth_provider: dict
 
 async def test_available_numbers_xml(client: AsyncClient, bandwidth_provider: dict):
     acc = _acct(bandwidth_provider)
-    resp = await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/availableTelephoneNumbers",
+    resp = await client.get(
+        f"/sandbox/bandwidth/api/accounts/{acc}/availableNumbers",
         params={"areaCode": "415", "quantity": 5},
         headers=_auth(bandwidth_provider),
     )
@@ -132,6 +132,63 @@ async def test_available_numbers_xml(client: AsyncClient, bandwidth_provider: di
     body = resp.text
     assert "<TelephoneNumberList>" in body
     assert body.count("<TelephoneNumber>") >= 5
+
+
+async def test_available_numbers_toll_free(client: AsyncClient, bandwidth_provider: dict):
+    """tollFreeWildCardPattern triggers toll-free search per real API."""
+    acc = _acct(bandwidth_provider)
+    resp = await client.get(
+        f"/sandbox/bandwidth/api/accounts/{acc}/availableNumbers",
+        params={"quantity": 3, "tollFreeWildCardPattern": "8**"},
+        headers=_auth(bandwidth_provider),
+    )
+    assert resp.status_code == 200
+    assert "<TelephoneNumberList>" in resp.text
+
+
+async def test_available_numbers_legacy_path_410(client: AsyncClient, bandwidth_provider: dict):
+    """Old POST/GET availableTelephoneNumbers path returns 410 Gone."""
+    acc = _acct(bandwidth_provider)
+    resp = await client.post(
+        f"/sandbox/bandwidth/accounts/{acc}/availableTelephoneNumbers",
+        params={"areaCode": "415", "quantity": 5},
+        headers=_auth(bandwidth_provider),
+    )
+    assert resp.status_code == 410
+    assert "availableNumbers" in resp.text
+
+
+async def test_verify_credentials_media(client: AsyncClient, bandwidth_provider: dict):
+    """GET /api/v2/users/{acc}/media returns 200 + [] for good creds."""
+    acc = _acct(bandwidth_provider)
+    resp = await client.get(
+        f"/sandbox/bandwidth/api/v2/users/{acc}/media",
+        headers=_auth(bandwidth_provider),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+async def test_verify_credentials_media_401(client: AsyncClient, bandwidth_provider: dict):
+    acc = _acct(bandwidth_provider)
+    from tests.conftest import basic_auth_header
+
+    resp = await client.get(
+        f"/sandbox/bandwidth/api/v2/users/{acc}/media",
+        headers={"Authorization": basic_auth_header("bad", "bad")},
+    )
+    assert resp.status_code == 401
+
+
+async def test_dashboard_account_xml(client: AsyncClient, bandwidth_provider: dict):
+    acc = _acct(bandwidth_provider)
+    resp = await client.get(
+        f"/sandbox/bandwidth/api/accounts/{acc}",
+        headers=_auth(bandwidth_provider),
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/xml")
+    assert f"<AccountId>{acc}</AccountId>" in resp.text
 
 
 async def test_order_numbers_xml(client: AsyncClient, bandwidth_provider: dict):

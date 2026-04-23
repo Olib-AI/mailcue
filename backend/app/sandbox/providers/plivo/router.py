@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from fastapi.responses import JSONResponse
@@ -19,6 +19,7 @@ from app.sandbox.models import (
     SandboxMessage,
     SandboxPhoneNumber,
     SandboxPortRequest,
+    SandboxProvider,
 )
 from app.sandbox.providers.base import BaseSandboxProvider
 from app.sandbox.providers.plivo import formatter as fmt
@@ -29,11 +30,13 @@ from app.sandbox.seeds.available_numbers import (
     release_consumed,
 )
 from app.sandbox.service import (
+    _fire_webhooks,
     get_messages,
     get_or_create_conversation,
     store_message,
     update_raw_response,
 )
+from app.sandbox.signers import SigningFn, make_plivo_v3_signer
 from app.sandbox.voice.worker import start_call
 from app.sandbox.webhook_raw import fire_and_forget, post_form
 
@@ -76,6 +79,50 @@ async def _parse_form(request: Request) -> dict[str, Any]:
         return out
     body = await request.json()
     return body if isinstance(body, dict) else {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Account (verify credentials)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/v1/Account/{auth_id}/")
+async def fetch_account(
+    auth_id: str,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Plivo ``GET /v1/Account/{auth_id}/``.
+
+    fase's Plivo adapter uses this endpoint as the
+    :meth:`verify_credentials` probe.  Returns the real Account resource
+    shape so the SDK's auto-generated model loads without
+    :class:`AttributeError`.
+    """
+    provider = await _resolve(db, auth_id, authorization)
+    if provider is None:
+        return _unauth()
+    name = provider.name or f"Mailcue Sandbox Account ({auth_id})"
+    return {
+        "api_id": str(provider.id),
+        "account_type": "standard",
+        "address": "",
+        "auth_id": auth_id,
+        "auto_recharge": False,
+        "billing_mode": "prepaid",
+        "cash_credits": "10.00000",
+        "city": "",
+        "country": "US",
+        "created_at": (provider.created_at.isoformat() if provider.created_at else ""),
+        "modified_at": (provider.created_at.isoformat() if provider.created_at else ""),
+        "name": name,
+        "resource_uri": f"/v1/Account/{auth_id}/",
+        "state": "",
+        "time_zone": "UTC",
+        "timezone": "UTC",
+        "vat": "",
+        "zip": "",
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +181,11 @@ async def send_message(
     )
     response = fmt.format_send_message_response(msg, auth_id)
     await update_raw_response(db, msg, response)
+    # Plivo posts a ``Status=queued`` callback immediately after accepting
+    # the send request, then later ``delivered`` / ``failed`` — fire the
+    # first one here so fase sees the message progress through its status
+    # pipeline.
+    _fire_webhooks(msg)
     return JSONResponse(status_code=202, content=response)
 
 
@@ -698,17 +750,73 @@ class PlivoProvider(BaseSandboxProvider):
     async def build_webhook_payload(
         self, message: SandboxMessage, event_type: str
     ) -> dict[str, Any]:
+        """Plivo SMS webhooks are form-encoded.
+
+        Inbound: ``MessageUUID``, ``From``, ``To``, ``Text``, ``Type=sms``
+        (plus MMS-only: ``MediaN`` keys).  Matches
+        ``plivo.parse_inbound_sms_webhook`` on fase which looks up
+        ``MessageUUID``, ``From``, ``To``, ``Text``.
+
+        Status callback: ``MessageUUID``, ``From``, ``To``, ``Status``
+        (``queued``/``sent``/``delivered``/``failed``), ``Units``.
+        """
         to_raw = message.metadata_json.get("to")
-        to = to_raw[0] if isinstance(to_raw, list) and to_raw else (to_raw or "")
-        return {
-            "MessageUUID": message.external_id,
-            "From": message.metadata_json.get("from", message.sender),
-            "To": to,
-            "Text": message.content or "",
-            "Type": "mms" if message.metadata_json.get("media_urls") else "sms",
-            "Status": event_type,
-            "Direction": "outbound" if message.direction == "outbound" else "inbound",
+        to = (to_raw[0] if to_raw else "") if isinstance(to_raw, list) else str(to_raw or "")
+        from_number = message.metadata_json.get("from", message.sender)
+        media: list[str] = message.metadata_json.get("media_urls") or []
+        msg_type = "mms" if media else "sms"
+        if message.direction == "inbound":
+            payload: dict[str, Any] = {
+                "MessageUUID": message.external_id or "",
+                "From": from_number,
+                "To": to,
+                "Text": message.content or "",
+                "Type": msg_type,
+            }
+            # Plivo numbers the media keys ``Media0..N`` in its MMS webhooks.
+            for idx, murl in enumerate(media):
+                payload[f"Media{idx}"] = murl
+            return payload
+
+        status_map = {
+            "message.created": "queued",
+            "message.sent": "sent",
+            "message.delivered": "delivered",
+            "message.failed": "failed",
         }
+        status = status_map.get(event_type, "queued")
+        return {
+            "MessageUUID": message.external_id or "",
+            "From": from_number,
+            "To": to,
+            "Status": status,
+            "Units": "1",
+            "TotalRate": "0.00350",
+            "TotalAmount": "0.00350",
+            "MCC": "",
+            "MNC": "",
+        }
+
+    def webhook_content_type(
+        self, message: SandboxMessage, event_type: str
+    ) -> Literal["json", "form"]:
+        del message, event_type
+        return "form"
+
+    def build_webhook_signer(
+        self,
+        *,
+        message: SandboxMessage,
+        provider_record: SandboxProvider,
+        url: str,
+        payload_body: bytes,
+    ) -> SigningFn | None:
+        """Attach ``X-Plivo-Signature-V3`` (HMAC-SHA256) + nonce."""
+        del message, payload_body
+        auth_token = str(provider_record.credentials.get("auth_token") or "")
+        if not auth_token:
+            return None
+        return make_plivo_v3_signer(auth_token=auth_token, url=url)
 
     async def validate_credentials(self, credentials: dict[str, Any]) -> bool:
         return "auth_id" in credentials and "auth_token" in credentials

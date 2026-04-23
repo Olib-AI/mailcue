@@ -103,8 +103,8 @@ async def test_fetch_call(client: AsyncClient, vonage_provider: dict):
 
 async def test_number_search(client: AsyncClient, vonage_provider: dict):
     resp = await client.get(
-        "/sandbox/vonage/number/search/US",
-        params=_api_params(vonage_provider),
+        "/sandbox/vonage/number/search",
+        params={**_api_params(vonage_provider), "country": "US"},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -112,10 +112,40 @@ async def test_number_search(client: AsyncClient, vonage_provider: dict):
     assert all("msisdn" in n for n in data["numbers"])
 
 
-async def test_number_buy_and_cancel(client: AsyncClient, vonage_provider: dict):
-    search = await client.get(
+async def test_number_search_with_features(client: AsyncClient, vonage_provider: dict):
+    resp = await client.get(
+        "/sandbox/vonage/number/search",
+        params={
+            **_api_params(vonage_provider),
+            "country": "US",
+            "size": 5,
+            "features": "SMS,VOICE",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] > 0
+    # features must be a list of strings per real Vonage shape
+    for n in data["numbers"]:
+        assert isinstance(n["features"], list)
+        assert "msisdn" in n
+        assert "cost" in n
+        assert "type" in n
+
+
+async def test_number_search_legacy_410(client: AsyncClient, vonage_provider: dict):
+    """Old path-parameterised /number/search/{country} returns 410."""
+    resp = await client.get(
         "/sandbox/vonage/number/search/US",
         params=_api_params(vonage_provider),
+    )
+    assert resp.status_code == 410
+
+
+async def test_number_buy_and_cancel(client: AsyncClient, vonage_provider: dict):
+    search = await client.get(
+        "/sandbox/vonage/number/search",
+        params={**_api_params(vonage_provider), "country": "US"},
     )
     msisdn = search.json()["numbers"][0]["msisdn"]
     buy = await client.post(
@@ -150,3 +180,79 @@ async def test_port_endpoint_returns_404(client: AsyncClient, vonage_provider: d
         headers=_bearer(vonage_provider),
     )
     assert resp.status_code == 404
+
+
+# ── Messages API v1 — string-form to/from (Fix #2) ───────────────────
+
+
+async def test_messages_send_sms_string_to_from(client: AsyncClient, vonage_provider: dict):
+    """Real Vonage accepts bare-string ``to``/``from`` on SMS channel."""
+    resp = await client.post(
+        "/sandbox/vonage/v1/messages",
+        json={
+            "message_type": "text",
+            "channel": "sms",
+            "to": "15551234567",
+            "from": "Vonage",
+            "text": "Hello (string form)",
+        },
+        headers=_bearer(vonage_provider),
+    )
+    assert resp.status_code == 202
+    assert "message_uuid" in resp.json()
+
+
+async def test_messages_send_sms_mixed_shapes(client: AsyncClient, vonage_provider: dict):
+    """Object ``to`` + string ``from`` (and vice-versa) both work."""
+    resp = await client.post(
+        "/sandbox/vonage/v1/messages",
+        json={
+            "message_type": "text",
+            "channel": "sms",
+            "to": {"type": "sms", "number": "15551234567"},
+            "from": "15559876543",
+            "text": "mixed shapes",
+        },
+        headers=_bearer(vonage_provider),
+    )
+    assert resp.status_code == 202
+
+
+async def test_messages_send_invalid_to_422(client: AsyncClient, vonage_provider: dict):
+    """``to`` as a list (wrong shape) must 422 in Vonage-shaped body."""
+    resp = await client.post(
+        "/sandbox/vonage/v1/messages",
+        json={
+            "message_type": "text",
+            "channel": "sms",
+            "to": ["15551234567"],
+            "from": "15559876543",
+            "text": "bad",
+        },
+        headers=_bearer(vonage_provider),
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["title"] == "Invalid request body"
+
+
+# ── Account get-balance (Fix #4 / verify_credentials) ─────────────────
+
+
+async def test_account_get_balance(client: AsyncClient, vonage_provider: dict):
+    resp = await client.get(
+        "/sandbox/vonage/account/get-balance",
+        params=_api_params(vonage_provider),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body["value"], (int, float))
+    assert "autoReload" in body
+
+
+async def test_account_get_balance_unauth(client: AsyncClient, vonage_provider: dict):
+    resp = await client.get(
+        "/sandbox/vonage/account/get-balance",
+        params={"api_key": "wrong", "api_secret": "bad"},
+    )
+    assert resp.status_code == 401

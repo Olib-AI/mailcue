@@ -12,14 +12,14 @@ Mounts three routers:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.sandbox.models import SandboxMessage
+from app.sandbox.models import SandboxMessage, SandboxProvider
 from app.sandbox.providers.base import BaseSandboxProvider
 from app.sandbox.providers.twilio import calls as twilio_calls
 from app.sandbox.providers.twilio import numbers as twilio_numbers
@@ -33,11 +33,13 @@ from app.sandbox.providers.twilio.formatter import (
 from app.sandbox.providers.twilio.schemas import SendSMSRequest
 from app.sandbox.providers.twilio.service import extract_basic_auth, resolve_account
 from app.sandbox.service import (
+    _fire_webhooks,
     get_messages,
     get_or_create_conversation,
     store_message,
     update_raw_response,
 )
+from app.sandbox.signers import SigningFn, make_twilio_signer
 
 logger = logging.getLogger("mailcue.sandbox.twilio")
 
@@ -101,6 +103,63 @@ async def twilio_index(account_sid: str) -> Any:
     }
 
 
+@messages_router.get("/{account_sid}.json")
+async def fetch_account(
+    account_sid: str,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Twilio ``GET /2010-04-01/Accounts/{AccountSid}.json``.
+
+    The Twilio Python SDK issues this call from
+    ``client.api.accounts(sid).fetch()``; fase's Phone-Number adapter
+    uses it as the :meth:`verify_credentials` probe.  Returns the real
+    Account resource shape.
+    """
+    provider = await _resolve_from_auth(db, account_sid, authorization)
+    if provider is None:
+        return _unauth()
+    created_at = provider.created_at
+    date_created = created_at.strftime("%a, %d %b %Y %H:%M:%S +0000") if created_at else None
+    friendly_name = provider.name or f"Mailcue Sandbox ({account_sid})"
+    base_uri = f"/2010-04-01/Accounts/{account_sid}"
+    return {
+        "sid": account_sid,
+        "friendly_name": friendly_name,
+        "status": "active",
+        "type": "Full",
+        "auth_token": "[REDACTED]",
+        "owner_account_sid": account_sid,
+        "date_created": date_created,
+        "date_updated": date_created,
+        "uri": f"{base_uri}.json",
+        "subresource_uris": {
+            "addresses": f"{base_uri}/Addresses.json",
+            "applications": f"{base_uri}/Applications.json",
+            "authorized_connect_apps": f"{base_uri}/AuthorizedConnectApps.json",
+            "available_phone_numbers": f"{base_uri}/AvailablePhoneNumbers.json",
+            "balance": f"{base_uri}/Balance.json",
+            "calls": f"{base_uri}/Calls.json",
+            "conferences": f"{base_uri}/Conferences.json",
+            "connect_apps": f"{base_uri}/ConnectApps.json",
+            "incoming_phone_numbers": f"{base_uri}/IncomingPhoneNumbers.json",
+            "keys": f"{base_uri}/Keys.json",
+            "messages": f"{base_uri}/Messages.json",
+            "notifications": f"{base_uri}/Notifications.json",
+            "outgoing_caller_ids": f"{base_uri}/OutgoingCallerIds.json",
+            "queues": f"{base_uri}/Queues.json",
+            "recordings": f"{base_uri}/Recordings.json",
+            "signing_keys": f"{base_uri}/SigningKeys.json",
+            "sip": f"{base_uri}/SIP.json",
+            "short_codes": f"{base_uri}/SMS/ShortCodes.json",
+            "tokens": f"{base_uri}/Tokens.json",
+            "transcriptions": f"{base_uri}/Transcriptions.json",
+            "usage": f"{base_uri}/Usage.json",
+            "validation_requests": f"{base_uri}/OutgoingCallerIds.json",
+        },
+    }
+
+
 @messages_router.post("/{account_sid}/Messages.json")
 async def send_sms(
     account_sid: str,
@@ -142,6 +201,11 @@ async def send_sms(
     )
     response = format_message(msg, account_sid)
     await update_raw_response(db, msg, response)
+    # Real Twilio emits a ``MessageStatus=queued`` callback right after
+    # accepting the send request.  The webhook worker resolves every
+    # registered application-level callback URL for the account and posts
+    # the form-encoded event there.
+    _fire_webhooks(msg)
     return response
 
 
@@ -216,15 +280,116 @@ class TwilioProvider(BaseSandboxProvider):
     async def build_webhook_payload(
         self, message: SandboxMessage, event_type: str
     ) -> dict[str, Any]:
+        """Build a real-Twilio-shaped webhook payload.
+
+        Inbound SMS (``message.direction == 'inbound'``) matches the form
+        fields Twilio POSTs to the Messaging URL on an incoming message:
+        ``MessageSid``, ``AccountSid``, ``From``, ``To``, ``Body``,
+        ``NumMedia``, ``NumSegments``, plus ``MediaUrl0..N`` / the matching
+        ``MediaContentType0..N`` when MMS is present — the exact shape
+        fase's ``parse_inbound_sms_webhook`` adapter consumes.
+
+        Outbound status callbacks match Twilio's ``MessageStatus`` callback
+        (``queued`` → ``sent`` → ``delivered``) with ``MessageSid``,
+        ``AccountSid``, ``From``, ``To``, ``Body``, ``MessageStatus``.
+        """
+        media_urls: list[str] = message.metadata_json.get("media_urls", []) or []
+        account_sid = message.metadata_json.get("account_sid", "")
+        from_number = message.metadata_json.get("from", message.sender)
+        to_number = message.metadata_json.get("to", "")
+        # Every SID field must reference the SAME SID so fase's
+        # ``twilio.request_validator.RequestValidator`` recomputes the same
+        # signing base.  Use ``external_id`` when present; fall back to a
+        # stable derivation from ``message.id`` so repeat webhook builds
+        # (e.g. retry attempts) produce identical payloads.
+        sid = message.external_id or f"SM{message.id.replace('-', '')}"
+        if message.direction == "inbound":
+            payload: dict[str, Any] = {
+                "MessageSid": sid,
+                "SmsMessageSid": sid,
+                "SmsSid": sid,
+                "AccountSid": account_sid,
+                "From": from_number,
+                "To": to_number,
+                "Body": message.content or "",
+                "NumMedia": str(len(media_urls)),
+                "NumSegments": "1",
+                "ApiVersion": "2010-04-01",
+            }
+            for idx, url in enumerate(media_urls):
+                payload[f"MediaUrl{idx}"] = url
+                payload[f"MediaContentType{idx}"] = "image/jpeg"
+            return payload
+        # Outbound status callback.
+        status = event_type.removeprefix("message.") if "." in event_type else event_type
+        if status in {"created", "received"}:
+            status = "queued"
         return {
-            "MessageSid": message.external_id or generate_sid("SM"),
-            "AccountSid": message.metadata_json.get("account_sid", ""),
-            "From": message.metadata_json.get("from", message.sender),
-            "To": message.metadata_json.get("to", ""),
+            "MessageSid": sid,
+            "SmsMessageSid": sid,
+            "SmsSid": sid,
+            "AccountSid": account_sid,
+            "From": from_number,
+            "To": to_number,
             "Body": message.content or "",
-            "MessageStatus": event_type,
-            "NumMedia": str(len(message.metadata_json.get("media_urls", []) or [])),
+            "MessageStatus": status,
+            "NumMedia": str(len(media_urls)),
+            "NumSegments": "1",
+            "ApiVersion": "2010-04-01",
         }
+
+    def webhook_content_type(
+        self, message: SandboxMessage, event_type: str
+    ) -> Literal["json", "form"]:
+        # Twilio *always* posts SMS + status callbacks form-encoded; the
+        # JSON variant with ``X-Twilio-Content-Sha256`` is reserved for
+        # the newer TaskRouter APIs and is not how SMS webhooks travel.
+        del message, event_type
+        return "form"
+
+    def build_webhook_signer(
+        self,
+        *,
+        message: SandboxMessage,
+        provider_record: SandboxProvider,
+        url: str,
+        payload_body: bytes,
+    ) -> SigningFn | None:
+        """Sign with ``X-Twilio-Signature`` (HMAC-SHA1 over URL + sorted form)."""
+        del payload_body
+        auth_token = str(provider_record.credentials.get("auth_token") or "")
+        if not auth_token:
+            return None
+        # Rebuild the form dict we'll be signing — must match
+        # ``build_webhook_payload`` byte-for-byte so the receiver sees the
+        # same (url, form_params) basis for its own HMAC.
+        media_urls: list[str] = message.metadata_json.get("media_urls", []) or []
+        account_sid = message.metadata_json.get("account_sid", "")
+        from_number = message.metadata_json.get("from", message.sender)
+        to_number = message.metadata_json.get("to", "")
+        sid = message.external_id or f"SM{message.id.replace('-', '')}"
+        form_params: dict[str, Any] = {
+            "MessageSid": sid,
+            "SmsMessageSid": sid,
+            "SmsSid": sid,
+            "AccountSid": account_sid,
+            "From": from_number,
+            "To": to_number,
+            "Body": message.content or "",
+            "NumMedia": str(len(media_urls)),
+            "NumSegments": "1",
+            "ApiVersion": "2010-04-01",
+        }
+        if message.direction != "inbound":
+            form_params["MessageStatus"] = "queued"
+        for idx, murl in enumerate(media_urls):
+            form_params[f"MediaUrl{idx}"] = murl
+            form_params[f"MediaContentType{idx}"] = "image/jpeg"
+        return make_twilio_signer(
+            auth_token=auth_token,
+            url=url,
+            form_params=form_params,
+        )
 
     async def validate_credentials(self, credentials: dict[str, Any]) -> bool:
         return "account_sid" in credentials and "auth_token" in credentials

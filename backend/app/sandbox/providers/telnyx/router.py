@@ -21,6 +21,7 @@ from app.sandbox.models import (
     SandboxNumberOrder,
     SandboxPhoneNumber,
     SandboxPortRequest,
+    SandboxProvider,
 )
 from app.sandbox.providers.base import BaseSandboxProvider
 from app.sandbox.providers.telnyx import formatter as fmt
@@ -35,10 +36,12 @@ from app.sandbox.seeds.available_numbers import (
     release_consumed,
 )
 from app.sandbox.service import (
+    _fire_webhooks,
     get_or_create_conversation,
     store_message,
     update_raw_response,
 )
+from app.sandbox.signers import SigningFn
 from app.sandbox.voice.worker import start_call
 from app.sandbox.webhook_raw import fire_and_forget, post_json
 
@@ -109,6 +112,84 @@ async def get_public_key(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Account (verify credentials)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/v2/balance")
+async def fetch_balance(
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Telnyx ``GET /v2/balance``.
+
+    Real endpoint returns the account's current balance, credit limit,
+    and currency.  We emit a conservative USD shape so fase's SDK
+    deserialisation works unchanged.
+    """
+    provider = await _resolve(db, authorization)
+    if provider is None:
+        return _unauth()
+    return {
+        "data": {
+            "record_type": "balance",
+            "balance": "10.00000",
+            "credit_limit": "0.00000",
+            "available_credit": "10.00000",
+            "currency": "USD",
+        }
+    }
+
+
+@router.get("/v2/messaging_profiles")
+async def list_messaging_profiles(
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+    page_size: int = Query(default=20, alias="page[size]"),
+    page_number: int = Query(default=1, alias="page[number]"),
+) -> Any:
+    """Telnyx ``GET /v2/messaging_profiles``.
+
+    fase's Telnyx adapter calls this as its :meth:`verify_credentials`
+    probe (cheap, paginated).  We return a seeded single-profile list
+    that matches the SDK's deserialisation contract.
+    """
+    provider = await _resolve(db, authorization)
+    if provider is None:
+        return _unauth()
+    profile_id = f"mailcue-msg-profile-{provider.id}"
+    now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    data = [
+        {
+            "id": profile_id,
+            "record_type": "messaging_profile",
+            "name": provider.name or "Mailcue Sandbox Messaging Profile",
+            "enabled": True,
+            "webhook_url": None,
+            "webhook_failover_url": None,
+            "webhook_api_version": "2",
+            "number_pool_settings": None,
+            "url_shortener_settings": None,
+            "mms_fall_back_to_sms": False,
+            "mms_transcoding": False,
+            "whitelisted_destinations": ["US"],
+            "v1_secret": None,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+    ]
+    return {
+        "data": data[: max(1, min(page_size, 20))],
+        "meta": {
+            "total_pages": 1,
+            "total_results": 1,
+            "page_number": page_number,
+            "page_size": page_size,
+        },
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Messages
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -156,6 +237,11 @@ async def send_message(
     )
     response = fmt.format_message(msg)
     await update_raw_response(db, msg, response)
+    # Real Telnyx emits ``message.sent`` then ``message.finalized`` events
+    # as the message traverses the carrier.  Fire the provider-formatted
+    # callback at every registered endpoint so fase's status-webhook
+    # handler ticks.
+    _fire_webhooks(msg)
     return JSONResponse(status_code=200, content=response)
 
 
@@ -818,17 +904,82 @@ class TelnyxProvider(BaseSandboxProvider):
     async def build_webhook_payload(
         self, message: SandboxMessage, event_type: str
     ) -> dict[str, Any]:
+        """Telnyx v2 webhooks wrap every event as ``{"data": {...}}``.
+
+        Inbound shape: ``{"data": {"record_type": "event", "event_type":
+        "message.received", "id": ..., "occurred_at": ..., "payload": {
+        "id": ..., "to": [{"phone_number": ...}], "from": {"phone_number":
+        ...}, "text": ..., "direction": "inbound", ...}}}`` — matches fase's
+        ``telnyx.parse_inbound_sms_webhook`` which reads
+        ``data.payload.from.phone_number`` + ``data.payload.to[0].phone_number``.
+
+        The outbound status path re-uses the same envelope but with
+        ``event_type=message.sent``/``message.finalized`` and
+        ``direction=outbound``.
+        """
+        payload = fmt.format_message(message)["data"]
+        # Telnyx carries ``to`` / ``from`` as objects with ``phone_number``
+        # inside the ``payload`` — already correct from ``format_message``.
+        # Ensure ``payload.id`` is populated (simulate-inbound messages may
+        # not have an ``external_id`` set).
+        payload["id"] = message.external_id or message.id
+        if message.direction == "inbound":
+            payload["direction"] = "inbound"
+            event = "message.received"
+        else:
+            payload["direction"] = "outbound"
+            # Real Telnyx dispatches ``message.sent`` on carrier hand-off
+            # and ``message.finalized`` on terminal state.  Map best-guess.
+            if event_type in {"message.delivered", "message.finalized"}:
+                event = "message.finalized"
+            else:
+                event = "message.sent"
         return {
             "data": {
-                "event_type": "message.received"
-                if message.direction == "inbound"
-                else "message.finalized",
-                "id": message.external_id,
+                "event_type": event,
+                # Stable event-id so retries and signer/body re-builds stay
+                # in sync — bare ``message.id`` is UUID4-derived.
+                "id": message.external_id or message.id,
                 "occurred_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-                "payload": fmt.format_message(message)["data"],
+                "payload": payload,
                 "record_type": "event",
-            }
+            },
+            "meta": {"attempt": 1, "delivered_to": ""},
         }
+
+    def build_webhook_signer(
+        self,
+        *,
+        message: SandboxMessage,
+        provider_record: SandboxProvider,
+        url: str,
+        payload_body: bytes,
+    ) -> SigningFn | None:
+        """Telnyx signs webhooks with Ed25519 per spec.
+
+        Headers: ``Telnyx-Signature-Ed25519`` (Base64 signature) and
+        ``Telnyx-Timestamp`` (Unix seconds).  Signing base is
+        ``f"{timestamp}|{body}"``.
+        """
+        del message, url, payload_body
+        creds = dict(provider_record.credentials)
+        priv_b64 = creds.get("ed25519_private_key")
+        if not priv_b64:
+            # Lazy keypair generation if none exists — mirrors what the
+            # create-call path does.  Mutates provider_record in place;
+            # the caller is responsible for commit.
+            priv_b64, _pub_b64 = ensure_keypair(provider_record)
+        priv_b64_str = str(priv_b64)
+
+        async def _sign(headers: dict[str, str], body: bytes) -> dict[str, str]:
+            ts = str(int(datetime.now(UTC).timestamp()))
+            sig = sign_webhook(priv_b64_str, body, ts)
+            merged = dict(headers)
+            merged["telnyx-timestamp"] = ts
+            merged["telnyx-signature-ed25519"] = sig
+            return merged
+
+        return _sign
 
     async def validate_credentials(self, credentials: dict[str, Any]) -> bool:
         return "api_key" in credentials

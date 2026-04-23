@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
-from app.sandbox.models import SandboxMessage
+from app.sandbox.models import SandboxMessage, SandboxProvider
 from app.sandbox.providers.bandwidth import formatter as fmt
 from app.sandbox.providers.bandwidth.schemas import (
     BandwidthBrandRequest,
@@ -46,10 +46,12 @@ from app.sandbox.seeds.available_numbers import (
     release_consumed,
 )
 from app.sandbox.service import (
+    _fire_webhooks,
     get_or_create_conversation,
     store_message,
     update_raw_response,
 )
+from app.sandbox.signers import SigningFn, make_bandwidth_signer
 from app.sandbox.voice.worker import start_call
 
 logger = logging.getLogger("mailcue.sandbox.bandwidth")
@@ -146,6 +148,10 @@ async def send_message(
     )
     response = fmt.format_message(msg, account_id)
     await update_raw_response(db, msg, response)
+    # Fire a ``message-sent``/``message-delivered``-style callback to every
+    # registered application endpoint — mirrors how real Bandwidth posts
+    # Messaging webhooks to the Application's callback URL.
+    _fire_webhooks(msg)
     return JSONResponse(status_code=202, content=response)
 
 
@@ -171,6 +177,26 @@ async def list_messages(
         },
         "messages": [fmt.format_message(m, account_id) for m in messages],
     }
+
+
+@router.get("/api/v2/users/{account_id}/media")
+async def list_media(
+    account_id: str,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Bandwidth Messaging v2 ``GET /users/{accountId}/media``.
+
+    Fase's :meth:`verify_credentials` probe hits this endpoint to assert
+    the Basic-auth credentials are valid for the account.  The real API
+    returns a JSON array of media metadata; we return an empty array
+    (the sandbox never produces MMS media uploads) but **do** enforce
+    auth so fase sees a 200 for good creds and 401 otherwise.
+    """
+    provider = await _resolve(db, account_id, authorization)
+    if provider is None:
+        return _unauth_json()
+    return JSONResponse(status_code=200, content=[])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -308,24 +334,84 @@ async def fetch_call(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/accounts/{account_id}/availableTelephoneNumbers")
+@router.get("/api/accounts/{account_id}")
+async def fetch_dashboard_account(
+    account_id: str,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Bandwidth Dashboard ``GET /api/accounts/{accountId}`` (XML).
+
+    The real Dashboard API exposes basic account metadata here.  We
+    return a minimal ``<AccountResponse><Account>...</Account></AccountResponse>``
+    tree containing the account id + friendly name so consumers can
+    sanity-check their credentials.
+    """
+    provider = await _resolve_dashboard(db, account_id, authorization)
+    if provider is None:
+        return _unauth_xml()
+    company = (
+        (provider.name or f"Mailcue Sandbox Account {account_id}")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<AccountResponse>"
+        "<Account>"
+        f"<AccountId>{account_id}</AccountId>"
+        f"<CompanyName>{company}</CompanyName>"
+        "<AccountType>Business</AccountType>"
+        "</Account>"
+        "</AccountResponse>"
+    )
+    return Response(content=body, media_type="application/xml")
+
+
+@router.get("/api/accounts/{account_id}/availableNumbers")
 async def available_numbers_search(
     account_id: str,
-    request: Request,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     area_code: str | None = Query(default=None, alias="areaCode"),
     quantity: int = Query(default=50, alias="quantity"),
+    pattern: str | None = Query(default=None, alias="pattern"),
+    toll_free_wildcard_pattern: str | None = Query(default=None, alias="tollFreeWildCardPattern"),
+    lata: str | None = Query(default=None, alias="lata"),
+    state: str | None = Query(default=None, alias="state"),
 ) -> Any:
+    """Bandwidth Dashboard/Numbers API — GET availableNumbers.
+
+    Real endpoint lives at
+    ``https://dashboard.bandwidth.com/api/accounts/{accountId}/availableNumbers``
+    and returns an XML ``<SearchResult>`` body.  The ``pattern`` query
+    param accepts Bandwidth's wildcard syntax; ``tollFreeWildCardPattern``
+    signals toll-free search.  ``quantity`` caps at 5000 per the real
+    API but our seed pool returns at most ``page_size`` entries.
+    """
     provider = await _resolve_dashboard(db, account_id, authorization)
     if provider is None:
         return _unauth_xml()
-    # Bandwidth number search can be GET or POST; either way search params
-    # drive the seed-table filter.
+
+    # ``tollFreeWildCardPattern`` is mutually exclusive with ``pattern``
+    # on real Bandwidth — either signals toll-free search or triggers an
+    # ApiError.  We emulate the canonical case: if the toll-free
+    # parameter is present, return toll-free entries from the seed pool.
+    number_type = "tollfree" if toll_free_wildcard_pattern is not None else "local"
+
+    # Bandwidth's ``pattern`` syntax allows a leading/trailing ``*``
+    # wildcard.  We treat any non-wildcard middle substring as a
+    # ``contains`` filter so seed lookup matches the real API's intent.
+    contains: str | None = None
+    if pattern:
+        contains = pattern.strip("*") or None
+
     numbers = get_available_numbers(
         iso_country="US",
-        number_type="local",
+        number_type=number_type,
         area_code=area_code,
+        contains=contains,
         page_size=quantity,
     )
     return Response(
@@ -334,25 +420,27 @@ async def available_numbers_search(
     )
 
 
-@router.get("/accounts/{account_id}/availableTelephoneNumbers")
-async def available_numbers_search_get(
-    account_id: str,
-    db: AsyncSession = Depends(get_db),
-    authorization: str | None = Header(default=None),
-    area_code: str | None = Query(default=None, alias="areaCode"),
-    quantity: int = Query(default=50, alias="quantity"),
-) -> Any:
-    return await available_numbers_search(
-        account_id,
-        Request(scope={"type": "http", "headers": [], "method": "GET"}),
-        db,
-        authorization,
-        area_code,
-        quantity,
+@router.post("/accounts/{account_id}/availableTelephoneNumbers", response_model=None)
+@router.get("/accounts/{account_id}/availableTelephoneNumbers", response_model=None)
+async def available_numbers_search_gone(account_id: str) -> Response:
+    """Legacy mailcue path kept as 410 Gone for 30 days.
+
+    The canonical endpoint lives at
+    ``GET /api/accounts/{accountId}/availableNumbers`` matching the real
+    Bandwidth Dashboard/Numbers API.  Any caller still pointing at the
+    old path gets a loud, unambiguous 410 rather than silent breakage.
+    """
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        "<Error><Code>410</Code>"
+        "<Description>availableTelephoneNumbers is deprecated; use "
+        f"GET /api/accounts/{account_id}/availableNumbers instead."
+        "</Description></Error>"
     )
+    return Response(status_code=410, content=body, media_type="application/xml")
 
 
-@router.post("/accounts/{account_id}/orders")
+@router.post("/api/accounts/{account_id}/orders")
 async def order_numbers(
     account_id: str,
     request: Request,
@@ -383,7 +471,7 @@ async def order_numbers(
     )
 
 
-@router.get("/accounts/{account_id}/orders/{order_id}")
+@router.get("/api/accounts/{account_id}/orders/{order_id}")
 async def fetch_order(
     account_id: str,
     order_id: str,
@@ -409,7 +497,7 @@ async def fetch_order(
     )
 
 
-@router.put("/accounts/{account_id}/phonenumbers/{tn}/messagingsettings")
+@router.put("/api/accounts/{account_id}/phonenumbers/{tn}/messagingsettings")
 async def set_messaging_settings(
     account_id: str,
     tn: str,
@@ -440,7 +528,7 @@ async def set_messaging_settings(
     return Response(content=fmt.format_messaging_settings_xml(pn), media_type="application/xml")
 
 
-@router.put("/accounts/{account_id}/phonenumbers/{tn}/voicesettings")
+@router.put("/api/accounts/{account_id}/phonenumbers/{tn}/voicesettings")
 async def set_voice_settings(
     account_id: str,
     tn: str,
@@ -470,7 +558,9 @@ async def set_voice_settings(
     return Response(content=fmt.format_voice_settings_xml(pn), media_type="application/xml")
 
 
-@router.delete("/accounts/{account_id}/phonenumbers/{tn}", status_code=204, response_model=None)
+@router.delete(
+    "/api/accounts/{account_id}/phonenumbers/{tn}", status_code=204, response_model=None
+)
 async def release_number(
     account_id: str,
     tn: str,
@@ -494,7 +584,7 @@ async def release_number(
     return Response(status_code=204)
 
 
-@router.post("/accounts/{account_id}/portIns")
+@router.post("/api/accounts/{account_id}/portIns")
 async def create_port_in(
     account_id: str,
     request: Request,
@@ -525,7 +615,7 @@ async def create_port_in(
     return Response(content=fmt.format_port_in_xml(order), media_type="application/xml")
 
 
-@router.get("/accounts/{account_id}/portIns/{port_id}")
+@router.get("/api/accounts/{account_id}/portIns/{port_id}")
 async def fetch_port_in(
     account_id: str,
     port_id: str,
@@ -550,7 +640,7 @@ async def fetch_port_in(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.post("/accounts/{account_id}/csp/brands")
+@router.post("/api/accounts/{account_id}/csp/brands")
 async def create_brand_endpoint(
     account_id: str,
     request: Request,
@@ -570,7 +660,7 @@ async def create_brand_endpoint(
     return JSONResponse(status_code=201, content=fmt.format_brand(brand))
 
 
-@router.get("/accounts/{account_id}/csp/brands/{brand_id}")
+@router.get("/api/accounts/{account_id}/csp/brands/{brand_id}")
 async def fetch_brand(
     account_id: str,
     brand_id: str,
@@ -588,7 +678,7 @@ async def fetch_brand(
     return fmt.format_brand(brand)
 
 
-@router.post("/accounts/{account_id}/csp/campaigns")
+@router.post("/api/accounts/{account_id}/csp/campaigns")
 async def create_campaign_endpoint(
     account_id: str,
     request: Request,
@@ -615,7 +705,7 @@ async def create_campaign_endpoint(
     return JSONResponse(status_code=201, content=fmt.format_campaign(campaign))
 
 
-@router.get("/accounts/{account_id}/csp/campaigns/{campaign_id}")
+@router.get("/api/accounts/{account_id}/csp/campaigns/{campaign_id}")
 async def fetch_campaign(
     account_id: str,
     campaign_id: str,
@@ -651,17 +741,100 @@ class BandwidthProvider(BaseSandboxProvider):
 
     async def build_webhook_payload(
         self, message: SandboxMessage, event_type: str
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
+        """Bandwidth always delivers webhooks as a JSON array of events.
+
+        Inbound format: ``[{"type": "message-received", "time": ..., "description": ...,
+        "to": "<dest>", "message": {"id": ..., "owner": "<dest>", "applicationId": ...,
+        "time": ..., "segmentCount": 1, "direction": "in", "to": ["<dest>"],
+        "from": "<src>", "text": "..."}}]`` — matches fase's
+        ``parse_inbound_sms_webhook`` expectation that the first array
+        element carries a ``message`` object with ``id`` / ``from`` / ``to`` /
+        ``text``.
+
+        Status callback format uses ``type="message-sent"`` /
+        ``"message-delivered"`` / ``"message-failed"`` depending on
+        ``event_type``.
+        """
         account_id = message.metadata_json.get("account_id", "")
-        return {
-            "type": "message-received" if message.direction == "inbound" else "message-delivered",
-            "time": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            "description": "Message received" if message.direction == "inbound" else "Delivered",
-            "to": (message.metadata_json.get("to") or [""])[0]
-            if isinstance(message.metadata_json.get("to"), list)
-            else message.metadata_json.get("to", ""),
-            "message": fmt.format_message(message, account_id),
+        to_raw = message.metadata_json.get("to")
+        to_list: list[str]
+        if isinstance(to_raw, list):
+            to_list = [str(t) for t in to_raw]
+        elif to_raw:
+            to_list = [str(to_raw)]
+        else:
+            to_list = [""]
+        from_number = message.metadata_json.get("from", message.sender)
+        media = message.metadata_json.get("media_urls") or []
+        now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+        if message.direction == "inbound":
+            # Canonical Bandwidth v2 inbound message envelope.
+            return [
+                {
+                    "type": "message-received",
+                    "time": now_iso,
+                    "description": "Incoming message received",
+                    "to": to_list[0],
+                    "message": {
+                        "id": message.external_id or fmt.new_message_id(),
+                        "owner": to_list[0],
+                        "applicationId": message.metadata_json.get("application_id", ""),
+                        "time": now_iso,
+                        "segmentCount": 1,
+                        "direction": "in",
+                        "to": to_list,
+                        "from": from_number,
+                        "text": message.content or "",
+                        "media": list(media),
+                    },
+                }
+            ]
+
+        status_map = {
+            "message.created": "message-sent",
+            "message.sent": "message-sent",
+            "message.delivered": "message-delivered",
+            "message.failed": "message-failed",
         }
+        envelope_type = status_map.get(event_type, "message-sent")
+        return [
+            {
+                "type": envelope_type,
+                "time": now_iso,
+                "description": envelope_type.replace("-", " ").capitalize(),
+                "to": to_list[0],
+                "message": fmt.format_message(message, account_id),
+            }
+        ]
+
+    def build_webhook_signer(
+        self,
+        *,
+        message: SandboxMessage,
+        provider_record: SandboxProvider,
+        url: str,
+        payload_body: bytes,
+    ) -> SigningFn | None:
+        """Attach HTTP Basic to the webhook POST.
+
+        Real Bandwidth Voice/Messaging Applications let operators configure
+        *separate* callback credentials (``callback_username`` /
+        ``callback_password``) from the API credentials (``user_id`` /
+        ``password``).  fase's verification reuses the API credentials,
+        so we prefer the callback pair only when it's explicitly set and
+        otherwise fall back to the API credentials that every Bandwidth
+        consumer knows by default.
+        """
+        del message, url, payload_body
+        creds = provider_record.credentials
+        user = creds.get("callback_username") or creds.get("user_id") or creds.get("username")
+        password = creds.get("callback_password") or creds.get("password")
+        return make_bandwidth_signer(
+            callback_username=user,
+            callback_password=password,
+        )
 
     async def validate_credentials(self, credentials: dict[str, Any]) -> bool:
         return all(k in credentials for k in ("username", "password", "account_id"))

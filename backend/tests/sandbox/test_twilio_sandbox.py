@@ -298,3 +298,57 @@ async def test_capability_matrix(client: AsyncClient):
     twilio = data["providers"]["twilio"]
     for cap in ("sms", "mms", "voice", "porting", "tcr", "number_search"):
         assert twilio[cap] is True
+
+
+# ── Account resource fetch (verify_credentials probe) ────────────────
+
+
+async def test_account_fetch(client: AsyncClient, twilio_provider: dict):
+    sid = twilio_provider["credentials"]["account_sid"]
+    resp = await client.get(
+        f"{TWILIO_PREFIX}/{sid}.json",
+        headers=_auth(twilio_provider),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sid"] == sid
+    assert body["status"] == "active"
+    assert body["type"] == "Full"
+    assert body["owner_account_sid"] == sid
+    assert body["uri"] == f"/2010-04-01/Accounts/{sid}.json"
+    # ``subresource_uris`` must include ``messages`` + ``calls`` so the
+    # Twilio SDK's auto-generated Account resource hydrates properly.
+    assert "messages" in body["subresource_uris"]
+    assert "calls" in body["subresource_uris"]
+
+
+async def test_account_fetch_unauth(client: AsyncClient, twilio_provider: dict):
+    sid = twilio_provider["credentials"]["account_sid"]
+    resp = await client.get(
+        f"{TWILIO_PREFIX}/{sid}.json",
+        headers={"Authorization": basic_auth_header(sid, "wrong")},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["code"] == 20003
+
+
+# ── Available numbers capability shape ───────────────────────────────
+
+
+async def test_available_numbers_capabilities_shape(client: AsyncClient, twilio_provider: dict):
+    """Real Twilio returns ``capabilities`` with mixed case keys:
+    ``voice`` lowercase, ``SMS``/``MMS`` uppercase, ``fax`` lowercase.
+    """
+    resp = await client.get(
+        _url(twilio_provider, "/AvailablePhoneNumbers/US/Local.json"),
+        params={"AreaCode": "415", "PageSize": 1},
+        headers=_auth(twilio_provider),
+    )
+    assert resp.status_code == 200
+    first = resp.json()["available_phone_numbers"][0]
+    caps = first["capabilities"]
+    assert set(caps.keys()) == {"voice", "SMS", "MMS", "fax"}
+    assert isinstance(caps["voice"], bool)
+    assert isinstance(caps["SMS"], bool)
+    assert isinstance(caps["MMS"], bool)
+    assert isinstance(caps["fax"], bool)

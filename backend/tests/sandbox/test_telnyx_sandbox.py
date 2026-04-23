@@ -267,3 +267,39 @@ async def test_update_phone_number(client: AsyncClient, telnyx_provider: dict):
     )
     assert update.status_code == 200
     assert update.json()["data"]["messaging_profile_id"] == "profile-xyz"
+
+
+# ── Balance + messaging_profiles (verify_credentials probes) ─────────
+
+
+async def test_balance(client: AsyncClient, telnyx_provider: dict):
+    resp = await client.get(
+        "/sandbox/telnyx/v2/balance",
+        headers=_auth(telnyx_provider),
+    )
+    assert resp.status_code == 200
+    body = resp.json()["data"]
+    assert body["record_type"] == "balance"
+    assert body["currency"] == "USD"
+    assert "balance" in body
+
+
+async def test_balance_unauth(client: AsyncClient):
+    resp = await client.get(
+        "/sandbox/telnyx/v2/balance",
+        headers={"Authorization": "Bearer wrong"},
+    )
+    assert resp.status_code == 401
+
+
+async def test_messaging_profiles(client: AsyncClient, telnyx_provider: dict):
+    """fase verify_credentials probe — GET /v2/messaging_profiles."""
+    resp = await client.get(
+        "/sandbox/telnyx/v2/messaging_profiles",
+        params={"page[size]": 1},
+        headers=_auth(telnyx_provider),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body["data"], list)
+    assert body["meta"]["total_results"] >= 0

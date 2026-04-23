@@ -216,6 +216,49 @@ def make_vonage_messages_signer(
     return _sign
 
 
+def make_vonage_hs256_signer(
+    *,
+    application_id: str,
+    signature_secret: str,
+) -> SigningFn:
+    """Attach ``Authorization: Bearer <HS256-JWT>`` for Vonage webhook calls.
+
+    The Vonage Messages API v1 delivers callbacks signed as an HS256 JWT
+    whose signing secret is the Messages-enabled Application's
+    ``signature_secret`` (distinct from ``private_key`` used when signing
+    API requests *to* Vonage).  fase's
+    :meth:`vonage.verify_webhook_signature` uses
+    ``vonage_jwt.verify_jwt.verify_signature`` which performs a
+    ``jwt.decode`` with HS256 + the shared secret.
+    """
+
+    async def _sign(headers: dict[str, str], body: bytes) -> dict[str, str]:
+        del body
+        now = int(time.time())
+        header = {"typ": "JWT", "alg": "HS256"}
+        payload = {
+            "iss": application_id,
+            "jti": secrets.token_urlsafe(16),
+            "iat": now,
+            "exp": now + 900,
+            "application_id": application_id,
+        }
+        header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+        payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+        signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
+        sig = hmac.new(
+            signature_secret.encode("utf-8"),
+            signing_input,
+            hashlib.sha256,
+        ).digest()
+        token = f"{header_b64}.{payload_b64}.{_b64url(sig)}"
+        merged = dict(headers)
+        merged["Authorization"] = f"Bearer {token}"
+        return merged
+
+    return _sign
+
+
 # ── Introspection helpers for tests ──────────────────────────────────────
 
 
@@ -246,6 +289,7 @@ __all__ = [
     "make_bandwidth_signer",
     "make_plivo_v3_signer",
     "make_twilio_signer",
+    "make_vonage_hs256_signer",
     "make_vonage_messages_signer",
     "verify_plivo_v3_signature",
 ]
