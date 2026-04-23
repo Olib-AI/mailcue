@@ -464,6 +464,50 @@ async def list_owned(
     return fmt.format_owned_number_list(nums, auth_id)
 
 
+@router.post("/v1/Account/{auth_id}/Number/{number}/")
+async def update_owned(
+    auth_id: str,
+    number: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(default=None),
+) -> Any:
+    """Update an owned number's metadata.
+
+    Real Plivo endpoint documented at
+    https://www.plivo.com/docs/numbers/api/your-numbers/#edit-a-number —
+    accepts ``sms_url``, ``sms_method``, ``voice_url``, ``voice_method``,
+    ``app_id``, ``alias`` and returns a ``202 Accepted`` with a short
+    acknowledgement payload.
+    """
+    provider = await _resolve(db, auth_id, authorization)
+    if provider is None:
+        return _unauth()
+    e164 = "+" + number.lstrip("+")
+    stmt = select(SandboxPhoneNumber).where(
+        SandboxPhoneNumber.provider_id == provider.id,
+        SandboxPhoneNumber.e164 == e164,
+    )
+    result = await db.execute(stmt)
+    pn = result.scalar_one_or_none()
+    if pn is None:
+        return JSONResponse(status_code=404, content={"error": "not found"})
+    body = await _parse_form(request)
+    new_meta = dict(pn.metadata_json or {})
+    for key in ("sms_url", "sms_method", "voice_url", "voice_method", "app_id", "alias"):
+        if key in body and body[key] is not None:
+            new_meta[key] = body[key]
+    pn.metadata_json = new_meta
+    await db.commit()
+    return JSONResponse(
+        status_code=202,
+        content={
+            "api_id": str(pn.id),
+            "message": "changed",
+        },
+    )
+
+
 @router.delete("/v1/Account/{auth_id}/Number/{number}/", status_code=204, response_model=None)
 async def release_owned(
     auth_id: str,

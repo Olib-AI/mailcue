@@ -536,6 +536,16 @@ async def set_voice_settings(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
 ) -> Any:
+    """Bind a voice Application to a TN.
+
+    The Bandwidth dashboard API accepts either
+    ``<HttpVoiceV2AppId>{id}</HttpVoiceV2AppId>`` (V2 voice API) or the
+    legacy ``<ApplicationId>{id}</ApplicationId>`` form nested inside
+    ``<VoiceSettings>``.  We accept both so fase's real-provider adapter
+    (which correctly sends the V2 tag) lands without a 405 / parse
+    warning.  See the Bandwidth TN Settings reference:
+    https://dev.bandwidth.com/docs/numbers/applications/tnVoiceApp/
+    """
     provider = await _resolve_dashboard(db, account_id, authorization)
     if provider is None:
         return _unauth_xml()
@@ -550,7 +560,11 @@ async def set_voice_settings(
     raw = (await request.body()).decode("utf-8")
     import re as _re
 
-    m = _re.search(r"<ApplicationId>([^<]+)</ApplicationId>", raw)
+    # Prefer the V2 voice tag (what fase + real Bandwidth API use);
+    # fall back to the legacy ``<ApplicationId>`` tag for older clients.
+    m = _re.search(r"<HttpVoiceV2AppId>([^<]+)</HttpVoiceV2AppId>", raw)
+    if m is None:
+        m = _re.search(r"<ApplicationId>([^<]+)</ApplicationId>", raw)
     app_id = m.group(1) if m else ""
     pn.metadata_json = {**pn.metadata_json, "voice_application_id": app_id}
     await db.commit()

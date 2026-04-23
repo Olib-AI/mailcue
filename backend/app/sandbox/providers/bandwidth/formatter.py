@@ -193,10 +193,14 @@ def format_messaging_settings_xml(number: SandboxPhoneNumber) -> str:
 
 def format_voice_settings_xml(number: SandboxPhoneNumber) -> str:
     root = ET.Element("VoiceSettings")
-    app_id = ET.SubElement(root, "ApplicationSettings")
-    ET.SubElement(app_id, "ApplicationId").text = number.metadata_json.get(
-        "voice_application_id", ""
-    )
+    app_settings = ET.SubElement(root, "ApplicationSettings")
+    voice_app_id = number.metadata_json.get("voice_application_id", "")
+    # Emit the V2 voice tag (fase + real Bandwidth dashboard API);
+    # keep the legacy ApplicationId tag alongside it so older clients
+    # that read back the settings before re-PUT-ing still parse
+    # correctly.
+    ET.SubElement(app_settings, "HttpVoiceV2AppId").text = voice_app_id
+    ET.SubElement(app_settings, "ApplicationId").text = voice_app_id
     return _xml_declaration() + ET.tostring(root, encoding="unicode")
 
 
