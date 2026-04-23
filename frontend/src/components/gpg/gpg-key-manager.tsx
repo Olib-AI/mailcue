@@ -54,6 +54,7 @@ const generateKeySchema = z.object({
 });
 
 type GenerateKeyValues = z.infer<typeof generateKeySchema>;
+type GenerateKeyFormValues = z.input<typeof generateKeySchema>;
 
 // --- Import Key Schema ---
 
@@ -99,7 +100,11 @@ function GpgKeyManager() {
 
   // --- Generate Form ---
 
-  const generateForm = useForm<GenerateKeyValues>({
+  const generateForm = useForm<
+    GenerateKeyFormValues,
+    unknown,
+    GenerateKeyValues
+  >({
     resolver: zodResolver(generateKeySchema),
     defaultValues: {
       mailbox_address: "",

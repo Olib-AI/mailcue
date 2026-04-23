@@ -54,6 +54,7 @@ const createUserSchema = z.object({
 });
 
 type CreateUserValues = z.infer<typeof createUserSchema>;
+type CreateUserFormValues = z.input<typeof createUserSchema>;
 
 const editUserSchema = z.object({
   max_mailboxes: z.coerce.number().int().min(1, "Must be at least 1"),
@@ -62,6 +63,7 @@ const editUserSchema = z.object({
 });
 
 type EditUserValues = z.infer<typeof editUserSchema>;
+type EditUserFormValues = z.input<typeof editUserSchema>;
 
 function UserManager() {
   const { data, isLoading, isError, error, refetch } = useUsers();
@@ -73,7 +75,7 @@ function UserManager() {
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null);
 
-  const createForm = useForm<CreateUserValues>({
+  const createForm = useForm<CreateUserFormValues, unknown, CreateUserValues>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       username: "",
@@ -84,7 +86,7 @@ function UserManager() {
     },
   });
 
-  const editForm = useForm<EditUserValues>({
+  const editForm = useForm<EditUserFormValues, unknown, EditUserValues>({
     resolver: zodResolver(editUserSchema),
   });
 
