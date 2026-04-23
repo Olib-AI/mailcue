@@ -57,7 +57,7 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 | **Let's Encrypt / ACME** | Automatic TLS certificate provisioning via Certbot in production mode. Also supports externally mounted certs via `MAILCUE_TLS_CERT_PATH` / `MAILCUE_TLS_KEY_PATH`. |
 | **Email Aliases** | Create aliases (e.g., `info@domain.com` → `admin@domain.com`) with optional catch-all support. Managed via the admin UI and REST API. |
 | **Production Readiness Dashboard** | Settings page shows a checklist of production readiness: TLS status, domain verification, Postfix/Dovecot hardening, and more. |
-| **Smarthost Relay** | Optional outbound relay via external SMTP services (SendGrid, Mailgun, AWS SES) when port 25 is blocked. Configured via `MAILCUE_RELAY_*` env vars. |
+| **Smarthost Relay** | Optional outbound relay via an external authenticated SMTP service when port 25 is blocked. Configured via `MAILCUE_RELAY_*` env vars. |
 | **Server Configuration** | Configure server hostname and upload custom TLS certificates from the admin UI. Certs persist across container restarts. |
 | **Multi-User** | Admin can create users with per-user mailbox quotas. Each user has fully isolated mailboxes, emails, GPG keys, and API keys -- no user can access another's data. |
 | **Admin Panel** | Create and delete mailboxes, manage users, manage aliases, inject test emails, manage domains, configure mail server -- all from the browser. |
@@ -217,6 +217,93 @@ curl -X POST http://localhost:8088/api/v1/emails/inject \
   }'
 ```
 
+## Sharing mailcue across projects
+
+MailCue is designed as a **shared development dependency**.  Multiple consumer
+projects (fase, and other Olib products) can talk to a single running MailCue
+container at the same time without embedding it in their own compose files.
+Coupling happens at the Docker-network layer — mailcue stays standalone.
+
+### One-time host setup
+
+```bash
+# Create the shared external network (once per host, never again)
+docker network create mailcue-net
+```
+
+### Bring up mailcue
+
+```bash
+cd /path/to/mailcue
+docker compose up -d
+```
+
+MailCue attaches to `mailcue-net` with a **static IPv4** — by default
+`172.28.0.10`.  Override via the `MAILCUE_SANDBOX_IP` env var if that address
+collides with another network on your host::
+
+```bash
+MAILCUE_SANDBOX_IP=172.28.0.20 docker compose up -d
+```
+
+### Consumer-project integration
+
+Inside a consumer project's own `docker-compose.yml` (or its dev-only
+`docker-compose.override.yml`) declare the network as external, attach the
+services that need MailCue, and map every hostname you want to intercept to
+MailCue's IP via `extra_hosts`:
+
+```yaml
+services:
+  backend:
+    # ... your service definition ...
+    networks:
+      - your-project-net    # your project's own bridge
+      - mailcue-net         # shared mailcue bridge
+    extra_hosts:
+      # Email — resolve mailcue's FQDN to its IP
+      - "mail.mailcue.local:172.28.0.10"
+      # Outbound HTTP(S) interception — point every upstream hostname you
+      # want the sandbox to capture at mailcue's Nginx, which serves
+      # CA-signed leaf certs for each:
+      - "api.example-provider-a.com:172.28.0.10"
+      - "api.example-provider-b.com:172.28.0.10"
+      # ... etc.
+
+networks:
+  mailcue-net:
+    external: true
+```
+
+The consumer project must also trust mailcue's Root CA so outbound SDKs
+complete their TLS handshake.  Copy `/var/lib/mailcue/certs/provider_ca.crt`
+out of the running container (it is identical to the email CA at
+`/etc/ssl/mailcue/ca.crt`) and install it into the consumer's image with
+`update-ca-certificates` at build time::
+
+```bash
+docker compose exec mailcue \
+    cat /var/lib/mailcue/certs/provider_ca.crt \
+    > /path/to/consumer/certs/mailcue-ca.crt
+```
+
+### Why an external network (not `build: ../mailcue` in your compose)
+
+Baking `build: ../mailcue` or a `mailcue:` service block into a consumer
+project's compose couples mailcue's lifecycle (healthchecks, volumes,
+`depends_on`) to that consumer.  Any other project that needs the same
+sandbox either (a) duplicates the coupling, producing two mailcue
+containers that can't share state, or (b) breaks when the consumer stops.
+An external network inverts that: mailcue owns its own compose, its own
+volumes, and its own healthcheck; every consumer just plugs into the bus.
+
+### Production
+
+Production deployments **do not** use `mailcue-net`.  Real upstream DNS
+resolves to real upstreams; real TLS is validated against real CAs.  See
+the Production Deployment section below for the `docker-compose.deploy.yml`
+workflow.
+
 ## Production Deployment
 
 MailCue can run as a fully hardened production email server. Set `MAILCUE_MODE=production` to switch from the default catch-all test mode to production mode.
@@ -366,7 +453,7 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | JWT access token lifetime |
 | `MAILCUE_REFRESH_TOKEN_EXPIRE_DAYS` | `7` | JWT refresh token lifetime |
 | `MAILCUE_DATABASE_ENCRYPTION_KEY` | *(empty)* | SQLCipher encryption key. Set for AES-256 database encryption. |
-| `MAILCUE_RELAY_HOST` | *(empty)* | Smarthost relay hostname (e.g., `smtp.sendgrid.net`) |
+| `MAILCUE_RELAY_HOST` | *(empty)* | Smarthost relay hostname of an external authenticated SMTP provider |
 | `MAILCUE_RELAY_PORT` | `587` | Smarthost relay port |
 | `MAILCUE_RELAY_USER` | *(empty)* | Smarthost SASL username |
 | `MAILCUE_RELAY_PASSWORD` | *(empty)* | Smarthost SASL password |
@@ -630,14 +717,50 @@ Ready-to-use configuration files for popular CI/CD platforms:
 
 Each example includes the full pattern: health check wait, authentication, API key creation, email injection, and verification.
 
-## Messaging Sandbox
+## Sandbox Providers
 
-MailCue includes a messaging sandbox that emulates the APIs of **Telegram**, **Slack**, **Mattermost**, and **Twilio**. Point your app at MailCue's sandbox endpoints instead of the real provider and all messages are captured locally. Webhooks fire in each provider's exact payload format with proper signatures.
+Beyond email, MailCue ships a configurable HTTP sandbox layer that captures outbound API traffic from your application for local testing. It exposes wire-protocol-identical endpoints for a range of messaging and telephony channels, letting you point your existing SDK at MailCue's base URL and run full end-to-end validation without touching external services.
 
-- Create provider instances via the UI or API (`/api/v1/sandbox/providers`)
-- Simulate inbound messages (provider → your app) and send outbound messages (your app → provider, triggers webhooks)
-- Configure webhook endpoints per provider with automatic retry and exponential backoff
-- Provider-native authentication on sandbox routes (bot token in URL for Telegram, Bearer for Slack/Mattermost, HTTP Basic for Twilio)
+### Supported channels
+
+| Channel            | Coverage |
+|--------------------|----------|
+| **Chat messaging** | Inbound and outbound message capture with signed webhooks |
+| **SMS / MMS**      | Send, receive, and delivery-status callbacks |
+| **Voice**          | Call lifecycle (initiated → ringing → answered → in-progress → completed) driven by a shared verb-execution state machine |
+| **Number search**  | Available-number lookup and purchase |
+| **Number porting** | Port-in order lifecycle (coverage varies per configured provider) |
+| **A2P 10DLC**      | Brand and campaign registration (coverage varies per configured provider) |
+
+All sandbox routes live under `/sandbox/<provider>/<api-version>/...`. Each configured provider keeps its own wire-format (URL shape, auth mechanism, request/response schemas, and webhook payload signatures) so your production SDK can talk to the sandbox unchanged.
+
+### Capabilities
+
+- Create sandbox instances via the UI or API (`/api/v1/sandbox/providers`)
+- Simulate inbound traffic (upstream → your app) and send outbound traffic (your app → upstream, which fires webhooks back)
+- Configure webhook endpoints with automatic retry and exponential backoff (up to 3 attempts) via the `SandboxWebhookDelivery` queue
+- Native authentication per provider (HTTP Basic, Bearer JWT, Bearer token, etc.) matching the upstream's real scheme
+- Ed25519-signed webhooks for providers that use them, with public-key retrieval endpoints
+- Call verbs normalised into a common intermediate representation so the same state machine drives every voice dialect
+
+Fetch the live capability matrix for every configured sandbox at `GET /sandbox/providers/capabilities`. Features not exposed by a given upstream return `provider_unsupported`, matching production behaviour exactly.
+
+### Call lifecycle timings
+
+All timings are configurable via environment variables (milliseconds):
+
+| Variable                               | Default | Controls                              |
+|----------------------------------------|---------|---------------------------------------|
+| `MAILCUE_SANDBOX_VOICE_RING_MS`        | 100     | Delay from `initiated` to `ringing`   |
+| `MAILCUE_SANDBOX_VOICE_ANSWER_MS`      | 100     | Delay from `ringing` to `answered`    |
+| `MAILCUE_SANDBOX_VOICE_ACTION_MS`      | 50      | Delay between each IR action          |
+| `MAILCUE_SANDBOX_VOICE_COMPLETE_MS`    | 50      | Delay from last action to `completed` |
+
+Known limitation: the sandbox drives call **lifecycle and verb execution** only — no actual audio is streamed. Recording verbs post a synthetic recording identifier back to the action URL.
+
+### TLS / hostname pinning
+
+Sandbox routes inherit the same TLS stack as the rest of the MailCue HTTP API. If your SDK performs hostname pinning, add aliases in your DNS or `/etc/hosts` pointing at the MailCue host, then download the MailCue CA via `GET /api/v1/system/certificate/download` and install it in your client's trust store (see "TLS Certificate" above).
 
 ## HTTP Bin
 

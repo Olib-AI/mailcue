@@ -162,7 +162,7 @@ RUN find /etc/s6-overlay/s6-rc.d -name "run" -exec chmod +x {} + \
 COPY --from=frontend-builder /build/dist/ /var/www/mailcue/
 
 # Expose ports
-EXPOSE 25 587 143 993 110 995 80 8000
+EXPOSE 25 587 143 993 110 995 80 443 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \

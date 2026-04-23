@@ -36,6 +36,9 @@ async def _engine_and_session():
     import app.mailboxes.models
     import app.sandbox.models
     import app.system.models  # noqa: F401
+    from app.sandbox.seeds.available_numbers import reset_pool
+
+    reset_pool()
 
     engine = create_async_engine(
         "sqlite+aiosqlite://",
@@ -169,3 +172,79 @@ def basic_auth_header(username: str, password: str) -> str:
     """Build an HTTP Basic auth header value."""
     encoded = base64.b64encode(f"{username}:{password}".encode()).decode()
     return f"Basic {encoded}"
+
+
+@pytest.fixture()
+async def bandwidth_provider(client: AsyncClient) -> dict:
+    """Create a Bandwidth sandbox provider."""
+    resp = await client.post(
+        "/api/v1/sandbox/providers",
+        json={
+            "provider_type": "bandwidth",
+            "name": "Test Bandwidth Account",
+            "credentials": {
+                "account_id": "bw-acc-12345",
+                "username": "bw-user",
+                "password": "bw-secret",
+                "application_id": "msg-app-1",
+                "voice_application_id": "voice-app-1",
+            },
+        },
+    )
+    assert resp.status_code == 201
+    return resp.json()
+
+
+@pytest.fixture()
+async def vonage_provider(client: AsyncClient) -> dict:
+    """Create a Vonage sandbox provider."""
+    resp = await client.post(
+        "/api/v1/sandbox/providers",
+        json={
+            "provider_type": "vonage",
+            "name": "Test Vonage Account",
+            "credentials": {
+                "api_key": "abc123",
+                "api_secret": "def456",
+                "application_id": "app-id-1",
+                "messages_token": "test-bearer-token",
+            },
+        },
+    )
+    assert resp.status_code == 201
+    return resp.json()
+
+
+@pytest.fixture()
+async def plivo_provider(client: AsyncClient) -> dict:
+    """Create a Plivo sandbox provider."""
+    resp = await client.post(
+        "/api/v1/sandbox/providers",
+        json={
+            "provider_type": "plivo",
+            "name": "Test Plivo Account",
+            "credentials": {
+                "auth_id": "MAXXXXXXXXXXX",
+                "auth_token": "plivo-secret-token",
+            },
+        },
+    )
+    assert resp.status_code == 201
+    return resp.json()
+
+
+@pytest.fixture()
+async def telnyx_provider(client: AsyncClient) -> dict:
+    """Create a Telnyx sandbox provider."""
+    resp = await client.post(
+        "/api/v1/sandbox/providers",
+        json={
+            "provider_type": "telnyx",
+            "name": "Test Telnyx Account",
+            "credentials": {
+                "api_key": "KEYABCDEF1234567890",
+            },
+        },
+    )
+    assert resp.status_code == 201
+    return resp.json()

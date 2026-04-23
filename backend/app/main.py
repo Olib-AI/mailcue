@@ -44,9 +44,16 @@ from app.httpbin.router import management_router as httpbin_management_router
 from app.mailboxes.models import Mailbox
 from app.mailboxes.router import router as mailboxes_router
 from app.rate_limit import limiter
+from app.sandbox.admin import router as sandbox_admin_router
 from app.sandbox.models import (  # noqa: F401 — imported for table creation
+    SandboxBrand,
+    SandboxCall,
+    SandboxCampaign,
     SandboxConversation,
     SandboxMessage,
+    SandboxNumberOrder,
+    SandboxPhoneNumber,
+    SandboxPortRequest,
     SandboxProvider,
     SandboxWebhookDelivery,
     SandboxWebhookEndpoint,
@@ -231,13 +238,66 @@ def create_app() -> FastAPI:
     # ── Sandbox (management API under /api/v1, provider routes at /sandbox/) ──
     if settings.sandbox_enabled:
         app.include_router(sandbox_router, prefix="/api/v1")
+        # Admin-scope helpers (CA info + idempotent provider seeding).
+        # Gated by MAILCUE_SANDBOX_ADMIN_TOKEN; see app.sandbox.admin.
+        app.include_router(sandbox_admin_router)
         # Register and mount provider-specific sandbox routes
+        from app.sandbox.capabilities import router as sandbox_capabilities_router
         from app.sandbox.providers import register_all_providers
         from app.sandbox.registry import get_all_providers
+
+        app.include_router(sandbox_capabilities_router)
 
         register_all_providers()
         for _name, provider_plugin in get_all_providers().items():
             app.include_router(provider_plugin.get_router())
+
+        # Public CA distribution — fase's image build curl's this at
+        # build-time to pin the CA fingerprint into the trust store.
+        from fastapi.responses import FileResponse, PlainTextResponse
+
+        @app.get("/sandbox/provider_ca.crt", include_in_schema=False)
+        async def _provider_ca_file() -> FileResponse:
+            from pathlib import Path
+
+            from fastapi import HTTPException
+
+            from app.sandbox.scripts.generate_provider_certs import (
+                _default_leaves_dir,
+            )
+
+            ca_pub = Path(_default_leaves_dir()).parent / "provider_ca.crt"
+            if not ca_pub.exists():
+                ca_pub = Path("/etc/ssl/mailcue/ca.crt")
+            if not ca_pub.exists():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Provider CA not yet generated.",
+                )
+            return FileResponse(
+                ca_pub,
+                media_type="application/x-x509-ca-cert",
+                filename="mailcue-provider-ca.crt",
+            )
+
+        @app.get("/sandbox/provider_ca_fingerprint.txt", include_in_schema=False)
+        async def _provider_ca_fp() -> PlainTextResponse:
+            from pathlib import Path
+
+            from cryptography import x509
+            from cryptography.hazmat.primitives import hashes
+
+            from app.sandbox.scripts.generate_provider_certs import (
+                _default_leaves_dir,
+            )
+
+            fp_file = Path(_default_leaves_dir()).parent / "provider_ca_fingerprint.txt"
+            if fp_file.exists():
+                return PlainTextResponse(fp_file.read_text(encoding="utf-8"))
+            # Compute on the fly from /etc/ssl/mailcue/ca.crt.
+            ca = Path("/etc/ssl/mailcue/ca.crt")
+            cert = x509.load_pem_x509_certificate(ca.read_bytes())
+            return PlainTextResponse(cert.fingerprint(hashes.SHA256()).hex() + "\n")
 
     # ── Health check ─────────────────────────────────────────────
     @app.get("/api/v1/health", tags=["Health"])

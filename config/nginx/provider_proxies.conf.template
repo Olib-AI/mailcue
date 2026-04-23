@@ -1,0 +1,51 @@
+# =============================================================================
+#  Phone-provider TLS-interception proxies — REFERENCE TEMPLATE
+#
+#  This file is a static copy for code review / diffing.  The canonical
+#  file used by Nginx at runtime is regenerated on every container boot
+#  by:
+#      python -m app.sandbox.scripts.generate_provider_nginx
+#  and written to ``/etc/nginx/conf.d/provider_proxies.conf``.
+#
+#  The hostname → path-prefix map lives in
+#  ``backend/app/sandbox/scripts/generate_provider_nginx.py::HOSTNAME_TO_PREFIX``
+#  and is the single source of truth.  Edit that file to add a hostname.
+# =============================================================================
+#
+# Representative server block:
+#
+# server {
+#     listen                    443 ssl http2;
+#     server_name               api.twilio.com;
+#
+#     ssl_certificate           /var/lib/mailcue/certs/provider_leaves/api.twilio.com/fullchain.pem;
+#     ssl_certificate_key       /var/lib/mailcue/certs/provider_leaves/api.twilio.com/privkey.pem;
+#     ssl_protocols             TLSv1.2 TLSv1.3;
+#     ssl_session_cache         shared:SSL_PROVIDERS:10m;
+#     ssl_session_timeout       1d;
+#
+#     client_max_body_size      25m;
+#
+#     location / {
+#         proxy_pass          http://api_backend/sandbox/twilio$request_uri;
+#         proxy_http_version  1.1;
+#         proxy_set_header    Host              $host;
+#         proxy_set_header    X-Real-IP         $remote_addr;
+#         proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+#         proxy_set_header    X-Forwarded-Proto https;
+#         proxy_set_header    X-Forwarded-Host  $host;
+#         proxy_set_header    X-Mailcue-Provider-Host $host;
+#         proxy_set_header    Connection        "";
+#
+#         proxy_connect_timeout 10s;
+#         proxy_read_timeout    60s;
+#         proxy_send_timeout    60s;
+#     }
+# }
+#
+# One such block is emitted for each of:
+#   api.twilio.com, trusthub.twilio.com, messaging.twilio.com, numbers.twilio.com
+#   messaging.bandwidth.com, voice.bandwidth.com, dashboard.bandwidth.com, numbers.bandwidth.com
+#   api.nexmo.com, rest.nexmo.com, api.vonage.com
+#   api.plivo.com
+#   api.telnyx.com

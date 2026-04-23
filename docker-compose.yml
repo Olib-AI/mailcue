@@ -1,6 +1,20 @@
 # =============================================================================
 # MailCue — docker-compose for local development and single-host deployment
 # =============================================================================
+#
+# MailCue is a shared sandbox service.  Multiple consumer projects (fase, and
+# other Olib products) attach to it via the external Docker network
+# ``mailcue-net``.  Before the first ``docker compose up`` create the network
+# once on the host::
+#
+#     docker network create mailcue-net
+#
+# Each consumer project then declares ``mailcue-net`` as ``external: true``
+# and resolves MailCue through ``extra_hosts`` pointing at its static IP
+# ``172.28.0.10`` (override via ``MAILCUE_SANDBOX_IP`` on a per-host basis).
+# See the README section "Sharing mailcue across projects" for the full
+# integration contract.
+# =============================================================================
 
 services:
   mailcue:
@@ -9,8 +23,12 @@ services:
     hostname: mail.mailcue.local
     restart: unless-stopped
     ports:
-      # Web UI (Nginx reverse proxy)
+      # Web UI (Nginx reverse proxy, HTTP)
       - "8088:80"
+      # Phone-provider TLS interception proxy (SNI routed; see
+      # app/sandbox/scripts/generate_provider_nginx.py).  Gated by
+      # MAILCUE_PROVIDER_PROXIES_ENABLED — leave unset to keep enabled.
+      - "8443:443"
       # SMTP — inbound MTA
       - "25:25"
       # SMTP Submission — client submission with STARTTLS + auth
@@ -29,13 +47,32 @@ services:
       - MAILCUE_ADMIN_PASSWORD=mailcue
       # Leave empty to auto-generate at first boot
       - MAILCUE_SECRET_KEY=
+      # Phone-provider TLS interception (port 443).  Set to "false"
+      # to skip leaf-cert generation and suppress the Nginx 443 server
+      # blocks — the Mailcue email workflow is unaffected.
+      - MAILCUE_PROVIDER_PROXIES_ENABLED=${MAILCUE_PROVIDER_PROXIES_ENABLED:-true}
+      # Shared-secret token for the /sandbox/admin/providers/seed API
+      # used by consumer project seeders (e.g. fase's seed.py).  Leave
+      # empty to disable that API.
+      - MAILCUE_SANDBOX_ADMIN_TOKEN=${MAILCUE_SANDBOX_ADMIN_TOKEN:-mailcue-dev-seed-token}
       # SQLCipher encryption key for the SQLite database (optional, leave empty to disable)
       # - MAILCUE_DATABASE_ENCRYPTION_KEY=your-secret-key-here
     volumes:
       # Persistent mail storage (Maildir)
       - mailcue-data:/var/mail/vhosts
-      # Persistent SQLite database and application state
+      # Persistent SQLite database and application state (also where
+      # provider_leaves/ and provider_ca.crt live — consumer projects
+      # fetch the CA from here for their ``update-ca-certificates``).
       - mailcue-db:/var/lib/mailcue
+      # Persistent CA + server certs.  Without this, rebuilding the
+      # image regenerates the Root CA on every boot and invalidates
+      # every consumer project's baked-in trust store.  Mount it to
+      # survive rebuilds — the CA cost is only re-paid when the
+      # operator explicitly `docker volume rm`s this volume.
+      - mailcue-tls:/etc/ssl/mailcue
+    networks:
+      mailcue-net:
+        ipv4_address: ${MAILCUE_SANDBOX_IP:-172.28.0.10}
     healthcheck:
       test:
         [
@@ -50,3 +87,15 @@ services:
 volumes:
   mailcue-data:
   mailcue-db:
+  mailcue-tls:
+
+networks:
+  # Shared external network used by every consumer project.  Create it
+  # once per host::
+  #
+  #     docker network create mailcue-net
+  #
+  # Defaulting to a /16 leaves room for several dozen consumer services
+  # on the same bridge without collisions.
+  mailcue-net:
+    external: true

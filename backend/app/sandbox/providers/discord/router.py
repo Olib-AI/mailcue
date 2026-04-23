@@ -198,6 +198,7 @@ async def edit_message(
 @router.delete(
     "/api/v10/channels/{channel_id}/messages/{message_id}",
     status_code=204,
+    response_model=None,
 )
 async def delete_message(
     channel_id: str,
