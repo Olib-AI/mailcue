@@ -154,31 +154,55 @@ async def create_mailbox(
                     detail=f"Mailbox quota exceeded. You have {current_count}/{user.max_mailboxes} mailboxes.",
                 )
 
-    # Check uniqueness
+    # Check uniqueness. `delete_mailbox` is a soft delete (sets
+    # is_active=False), so a row with this address may already exist
+    # in an inactive state — in that case we reactivate it rather than
+    # 409, which both preserves attached state (forwarding rules,
+    # signatures, GPG keys) AND re-runs system provisioning so the
+    # Dovecot users line is restored.
     stmt = select(Mailbox).where(Mailbox.address == address)
     result = await db.execute(stmt)
-    if result.scalar_one_or_none() is not None:
+    existing = result.scalar_one_or_none()
+    if existing is not None and existing.is_active:
         raise ConflictError(f"Mailbox '{address}' already exists")
 
-    # 1. Database record
-    mailbox = Mailbox(
-        address=address,
-        display_name=body.display_name or local_part,
-        domain=domain,
-        user_id=user_id,
-    )
-    db.add(mailbox)
-    await db.commit()
-    await db.refresh(mailbox)
+    if existing is not None:
+        # Reactivate the soft-deleted row.
+        existing.is_active = True
+        existing.display_name = body.display_name or local_part
+        if user_id is not None:
+            existing.user_id = user_id
+        await db.commit()
+        await db.refresh(existing)
+        mailbox = existing
+    else:
+        # 1. Database record
+        mailbox = Mailbox(
+            address=address,
+            display_name=body.display_name or local_part,
+            domain=domain,
+            user_id=user_id,
+        )
+        db.add(mailbox)
+        await db.commit()
+        await db.refresh(mailbox)
 
-    # 2 + 3. System provisioning (blocking I/O in thread pool)
+    # 2 + 3. System provisioning (blocking I/O in thread pool).
+    # On reactivation, this re-appends the Dovecot users line that
+    # `delete_mailbox` removed.
     try:
         await _provision_system_mailbox(address, body.password, domain, local_part)
     except Exception as exc:
         logger.exception("Failed to provision system mailbox for %s", address)
-        # Roll back the DB record so we stay consistent
-        await db.delete(mailbox)
-        await db.commit()
+        if existing is None:
+            # Fresh row — roll back.
+            await db.delete(mailbox)
+            await db.commit()
+        else:
+            # Reactivation failed — flip back to inactive so the next
+            # attempt can re-try cleanly.
+            mailbox.is_active = False
+            await db.commit()
         raise MailServerError(
             f"Failed to provision mailbox '{address}' on the mail server"
         ) from exc
