@@ -176,11 +176,57 @@ sed -i \
 # Regexp table: match any domain.  Does NOT need postmap.
 printf '/^.+$/    OK\n' > /etc/postfix/virtual_domains_catchall
 
-# Keep legacy hash files for backward compat but they are no longer
-# referenced by the main delivery path (catch-all replaces them).
-touch /etc/postfix/virtual_mailboxes
-touch /etc/postfix/virtual_aliases
-touch /etc/postfix/virtual_domains
+# Persist the API-mutable Postfix lookup tables into the
+# /var/lib/mailcue volume (same idea as the Dovecot users files).
+# Without this, /etc/postfix/* lives in the container's writable layer
+# and every `docker compose up -d` strips every API-created mailbox
+# from the recipient allow-list — inbound mail bounces with
+# "550 5.1.1 User unknown in virtual mailbox table".
+POSTFIX_STATE_DIR="/var/lib/mailcue/postfix"
+mkdir -p "${POSTFIX_STATE_DIR}"
+chmod 750 "${POSTFIX_STATE_DIR}"
+chown root:postfix "${POSTFIX_STATE_DIR}" 2>/dev/null || chown root:root "${POSTFIX_STATE_DIR}"
+
+for name in virtual_mailboxes virtual_aliases virtual_domains; do
+    src="/etc/postfix/${name}"
+    target="${POSTFIX_STATE_DIR}/${name}"
+    target_db="${target}.db"
+    src_db="${src}.db"
+
+    if [ -L "${src}" ]; then
+        # Already a symlink — make sure it points where we expect.
+        if [ "$(readlink "${src}")" != "${target}" ]; then
+            rm -f "${src}"
+            ln -s "${target}" "${src}"
+        fi
+    elif [ -f "${src}" ]; then
+        if [ ! -f "${target}" ]; then
+            mv "${src}" "${target}"
+        else
+            # Persisted copy wins; the in-container seed is discarded.
+            rm -f "${src}"
+        fi
+        ln -s "${target}" "${src}"
+    else
+        touch "${target}"
+        ln -s "${target}" "${src}"
+    fi
+
+    # Mirror the .db symlink so `hash:/etc/postfix/<name>` resolves to
+    # the persisted copy.
+    if [ -f "${target_db}" ] || [ -L "${src_db}" ]; then
+        rm -f "${src_db}"
+        ln -sf "${target_db}" "${src_db}"
+    fi
+done
+
+# Rebuild .db files from the persisted source so they reflect any
+# entries added by the API in a previous run.
+for name in virtual_mailboxes virtual_aliases virtual_domains; do
+    if [ -s "${POSTFIX_STATE_DIR}/${name}" ]; then
+        postmap "/etc/postfix/${name}" 2>/dev/null || true
+    fi
+done
 
 # --- OpenDKIM tables ---
 echo "mail._domainkey.${DOMAIN}    ${DOMAIN}:mail:${DKIM_DIR}/mail.private" \
