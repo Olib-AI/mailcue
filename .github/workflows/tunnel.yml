@@ -130,9 +130,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Pattern-filter so we only pull the binary artifacts we uploaded
+      # in the build-binaries job. Without this, `download-artifact`
+      # also tries to fetch the auxiliary `*.dockerbuild` summary blob
+      # produced by docker/build-push-action and a transient retry-
+      # exhausted failure on that side artifact fails the whole job.
       - uses: actions/download-artifact@v5
         with:
           path: dist
+          pattern: mailcue-relay-*
           merge-multiple: true
 
       - name: Combined SHA256SUMS
