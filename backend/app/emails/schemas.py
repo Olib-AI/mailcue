@@ -32,6 +32,9 @@ class EmailSummary(BaseModel):
     is_read: bool
     preview: str
     message_id: str = ""
+    in_reply_to: str | None = None
+    references: list[str] = []
+    thread_id: str = ""
     size: int = 0
     is_signed: bool = False
     is_encrypted: bool = False
