@@ -316,11 +316,22 @@ export interface DnsRecordInfo {
   verified: boolean;
   current_value: string | null;
   purpose: string;
+  drift?: boolean;
+  last_checked_at?: string | null;
+  last_verified_at?: string | null;
 }
 
 export interface DomainDetail extends Domain {
   dns_records: DnsRecordInfo[];
   dkim_public_key_txt: string | null;
+}
+
+export interface DomainDnsState {
+  domain: string;
+  records: DnsRecordInfo[];
+  has_drift: boolean;
+  has_missing: boolean;
+  last_dns_check: string | null;
 }
 
 export interface DomainListResponse {
