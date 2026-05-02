@@ -18,12 +18,14 @@ from app.domains.schemas import (
     DnsCheckResponse,
     DomainCreateRequest,
     DomainDetailResponse,
+    DomainDnsStateResponse,
     DomainListResponse,
     DomainResponse,
 )
 from app.domains.service import (
     _build_dns_records,
     add_domain,
+    compute_dns_state,
     get_domain_detail,
     list_domains,
     remove_domain,
@@ -194,6 +196,27 @@ async def verify_domain_dns(
     """Run live DNS checks for a domain. **Admin only.**"""
     try:
         return await verify_dns(name, db)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get("/{name}/dns-state", response_model=DomainDnsStateResponse)
+async def get_dns_state(
+    name: str,
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> DomainDnsStateResponse:
+    """Refresh DNS lookups + return per-record expected/published/drift state.
+
+    Read-only: never flips the canonical ``*_verified`` booleans (use
+    ``POST /verify-dns`` for that).  Designed to be cheap and pollable from
+    the admin UI every 60s.  **Admin only.**
+    """
+    try:
+        return await compute_dns_state(name, db)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
