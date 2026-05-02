@@ -260,7 +260,7 @@ async def test_verify_dns_with_multistring_dkim_concatenates_without_space(
     """The exact regression: a DKIM TXT split into multiple
     ``<character-string>``s must concatenate WITHOUT a space, otherwise
     the published ``p=`` blob gets a stray space and verification fails."""
-    _engine, factory = _engine_and_session
+    del _engine_and_session  # unused; resolver is mocked via monkeypatch
     expected = seed_domain.dkim_public_key_txt or ""
     # Split the expected value at an arbitrary boundary so that naive
     # ``str(rdata)`` would re-introduce a separator.
