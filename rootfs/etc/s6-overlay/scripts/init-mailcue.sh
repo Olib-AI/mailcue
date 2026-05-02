@@ -231,23 +231,37 @@ RELAY_USER="${MAILCUE_RELAY_USER:-}"
 RELAY_PASSWORD="${MAILCUE_RELAY_PASSWORD:-}"
 
 if [ -n "${RELAY_HOST}" ]; then
-    echo "[init-mailcue] Configuring smarthost relay: ${RELAY_HOST}:${RELAY_PORT}"
-
-    # Update Postfix main.cf
-    cat >> /etc/postfix/main.cf << RELAY
-# --- Smarthost relay (auto-configured) ---
+    if [ -n "${RELAY_USER}" ] && [ -n "${RELAY_PASSWORD}" ]; then
+        # Authenticated smarthost (SendGrid / Mailgun / AWS SES / Postmark / ...).
+        # Enforce TLS — SASL credentials must never traverse plaintext.
+        echo "[init-mailcue] Configuring authenticated smarthost relay: ${RELAY_HOST}:${RELAY_PORT}"
+        cat >> /etc/postfix/main.cf << RELAY
+# --- Smarthost relay (auto-configured, SASL + TLS) ---
 relayhost = [${RELAY_HOST}]:${RELAY_PORT}
 smtp_sasl_auth_enable = yes
 smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
 smtp_sasl_security_options = noanonymous
 smtp_tls_security_level = encrypt
 RELAY
-
-    # Create SASL password file
-    echo "[${RELAY_HOST}]:${RELAY_PORT} ${RELAY_USER}:${RELAY_PASSWORD}" > /etc/postfix/sasl_passwd
-    postmap /etc/postfix/sasl_passwd
-    chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
-    echo "[init-mailcue] Smarthost relay configured."
+        echo "[${RELAY_HOST}]:${RELAY_PORT} ${RELAY_USER}:${RELAY_PASSWORD}" > /etc/postfix/sasl_passwd
+        postmap /etc/postfix/sasl_passwd
+        chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
+        echo "[init-mailcue] Authenticated smarthost relay configured."
+    else
+        # Trusted relay on a private network — typically the MailCue
+        # tunnel sidecar (mailcue-relay-sidecar) listening on a Docker
+        # bridge / unix-domain hop. No SASL, no STARTTLS required:
+        # confidentiality is provided by the Noise IK tunnel between
+        # the sidecar and the remote edge, not by the loopback hop.
+        echo "[init-mailcue] Configuring trusted relay (no SASL, no TLS): ${RELAY_HOST}:${RELAY_PORT}"
+        cat >> /etc/postfix/main.cf << RELAY
+# --- Trusted relay (auto-configured, plain TCP) ---
+relayhost = [${RELAY_HOST}]:${RELAY_PORT}
+smtp_sasl_auth_enable = no
+smtp_tls_security_level = none
+RELAY
+        echo "[init-mailcue] Trusted relay configured."
+    fi
 fi
 
 # -------------------------------------------------------------------------
