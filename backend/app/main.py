@@ -105,23 +105,49 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Ensure the admin mailbox exists in the mailboxes table too.
     # The init script creates the Dovecot user and Maildir, but the
     # API lists mailboxes from SQLite — without this row the frontend
-    # shows an empty sidebar.
+    # shows an empty sidebar. Always link it to the default admin user
+    # so the multi-user owner filter (introduced in migration 012)
+    # surfaces the mailbox in `/mailboxes` and the compose dropdown.
     async with AsyncSessionLocal() as session:
         from sqlalchemy import select
 
+        from app.auth.models import User
+
         admin_address = f"{settings.admin_user}@{settings.domain}"
+        admin_user_row = (
+            await session.execute(
+                select(User).where(User.username == settings.admin_user, User.is_admin == True)  # noqa: E712
+            )
+        ).scalar_one_or_none()
+        admin_user_id = admin_user_row.id if admin_user_row is not None else None
+
         stmt = select(Mailbox).where(Mailbox.address == admin_address)
-        result = await session.execute(stmt)
-        if result.scalar_one_or_none() is None:
+        existing_mailbox = (await session.execute(stmt)).scalar_one_or_none()
+        if existing_mailbox is None:
             session.add(
                 Mailbox(
                     address=admin_address,
                     display_name=settings.admin_user,
                     domain=settings.domain,
+                    user_id=admin_user_id,
                 )
             )
             await session.commit()
-            logger.info("Registered admin mailbox '%s' in database.", admin_address)
+            logger.info(
+                "Registered admin mailbox '%s' (owner=%s) in database.",
+                admin_address,
+                admin_user_id,
+            )
+        elif existing_mailbox.user_id is None and admin_user_id is not None:
+            # Backfill orphans created before migration 012 / before this
+            # owner-link fix landed.
+            existing_mailbox.user_id = admin_user_id
+            await session.commit()
+            logger.info(
+                "Backfilled owner of admin mailbox '%s' to user %s.",
+                admin_address,
+                admin_user_id,
+            )
 
     # Ensure the primary domain is registered in the domains table.
     # The init script configures Postfix/Dovecot with MAILCUE_DOMAIN,
