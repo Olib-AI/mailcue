@@ -2,17 +2,22 @@
 #
 # Multi-stage build for mailcue-relay-sidecar.
 #
-# Stage 1 builds a fully static x86_64-unknown-linux-musl binary with
-# ring's assembly intrinsics statically linked in. Stage 2 is a distroless
-# /cc base — small attack surface, runs as the `nonroot` user.
+# Stage 1 builds a fully static linux-musl binary for the requested
+# TARGETPLATFORM. Stage 2 is a distroless /cc base — small attack
+# surface, runs as the `nonroot` user.
 #
 # Build context expectation: this Dockerfile is built from the
 # `tunnel/` directory:
 #
 #     docker build -f tunnel/deploy/docker/Dockerfile.sidecar tunnel/
+#
+# Multi-arch (amd64 + arm64) is supported via buildx; each arch builds
+# natively (under QEMU emulation in CI) for its own musl target.
 
 # ---------- builder ----------
 FROM rust:1.95-slim AS builder
+
+ARG TARGETARCH
 
 ENV CARGO_TERM_COLOR=never \
     DEBIAN_FRONTEND=noninteractive \
@@ -26,18 +31,34 @@ RUN apt-get update \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-RUN rustup target add x86_64-unknown-linux-musl
-
 WORKDIR /build
 
-# Cache dependencies first.
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+# Pull in rust-toolchain.toml FIRST so any later `rustup` invocation
+# operates against the workspace-pinned toolchain (1.95), not the image
+# default. Without this, `rustup target add` installs the musl target on
+# a toolchain that's then overridden when the toml takes effect, and
+# the build fails with "can't find crate for core".
+COPY rust-toolchain.toml ./
+
+# Map Docker's TARGETARCH to the matching musl rustc target triple.
+# Persist for later RUN steps.
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) RUST_TARGET="x86_64-unknown-linux-musl" ;; \
+        arm64) RUST_TARGET="aarch64-unknown-linux-musl" ;; \
+        *) echo "Unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    echo "${RUST_TARGET}" > /build/.rust-target; \
+    rustup target add "${RUST_TARGET}"
+
+# Cache dependencies. Copy the workspace + crate manifests, then
+# fabricate empty source files so cargo's manifest parser is satisfied
+# during fetch.
+COPY Cargo.toml Cargo.lock ./
 COPY crates/proto/Cargo.toml    crates/proto/Cargo.toml
 COPY crates/edge/Cargo.toml     crates/edge/Cargo.toml
 COPY crates/sidecar/Cargo.toml  crates/sidecar/Cargo.toml
 
-# Synthesise empty source files so `cargo fetch` succeeds before the
-# real sources arrive (lets Docker cache the dependency layer).
 RUN mkdir -p crates/proto/src crates/edge/src crates/sidecar/src \
     && echo "fn main() {}" > crates/edge/src/main.rs \
     && echo "fn main() {}" > crates/sidecar/src/main.rs \
@@ -51,14 +72,16 @@ COPY crates/sidecar/src  crates/sidecar/src
 
 # Build only the sidecar binary — the edge crate's MX-resolver pulls in
 # bigger transitive deps we don't need here.
-RUN cargo build \
-    --release \
-    --locked \
-    --target x86_64-unknown-linux-musl \
-    --package mailcue-relay-sidecar \
-    --bin mailcue-relay-sidecar
-
-RUN strip /build/target/x86_64-unknown-linux-musl/release/mailcue-relay-sidecar || true
+RUN set -eux; \
+    RUST_TARGET="$(cat /build/.rust-target)"; \
+    cargo build \
+        --release \
+        --locked \
+        --target "${RUST_TARGET}" \
+        --package mailcue-relay-sidecar \
+        --bin mailcue-relay-sidecar; \
+    cp "target/${RUST_TARGET}/release/mailcue-relay-sidecar" /build/mailcue-relay-sidecar; \
+    strip /build/mailcue-relay-sidecar || true
 
 # ---------- runtime ----------
 FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
@@ -69,9 +92,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.title="mailcue-relay-sidecar"
 LABEL org.opencontainers.image.vendor="Olib AI"
 
-COPY --from=builder \
-    /build/target/x86_64-unknown-linux-musl/release/mailcue-relay-sidecar \
-    /usr/local/bin/mailcue-relay-sidecar
+COPY --from=builder /build/mailcue-relay-sidecar /usr/local/bin/mailcue-relay-sidecar
 
 # 2525 = loopback SMTP submission listener consumed by Postfix.
 # 9325 = HTTP health endpoint (/healthz, /metrics).
