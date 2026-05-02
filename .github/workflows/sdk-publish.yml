@@ -1,0 +1,109 @@
+name: SDK Publish
+
+on:
+  push:
+    tags:
+      - "python-sdk-v*"
+      - "node-sdk-v*"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Which SDK to publish"
+        required: true
+        type: choice
+        options: [python, node]
+
+jobs:
+  publish-python:
+    name: Publish Python SDK to PyPI
+    if: startsWith(github.ref, 'refs/tags/python-sdk-v') || github.event.inputs.target == 'python'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: sdks/python
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" build
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/python-sdk-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#python-sdk-v}"
+          PKG_VERSION=$(python -c "from mailcue._version import __version__; print(__version__)")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Lint, type, test
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy mailcue
+          pytest -q
+
+      - name: Build
+        run: python -m build
+
+      - name: Publish to PyPI (Trusted Publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdks/python/dist
+
+  publish-node:
+    name: Publish Node SDK to npm
+    if: startsWith(github.ref, 'refs/tags/node-sdk-v') || github.event.inputs.target == 'node'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdks/node
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+          cache-dependency-path: sdks/node/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/node-sdk-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#node-sdk-v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Lint, type, test, build
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm run build
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
