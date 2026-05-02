@@ -618,30 +618,54 @@ mkdir -p /run
 
 # -------------------------------------------------------------------------
 # 7.5 One-time plaintext → encrypted migration (SQLCipher)
+#
+# Detect what `${DB_PATH}` actually is by reading the first 16 bytes:
+#
+#   - "SQLite format 3\0"          → plaintext SQLite, convert to encrypted
+#   - random ciphertext bytes      → already SQLCipher-encrypted, skip
+#   - empty / 0 bytes              → fresh deployment, skip (alembic creates)
+#   - non-SQLite garbage           → corrupt DB; fail loudly with guidance
+#                                    rather than corrupt it further
 # -------------------------------------------------------------------------
 if [ -n "${DB_ENCRYPTION_KEY}" ] && [ -f "${DB_PATH}" ]; then
-    # Probe whether the existing DB is still plaintext
-    IS_PLAINTEXT=$(python3 -c "
-import sqlite3
-try:
-    conn = sqlite3.connect('${DB_PATH}')
-    conn.execute('SELECT 1')
-    print('yes')
-except Exception:
-    print('no')
-finally:
-    conn.close()
-" 2>/dev/null || echo "no")
+    DB_SIZE=$(stat -c '%s' "${DB_PATH}" 2>/dev/null || echo 0)
+    DB_HEADER=$(head -c 16 "${DB_PATH}" 2>/dev/null | tr -d '\0' || true)
 
-    if [ "$IS_PLAINTEXT" = "yes" ]; then
+    if [ "${DB_SIZE}" = "0" ]; then
+        echo "[init-mailcue] DB file is empty — Alembic will create a fresh encrypted DB."
+    elif [ "${DB_HEADER#SQLite format 3}" != "${DB_HEADER}" ]; then
+        # The plaintext-SQLite magic prefix is present (the trailing NUL
+        # was stripped above for a clean compare).
         echo "[init-mailcue] Converting plaintext database to SQLCipher-encrypted format..."
         ENCRYPTED_TMP="${DB_PATH}.encrypted"
-        sqlcipher "${DB_PATH}" \
-            "ATTACH DATABASE '${ENCRYPTED_TMP}' AS encrypted KEY '${DB_ENCRYPTION_KEY}';" \
-            "SELECT sqlcipher_export('encrypted');" \
-            "DETACH DATABASE encrypted;"
+        if ! sqlcipher "${DB_PATH}" \
+                "ATTACH DATABASE '${ENCRYPTED_TMP}' AS encrypted KEY '${DB_ENCRYPTION_KEY}';" \
+                "SELECT sqlcipher_export('encrypted');" \
+                "DETACH DATABASE encrypted;"; then
+            rm -f "${ENCRYPTED_TMP}"
+            echo "[init-mailcue] ERROR: sqlcipher_export failed; refusing to overwrite ${DB_PATH}."
+            exit 1
+        fi
         mv "${ENCRYPTED_TMP}" "${DB_PATH}"
         echo "[init-mailcue] Database encryption complete."
+    else
+        # Header doesn't match plaintext SQLite. The DB is either already
+        # encrypted (good — leave it for alembic to open with the key) or
+        # genuinely corrupt. Quick sanity check: try to open it as an
+        # encrypted DB with our key. On success it's encrypted-with-this-key;
+        # on failure it's either a different key or random garbage.
+        if echo "PRAGMA key='${DB_ENCRYPTION_KEY}'; SELECT count(*) FROM sqlite_master;" \
+                | sqlcipher "${DB_PATH}" >/dev/null 2>&1; then
+            echo "[init-mailcue] DB is already SQLCipher-encrypted with the provided key — skipping."
+        else
+            echo "[init-mailcue] ERROR: ${DB_PATH} exists but is neither plaintext SQLite nor"
+            echo "[init-mailcue]        decryptable with MAILCUE_DATABASE_ENCRYPTION_KEY."
+            echo "[init-mailcue]        - If you rotated the key: restore the previous key, or"
+            echo "[init-mailcue]          delete the file (LOSES ALL DATA) and let it recreate."
+            echo "[init-mailcue]        - If the file is corrupt: stop the container and remove"
+            echo "[init-mailcue]          ${DB_PATH} (LOSES ALL DATA), then start again."
+            exit 1
+        fi
     fi
 fi
 
