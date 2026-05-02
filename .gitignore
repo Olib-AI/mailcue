@@ -36,6 +36,7 @@ Thumbs.db
 
 # Claude
 .claude/
+CLAUDE.md
 
 # Docker
 *.tar
