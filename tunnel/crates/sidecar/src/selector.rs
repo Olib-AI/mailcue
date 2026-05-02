@@ -38,6 +38,10 @@ impl Selector {
     /// Pick a tunnel from `view` whose id appears in `healthy_ids`.
     ///
     /// Returns `None` when no enabled+healthy tunnel exists.
+    ///
+    /// Kept for unit tests / benchmarks; production code path goes
+    /// through `pick_all` so it can fall over to backup tunnels.
+    #[cfg(test)]
     pub fn pick<'a>(
         &self,
         view: &'a TunnelsView,
@@ -72,6 +76,81 @@ impl Selector {
         let idx = state.cursor % candidates.len();
         state.cursor = state.cursor.wrapping_add(1);
         Some(candidates[idx])
+    }
+
+    /// Return every enabled+healthy tunnel in the order this selector
+    /// would visit them. Used by the relay path to fail over from one
+    /// tunnel to another when a destination MX rejects the message
+    /// (e.g. an IP-reputation block on a single relay's IP).
+    ///
+    /// Each tunnel appears at most once. The first element is the
+    /// strategy's "primary" pick; the remaining elements are the
+    /// fallback candidates in strategy-defined order.
+    #[must_use]
+    pub fn pick_all<'a>(
+        &self,
+        view: &'a TunnelsView,
+        healthy_ids: &BTreeSet<String>,
+    ) -> Vec<&'a Tunnel> {
+        let candidates: Vec<&Tunnel> = view
+            .tunnels
+            .iter()
+            .filter(|t| t.enabled && healthy_ids.contains(&t.id))
+            .collect();
+
+        if candidates.is_empty() {
+            return Vec::new();
+        }
+
+        match view.selection {
+            SelectionStrategy::RoundRobin => {
+                // Take the round-robin pick (advances cursor) as the
+                // first element, then list every other healthy tunnel
+                // by stable id order so failover is deterministic.
+                let primary = self.round_robin(&candidates, view);
+                let mut out = Vec::with_capacity(candidates.len());
+                if let Some(p) = primary {
+                    out.push(p);
+                }
+                let primary_id = primary.map(|t| t.id.as_str());
+                for t in &candidates {
+                    if Some(t.id.as_str()) != primary_id {
+                        out.push(*t);
+                    }
+                }
+                out
+            }
+            SelectionStrategy::Random => {
+                let mut rng_order = candidates.clone();
+                shuffle(&mut rng_order);
+                rng_order
+            }
+            SelectionStrategy::WeightedRandom => {
+                // Pick weighted as the primary, then fall back to all
+                // remaining tunnels in stable order.
+                let primary = weighted(&candidates);
+                let mut out = Vec::with_capacity(candidates.len());
+                if let Some(p) = primary {
+                    out.push(p);
+                }
+                let primary_id = primary.map(|t| t.id.as_str());
+                for t in &candidates {
+                    if Some(t.id.as_str()) != primary_id {
+                        out.push(*t);
+                    }
+                }
+                out
+            }
+        }
+    }
+}
+
+fn shuffle(slice: &mut [&Tunnel]) {
+    let mut rng = rand::rng();
+    // Fisher–Yates.
+    for i in (1..slice.len()).rev() {
+        let j = rng.random_range(0..=i);
+        slice.swap(i, j);
     }
 }
 
