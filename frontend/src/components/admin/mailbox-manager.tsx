@@ -369,7 +369,7 @@ function MailboxManager() {
               </Label>
               <Input
                 id="mb-display-name"
-                placeholder="Akram Hasan"
+                placeholder="Jane Doe"
                 autoComplete="off"
                 {...register("display_name")}
               />
@@ -465,7 +465,7 @@ function MailboxManager() {
               id="mb-rename-display-name"
               value={renameValue}
               onChange={(e) => setRenameValue(e.target.value)}
-              placeholder="Akram Hasan"
+              placeholder="Jane Doe"
               autoFocus
               maxLength={255}
               onKeyDown={(e) => {
