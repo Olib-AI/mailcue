@@ -9,7 +9,10 @@
 use std::collections::BTreeSet;
 
 use parking_lot::Mutex;
-use rand::Rng;
+// rand 0.10 split the legacy `Rng` trait: the core sampling methods
+// (`random_range`, `random_bool`, ...) moved to `RngExt`. We use only
+// the extension methods, so just `RngExt` needs to be in scope.
+use rand::RngExt;
 
 use crate::tunnels::{SelectionStrategy, Tunnel, TunnelsView};
 
