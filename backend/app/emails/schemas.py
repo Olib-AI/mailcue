@@ -83,6 +83,15 @@ class SendEmailRequest(BaseModel):
     reply_to: str | None = None
     in_reply_to: str | None = None
     references: list[str] = []
+    # When true, attach `List-Unsubscribe` + `List-Unsubscribe-Post`
+    # headers (RFC 8058 one-click). Only set on actual bulk / list mail
+    # — Gmail and other receivers treat its presence on transactional
+    # 1:1 mail as a "this is a marketing list" signal and bias toward
+    # spam-folder. Default False so the API and the web Compose UI
+    # produce clean transactional messages out of the box.
+    bulk: bool = False
+    list_unsubscribe: str | None = None
+    list_unsubscribe_post: str | None = None
 
 
 class InjectEmailRequest(BaseModel):

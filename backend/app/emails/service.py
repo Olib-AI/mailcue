@@ -361,10 +361,19 @@ async def send_email(
     if request.references:
         msg["References"] = " ".join(request.references)
 
-    # List-Unsubscribe header (improves deliverability scores)
-    unsub_addr = f"unsubscribe@{settings.domain}"
-    msg["List-Unsubscribe"] = f"<mailto:{unsub_addr}?subject=unsubscribe>"
-    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    # List-Unsubscribe is a *bulk-mail* signal (RFC 8058 + RFC 2369).
+    # Gmail / Yahoo / M365 treat its presence on a transactional or 1:1
+    # message as a strong "this is a marketing list" cue and bias toward
+    # the spam folder. Only attach it when the caller explicitly opts in
+    # via `bulk=True` (and optionally provides custom URI(s)).
+    if request.bulk:
+        unsub_addr = f"unsubscribe@{settings.domain}"
+        msg["List-Unsubscribe"] = (
+            request.list_unsubscribe or f"<mailto:{unsub_addr}?subject=unsubscribe>"
+        )
+        msg["List-Unsubscribe-Post"] = (
+            request.list_unsubscribe_post or "List-Unsubscribe=One-Click"
+        )
 
     all_recipients = list(request.to_addresses) + list(request.cc_addresses)
 
