@@ -135,7 +135,7 @@ jobs:
       # also tries to fetch the auxiliary `*.dockerbuild` summary blob
       # produced by docker/build-push-action and a transient retry-
       # exhausted failure on that side artifact fails the whole job.
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           pattern: mailcue-relay-*
