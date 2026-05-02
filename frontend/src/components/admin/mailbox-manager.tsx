@@ -11,6 +11,7 @@ import {
   AlertCircle,
   RefreshCw,
   Eraser,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,9 @@ import {
   useCreateMailbox,
   useDeleteMailbox,
   usePurgeMailbox,
+  useUpdateDisplayName,
 } from "@/hooks/use-mailboxes";
+import type { Mailbox } from "@/types/api";
 import { formatEmailDate } from "@/lib/utils";
 
 const createMailboxSchema = z.object({
@@ -43,6 +46,10 @@ const createMailboxSchema = z.object({
     ),
   password: z.string().min(4, "Password must be at least 4 characters"),
   domain: z.string().optional(),
+  display_name: z
+    .string()
+    .max(255, "Sender name must be 255 characters or fewer")
+    .optional(),
 });
 
 type CreateMailboxValues = z.infer<typeof createMailboxSchema>;
@@ -52,9 +59,12 @@ function MailboxManager() {
   const createMailbox = useCreateMailbox();
   const deleteMailbox = useDeleteMailbox();
   const purgeMailbox = usePurgeMailbox();
+  const updateDisplayName = useUpdateDisplayName();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [purgeTarget, setPurgeTarget] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Mailbox | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   const {
     register,
@@ -63,7 +73,7 @@ function MailboxManager() {
     formState: { errors },
   } = useForm<CreateMailboxValues>({
     resolver: zodResolver(createMailboxSchema),
-    defaultValues: { username: "", password: "", domain: "" },
+    defaultValues: { username: "", password: "", domain: "", display_name: "" },
   });
 
   const onCreateSubmit = (values: CreateMailboxValues) => {
@@ -72,6 +82,7 @@ function MailboxManager() {
         username: values.username,
         password: values.password,
         domain: values.domain || undefined,
+        display_name: values.display_name?.trim() || undefined,
       },
       {
         onSuccess: (result) => {
@@ -119,6 +130,30 @@ function MailboxManager() {
       },
     });
   }, [purgeTarget, purgeMailbox]);
+
+  const openRename = useCallback((mailbox: Mailbox) => {
+    setRenameTarget(mailbox);
+    setRenameValue(mailbox.display_name ?? "");
+  }, []);
+
+  const handleRename = useCallback(() => {
+    if (!renameTarget) return;
+    updateDisplayName.mutate(
+      { address: renameTarget.address, display_name: renameValue.trim() },
+      {
+        onSuccess: () => {
+          toast.success(`Sender name updated for ${renameTarget.address}`);
+          setRenameTarget(null);
+          setRenameValue("");
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to update sender name"
+          );
+        },
+      }
+    );
+  }, [renameTarget, renameValue, updateDisplayName]);
 
   const mailboxes = data?.mailboxes ?? [];
 
@@ -191,9 +226,30 @@ function MailboxManager() {
           {mailboxes.map((mailbox) => (
             <Card key={mailbox.address}>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center justify-between">
-                  <span className="truncate">{mailbox.address}</span>
+                <CardTitle className="text-base flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate">{mailbox.address}</div>
+                    {mailbox.display_name ? (
+                      <div className="text-xs font-normal text-muted-foreground truncate">
+                        Sender name: {mailbox.display_name}
+                      </div>
+                    ) : (
+                      <div className="text-xs font-normal text-muted-foreground/70 italic">
+                        No sender name set
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => openRename(mailbox)}
+                      aria-label={`Edit sender name for ${mailbox.address}`}
+                      title="Edit sender name"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -304,6 +360,30 @@ function MailboxManager() {
               )}
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="mb-display-name">
+                Sender name{" "}
+                <span className="text-muted-foreground font-normal">
+                  (optional)
+                </span>
+              </Label>
+              <Input
+                id="mb-display-name"
+                placeholder="Akram Hasan"
+                autoComplete="off"
+                {...register("display_name")}
+              />
+              <p className="text-xs text-muted-foreground">
+                Shown as the &quot;From&quot; display name on outbound mail.
+                Leave blank to use just the address.
+              </p>
+              {errors.display_name && (
+                <p className="text-xs text-destructive">
+                  {errors.display_name.message}
+                </p>
+              )}
+            </div>
+
             <DialogFooter>
               <Button
                 type="button"
@@ -355,6 +435,65 @@ function MailboxManager() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename (display name) Dialog */}
+      <Dialog
+        open={renameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameTarget(null);
+            setRenameValue("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit sender name</DialogTitle>
+            <DialogDescription>
+              Set the display name shown alongside{" "}
+              <strong>{renameTarget?.address}</strong> when this mailbox sends
+              mail. Leave empty to send with just the address.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5 py-2">
+            <Label htmlFor="mb-rename-display-name">Sender name</Label>
+            <Input
+              id="mb-rename-display-name"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Akram Hasan"
+              autoFocus
+              maxLength={255}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleRename();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRenameTarget(null);
+                setRenameValue("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRename}
+              disabled={updateDisplayName.isPending}
+            >
+              {updateDisplayName.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
