@@ -1,0 +1,63 @@
+{
+  "name": "mailcue",
+  "version": "0.1.0",
+  "description": "Official MailCue SDK for Node.js",
+  "author": "Olib AI <hello@olib.ai>",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mailcue",
+    "email",
+    "smtp",
+    "imap",
+    "transactional-email",
+    "olib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Olib-AI/mailcue.git",
+    "directory": "sdks/node"
+  },
+  "homepage": "https://github.com/Olib-AI/mailcue",
+  "bugs": {
+    "url": "https://github.com/Olib-AI/mailcue/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run test && npm run lint && npm run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
+    "eslint": "^9.18.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  }
+}
