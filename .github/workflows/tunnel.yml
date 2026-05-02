@@ -141,12 +141,19 @@ jobs:
           pattern: mailcue-relay-*
           merge-multiple: true
 
+      # Bundle the systemd unit into the release so install-edge.sh can
+      # fetch it directly from the release URL when the script itself
+      # is being curl|bash-ed onto a fresh VPS (no local checkout).
+      - name: Stage systemd unit
+        run: |
+          cp tunnel/deploy/systemd/mailcue-relay-edge.service dist/
+
       - name: Combined SHA256SUMS
         working-directory: dist
         run: |
           rm -f SHA256SUMS
           # shellcheck disable=SC2035
-          sha256sum mailcue-relay-* > SHA256SUMS
+          sha256sum mailcue-relay-* mailcue-relay-edge.service > SHA256SUMS
           cat SHA256SUMS
 
       - name: GitHub Release
@@ -158,6 +165,7 @@ jobs:
           files: |
             dist/mailcue-relay-edge-*
             dist/mailcue-relay-sidecar-*
+            dist/mailcue-relay-edge.service
             dist/SHA256SUMS
 
   # -----------------------------------------------------------------
