@@ -521,6 +521,48 @@ echo "[init-mailcue] Creating admin user: ${ADMIN_USER}@${DOMAIN}"
 ADMIN_EMAIL="${ADMIN_USER}@${DOMAIN}"
 ADMIN_MAILDIR="${VMAIL_BASE}/${DOMAIN}/${ADMIN_USER}"
 
+# -------------------------------------------------------------------------
+# Persist Dovecot users + master-users into the /var/lib/mailcue volume so
+# API-managed mailbox entries survive `docker compose up -d` recreations.
+# Without this, /etc/dovecot/users lives only in the container's writable
+# layer and every container recreation strips every mailbox the API ever
+# added (only the admin line gets re-templated by this script).
+# -------------------------------------------------------------------------
+DOVECOT_STATE_DIR="/var/lib/mailcue/dovecot"
+mkdir -p "${DOVECOT_STATE_DIR}"
+chmod 750 "${DOVECOT_STATE_DIR}"
+chown root:dovecot "${DOVECOT_STATE_DIR}" 2>/dev/null || chown root:root "${DOVECOT_STATE_DIR}"
+
+for src in "${DOVECOT_USERS}" /etc/dovecot/master-users; do
+    target="${DOVECOT_STATE_DIR}/$(basename "${src}")"
+    if [ -L "${src}" ]; then
+        # Already a symlink — make sure it points where we expect.
+        current=$(readlink "${src}")
+        if [ "${current}" != "${target}" ]; then
+            rm -f "${src}"
+            ln -s "${target}" "${src}"
+        fi
+    elif [ -f "${src}" ]; then
+        # First-time migration: move the existing file into the volume,
+        # then replace the original path with a symlink.
+        if [ ! -f "${target}" ]; then
+            mv "${src}" "${target}"
+        else
+            # Both exist — prefer the persisted one and discard the
+            # in-container copy (which is just the image-baked seed).
+            rm -f "${src}"
+        fi
+        ln -s "${target}" "${src}"
+    else
+        # No file in either place — create the persisted file empty
+        # and symlink. The block below will populate the admin line.
+        touch "${target}"
+        ln -s "${target}" "${src}"
+    fi
+    chmod 640 "${target}"
+    chown root:dovecot "${target}" 2>/dev/null || chown root:root "${target}"
+done
+
 # Generate password hash via doveadm (SHA512-CRYPT)
 ADMIN_HASH=$(doveadm pw -s SHA512-CRYPT -p "${ADMIN_PASSWORD}" 2>/dev/null || true)
 if [ -z "${ADMIN_HASH}" ]; then
