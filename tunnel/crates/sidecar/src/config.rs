@@ -114,6 +114,13 @@ pub struct SidecarConfig {
     pub partial_failure_policy: PartialFailurePolicy,
     /// `tracing` env-filter directive.
     pub log_level: String,
+    /// CIDR networks (in addition to loopback) trusted to submit on
+    /// the local SMTP listener. Empty means "loopback only" — the
+    /// secure default for non-containerised installs. For docker-
+    /// compose deployments where the sidecar is on a private bridge
+    /// (e.g. mailcue connecting from `172.18.0.0/16`), set this via
+    /// `MAILCUE_SIDECAR_SMTP_TRUSTED_NETWORKS`.
+    pub smtp_trusted_networks: Vec<ipnet::IpNet>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -134,6 +141,7 @@ struct FileCfg {
     unhealthy_after_consecutive_failures: Option<u32>,
     partial_failure_policy: Option<PartialFailurePolicy>,
     log_level: Option<String>,
+    smtp_trusted_networks: Option<Vec<String>>,
 }
 
 /// CLI-side overrides to layer on top of file + env config.
@@ -256,6 +264,25 @@ pub fn load(config_path: &Path, cli: CliOverrides) -> Result<SidecarConfig> {
         .or(file.log_level)
         .unwrap_or_else(|| DEFAULT_LOG_LEVEL.to_string());
 
+    // Comma-separated CIDRs in addition to loopback. Empty / unset =
+    // loopback-only (the secure default for non-containerised installs).
+    let trusted_strings: Vec<String> =
+        if let Some(raw) = env_str("MAILCUE_SIDECAR_SMTP_TRUSTED_NETWORKS") {
+            raw.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        } else {
+            file.smtp_trusted_networks.unwrap_or_default()
+        };
+    let mut smtp_trusted_networks = Vec::with_capacity(trusted_strings.len());
+    for s in &trusted_strings {
+        let net: ipnet::IpNet = s.parse().with_context(|| {
+            format!("smtp_trusted_networks: `{s}` is not a CIDR (e.g. 172.18.0.0/16)")
+        })?;
+        smtp_trusted_networks.push(net);
+    }
+
     Ok(SidecarConfig {
         smtp_listen,
         metrics_listen,
@@ -273,6 +300,7 @@ pub fn load(config_path: &Path, cli: CliOverrides) -> Result<SidecarConfig> {
         unhealthy_after_consecutive_failures,
         partial_failure_policy,
         log_level,
+        smtp_trusted_networks,
     })
 }
 

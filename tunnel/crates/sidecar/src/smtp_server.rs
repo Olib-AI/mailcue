@@ -79,8 +79,12 @@ async fn handle_session(
 
     let helo_self = gethostname::gethostname().to_string_lossy().into_owned();
 
-    if !is_loopback(peer_ip) {
-        let _ = write_line(&mut write_half, "554 5.7.1 only loopback peers allowed").await;
+    if !is_trusted_peer(peer_ip, &cfg.smtp_trusted_networks) {
+        let _ = write_line(
+            &mut write_half,
+            "554 5.7.1 peer not in trusted networks (set MAILCUE_SIDECAR_SMTP_TRUSTED_NETWORKS)",
+        )
+        .await;
         return Ok(());
     }
 
@@ -358,6 +362,10 @@ fn is_valid_mailbox(s: &str) -> bool {
     }
     !s.bytes()
         .any(|b| b.is_ascii_control() || b == b' ' || b == b'<' || b == b'>')
+}
+
+fn is_trusted_peer(ip: IpAddr, allow_extra: &[ipnet::IpNet]) -> bool {
+    is_loopback(ip) || allow_extra.iter().any(|net| net.contains(&ip))
 }
 
 fn is_loopback(ip: IpAddr) -> bool {
