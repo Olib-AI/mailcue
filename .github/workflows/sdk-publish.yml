@@ -84,7 +84,7 @@ jobs:
           cache-dependency-path: sdks/node/package-lock.json
 
       - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
+        run: npm install --prefix=/tmp/npm-latest -g npm@11 && echo "/tmp/npm-latest/bin" >> "$GITHUB_PATH"
 
       - name: Install
         run: npm ci
