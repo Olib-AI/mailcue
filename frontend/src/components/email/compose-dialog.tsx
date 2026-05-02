@@ -141,6 +141,14 @@ function ComposeDialog() {
     [mailboxes],
   );
 
+  const getDisplayNameForAddress = useCallback(
+    (address: string): string => {
+      const mb = mailboxes.find((m) => m.address === address);
+      return mb?.display_name ?? "";
+    },
+    [mailboxes],
+  );
+
   // Pre-fill form when compose dialog opens with context
   useEffect(() => {
     const justOpened = composeOpen && !prevOpenRef.current;
@@ -158,7 +166,7 @@ function ComposeDialog() {
       setAttachments([]);
       reset({
         from_address: defaultAddress,
-        from_name: "",
+        from_name: getDisplayNameForAddress(defaultAddress),
         to_addresses: "",
         cc_addresses: "",
         bcc_addresses: "",
@@ -190,6 +198,7 @@ function ComposeDialog() {
     if (mode === "reply") {
       reset({
         from_address: fromAddress,
+        from_name: getDisplayNameForAddress(fromAddress),
         to_addresses: replyToAddress,
         cc_addresses: "",
         bcc_addresses: "",
@@ -215,6 +224,7 @@ function ComposeDialog() {
 
       reset({
         from_address: fromAddress,
+        from_name: getDisplayNameForAddress(fromAddress),
         to_addresses: replyToAddress,
         cc_addresses: ccAddresses,
         bcc_addresses: "",
@@ -227,6 +237,7 @@ function ComposeDialog() {
     } else if (mode === "forward") {
       reset({
         from_address: fromAddress,
+        from_name: getDisplayNameForAddress(fromAddress),
         to_addresses: "",
         cc_addresses: "",
         bcc_addresses: "",
@@ -237,7 +248,14 @@ function ComposeDialog() {
         encrypt: false,
       });
     }
-  }, [composeOpen, composeContext, reset, mailboxes, getSignatureForAddress]);
+  }, [
+    composeOpen,
+    composeContext,
+    reset,
+    mailboxes,
+    getSignatureForAddress,
+    getDisplayNameForAddress,
+  ]);
 
   const bodyType = watch("body_type");
   const watchedFromAddress = watch("from_address");
