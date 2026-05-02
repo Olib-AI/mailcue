@@ -42,3 +42,7 @@ Thumbs.db
 
 # Docker build context noise
 docker-compose.override.yml
+
+# Out-of-band Rust SMTP tunnel — built and deployed independently of the
+# main mailcue image. Never copy into the container.
+tunnel/

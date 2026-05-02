@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     sandbox_webhook_timeout_seconds: int = 10
     sandbox_webhook_max_retries: int = 3
 
+    # ── Tunnels (optional outbound relay through remote VPS edges) ─
+    tunnels_config_path: str = "/etc/mailcue-sidecar/tunnels.json"
+
     @property
     def is_production(self) -> bool:
         """Return ``True`` when the server is running in production mode."""

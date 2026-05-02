@@ -1,0 +1,110 @@
+# =============================================================================
+# MailCue tunnel — docker-compose overlay
+# =============================================================================
+#
+# This is an **opt-in** overlay that adds the out-of-band SMTP tunnel
+# sidecar next to the main MailCue container, and rewires Postfix's
+# relayhost to send all outbound mail through it.
+#
+# Use it when your hosting environment blocks outbound TCP/25 (Hetzner,
+# AWS, GCP, fly.io, Render, Railway, ...). The sidecar tunnels SMTP egress
+# to one or more `mailcue-relay-edge` instances running on a VPS that
+# does have port-25 access (typically OVH Eco / Kimsufi).
+#
+# Bring the stack up with both files merged:
+#
+#     docker compose \
+#         -f docker-compose.yml \
+#         -f tunnel/deploy/docker/docker-compose.tunnel.yml \
+#         up -d
+#
+# Prerequisites:
+#
+#   1. The shared `mailcue-net` Docker network already exists. The base
+#      compose file documents how to create it:
+#          docker network create mailcue-net
+#
+#   2. At least one MailCue tunnel record exists. Tunnel records live in
+#      /etc/mailcue-sidecar/tunnels.json inside the sidecar container,
+#      written by the Mailcue API at /api/v1/tunnels — never by hand.
+#
+#   3. One-time bootstrap: on first start the sidecar generates
+#      /var/lib/mailcue-sidecar/client.key (private) and client.pub
+#      (public). The Mailcue API exposes the pubkey via
+#      GET /api/v1/tunnels/client-pubkey — copy it, send it to your VPS
+#      operator, who runs `mailcue-relay-edge authorize --pubkey <b64>`
+#      to add it to the edge's allow-list.
+#
+# See tunnel/README.md for the full operator runbook.
+# =============================================================================
+
+services:
+  mailcue-sidecar:
+    image: ghcr.io/olib-ai/mailcue-relay-sidecar:latest
+    container_name: mailcue-sidecar
+    hostname: mailcue-sidecar
+    restart: unless-stopped
+    # The sidecar listens on 2525 (loopback SMTP submission) and 9325
+    # (health). Both stay inside `mailcue-net` — we deliberately do not
+    # publish them to the host.
+    expose:
+      - "2525"
+      - "9325"
+    environment:
+      # Free-form identifier the sidecar puts in its `Hello` frame, used
+      # only for edge-side logging.
+      - MAILCUE_SIDECAR_CLIENT_ID=mailcue-${HOSTNAME:-local}
+      # Path inside the container to the tunnel list managed by the
+      # Mailcue API. Must live on the config volume.
+      - MAILCUE_SIDECAR_TUNNELS_PATH=/etc/mailcue-sidecar/tunnels.json
+      # Loopback SMTP listener — Postfix relays into this.
+      - MAILCUE_SIDECAR_LISTEN_ADDR=0.0.0.0:2525
+      # Health / metrics HTTP listener.
+      - MAILCUE_SIDECAR_HEALTH_ADDR=0.0.0.0:9325
+      - MAILCUE_SIDECAR_LOG_LEVEL=${MAILCUE_SIDECAR_LOG_LEVEL:-info}
+    volumes:
+      - mailcue-sidecar-config:/etc/mailcue-sidecar
+      - mailcue-sidecar-state:/var/lib/mailcue-sidecar
+    networks:
+      mailcue-net:
+        aliases:
+          - mailcue-sidecar
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9325/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Run as the distroless `nonroot` user (uid/gid 65532).
+    user: "65532:65532"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1777
+
+  # Override the main mailcue service: force Postfix to relay via the
+  # sidecar instead of attempting direct port-25 egress. The init script
+  # at rootfs/etc/s6-overlay/scripts/init-mailcue.sh wires these env vars
+  # into Postfix's main.cf at boot.
+  mailcue:
+    environment:
+      - MAILCUE_RELAY_HOST=mailcue-sidecar
+      - MAILCUE_RELAY_PORT=2525
+      # Sidecar listener is unauthenticated (loopback-only via mailcue-net).
+      # Auth happens at the Noise IK layer between sidecar and edge.
+      - MAILCUE_RELAY_USER=
+      - MAILCUE_RELAY_PASSWORD=
+    depends_on:
+      mailcue-sidecar:
+        condition: service_started
+
+volumes:
+  mailcue-sidecar-config:
+  mailcue-sidecar-state:
+
+networks:
+  mailcue-net:
+    external: true

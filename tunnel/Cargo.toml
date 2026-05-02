@@ -1,0 +1,74 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/proto",
+    "crates/edge",
+    "crates/sidecar",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "AGPL-3.0-or-later"
+authors = ["Olib AI <hello@olib.ai>"]
+repository = "https://github.com/Olib-AI/mailcue"
+description = "MailCue out-of-band SMTP tunnel"
+
+[workspace.dependencies]
+# Async runtime + IO
+tokio = { version = "1.40", features = ["full"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = "1.10"
+webpki-roots = "0.26"
+
+# Crypto / Noise
+snow = { version = "0.9", default-features = false, features = ["default-resolver"] }
+rand = "0.8"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+base64 = "0.22"
+
+# Serialization / framing
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+postcard = { version = "1.0", features = ["use-std"] }
+bytes = { version = "1.7", features = ["serde"] }
+
+# Errors / logs
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+
+# CLI / config
+clap = { version = "4.5", features = ["derive", "env"] }
+toml = "0.8"
+
+# DNS / SMTP
+hickory-resolver = { version = "0.24", default-features = false, features = ["tokio-runtime", "system-config"] }
+
+# Sidecar specifics
+notify = { version = "6.1", default-features = false, features = ["macos_kqueue"] }
+hyper = { version = "1.4", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+
+# Misc
+hex = "0.4"
+gethostname = "0.5"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+parking_lot = "0.12"
+futures-util = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+panic = "abort"
+debug = false
+
+[profile.dev]
+opt-level = 0
+debug = true

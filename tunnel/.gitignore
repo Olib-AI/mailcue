@@ -1,0 +1,35 @@
+# Build artifacts
+/target
+**/target/
+Cargo.lock.bak
+
+# Secret material — never commit
+*.key
+*.pem
+*.p12
+*.pfx
+authorized_clients
+authorized_clients.bak
+
+# State / runtime files (var-style)
+state/
+var/
+data/
+/var-state/
+/srv-state/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env overrides
+.env
+.env.local
+*.local.toml

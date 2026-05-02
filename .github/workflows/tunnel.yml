@@ -1,0 +1,202 @@
+name: Tunnel CI & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["tunnel-v*"]
+    paths:
+      - "tunnel/**"
+      - ".github/workflows/tunnel.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tunnel/**"
+      - ".github/workflows/tunnel.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+  REGISTRY: ghcr.io
+  SIDECAR_IMAGE: ${{ github.repository_owner }}/mailcue-relay-sidecar
+
+jobs:
+  # -----------------------------------------------------------------
+  # Lint, format check, clippy, tests — single job on the host runner.
+  # Pinned via tunnel/rust-toolchain.toml (1.95).
+  # -----------------------------------------------------------------
+  lint:
+    name: Rust Lint, Format, Clippy & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tunnel
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tunnel/target
+          key: tunnel-${{ runner.os }}-cargo-${{ hashFiles('tunnel/Cargo.lock') }}
+          restore-keys: |
+            tunnel-${{ runner.os }}-cargo-
+
+      - name: Install toolchain components
+        run: |
+          rustup show active-toolchain
+          rustup component add rustfmt clippy
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+  # -----------------------------------------------------------------
+  # Build static musl binaries for amd64 + arm64 on every push to main
+  # and every tunnel-v* tag. Releases attach the binaries as assets.
+  # -----------------------------------------------------------------
+  build-binaries:
+    name: Build ${{ matrix.target }} (${{ matrix.bin }})
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+        bin:
+          - mailcue-relay-edge
+          - mailcue-relay-sidecar
+    defaults:
+      run:
+        working-directory: tunnel
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install cross
+        run: |
+          cargo install cross --locked --version ^0.2
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            tunnel/target
+          key: tunnel-${{ runner.os }}-cargo-${{ matrix.target }}-${{ hashFiles('tunnel/Cargo.lock') }}
+          restore-keys: |
+            tunnel-${{ runner.os }}-cargo-${{ matrix.target }}-
+
+      - name: Build (release, static musl)
+        run: |
+          cross build --release --locked \
+            --target ${{ matrix.target }} \
+            --bin ${{ matrix.bin }}
+
+      - name: Stage artifact
+        run: |
+          mkdir -p ../dist
+          ARTIFACT="${{ matrix.bin }}-${{ matrix.target }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin }}" "../dist/${ARTIFACT}"
+          (cd ../dist && sha256sum "${ARTIFACT}" > "${ARTIFACT}.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.bin }}-${{ matrix.target }}
+          path: dist/${{ matrix.bin }}-${{ matrix.target }}*
+          if-no-files-found: error
+          retention-days: 14
+
+  # -----------------------------------------------------------------
+  # Tagged release: pull all artifacts, write a combined SHA256SUMS,
+  # publish a GitHub release that install-edge.sh can download from.
+  # -----------------------------------------------------------------
+  release:
+    name: Publish Release
+    if: startsWith(github.ref, 'refs/tags/tunnel-v')
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Combined SHA256SUMS
+        working-directory: dist
+        run: |
+          rm -f SHA256SUMS
+          # shellcheck disable=SC2035
+          sha256sum mailcue-relay-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/mailcue-relay-edge-*
+            dist/mailcue-relay-sidecar-*
+            dist/SHA256SUMS
+
+  # -----------------------------------------------------------------
+  # Sidecar Docker image: built from tunnel/deploy/docker/Dockerfile.sidecar
+  # and pushed to GHCR on main + tunnel-v* tags. Multi-arch via buildx.
+  # -----------------------------------------------------------------
+  sidecar-image:
+    name: Build & Push Sidecar Image
+    if: github.event_name == 'push'
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-qemu-action@v4
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.SIDECAR_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=match,pattern=tunnel-v(.*),group=1
+            type=sha,prefix=
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: tunnel
+          file: tunnel/deploy/docker/Dockerfile.sidecar
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=tunnel-sidecar
+          cache-to: type=gha,mode=max,scope=tunnel-sidecar

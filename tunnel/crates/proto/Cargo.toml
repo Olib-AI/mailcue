@@ -1,0 +1,29 @@
+[package]
+name = "mailcue-relay-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Wire protocol + Noise IK framing for the MailCue out-of-band SMTP tunnel"
+
+[lib]
+name = "mailcue_relay_proto"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+snow = { workspace = true }
+serde = { workspace = true }
+postcard = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+base64 = { workspace = true }
+zeroize = { workspace = true }
+rand = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = "3.10"

@@ -1,0 +1,78 @@
+# /etc/systemd/system/mailcue-relay-edge.service
+#
+# Hardened unit for the MailCue tunnel edge daemon.
+#
+# Sandbox notes (every directive here matters for blast-radius — do not
+# relax without reading docs/SECURITY.md):
+#
+#   - Runs as a dedicated unprivileged user, no shell, no home.
+#   - Drops every Linux capability (CapabilityBoundingSet=, AmbientCapabilities=).
+#   - Filesystem is read-only except the two state dirs.
+#   - Network is restricted to AF_INET / AF_INET6 (no AF_UNIX, AF_NETLINK).
+#   - System call surface is filtered to @system-service minus @privileged
+#     and @resources to deny things like ptrace, mount, set_thread_area, ...
+#   - MemoryDenyWriteExecute blocks W^X violations (no JIT codegen here).
+#
+# Because the daemon does not implement sd_notify(READY=1), Type=simple is
+# used — switch to Type=notify when the binary grows that capability.
+
+[Unit]
+Description=MailCue out-of-band SMTP tunnel edge daemon
+Documentation=https://github.com/Olib-AI/mailcue/blob/main/tunnel/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mailcue-edge
+Group=mailcue-edge
+
+ExecStart=/usr/local/bin/mailcue-relay-edge run
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+LimitNOFILE=65536
+
+# ----- filesystem isolation -----
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/mailcue-edge /etc/mailcue-edge
+
+# ----- privilege isolation -----
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+# ----- kernel surface lock-down -----
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+
+# ----- runtime restriction -----
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallFilter=~@resources
+SystemCallErrorNumber=EPERM
+
+# ----- logging -----
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mailcue-relay-edge
+
+[Install]
+WantedBy=multi-user.target

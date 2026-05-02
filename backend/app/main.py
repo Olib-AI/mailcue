@@ -64,6 +64,11 @@ from app.system.models import (  # noqa: F401 — imported for table creation
     TlsCertificate,
 )
 from app.system.router import router as system_router
+from app.tunnels.models import (  # noqa: F401 — imported for table creation
+    Tunnel,
+    TunnelClientIdentity,
+)
+from app.tunnels.router import router as tunnels_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -161,6 +166,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
         await restore_custom_certs(session)
 
+    # Render tunnels.json for the relay sidecar.  When the sidecar is
+    # not deployed the configured directory is missing -- write_tunnels_json
+    # logs a warning and returns without raising, so startup never fails.
+    async with AsyncSessionLocal() as session:
+        from app.tunnels.service import write_tunnels_json
+
+        try:
+            await write_tunnels_json(session)
+        except Exception:
+            logger.exception("Failed to write tunnels.json during startup.")
+
     # Register forwarding-rule listener on the event bus so incoming
     # emails are automatically evaluated against active rules.
     from app.forwarding.service import process_incoming_email
@@ -230,6 +246,7 @@ def create_app() -> FastAPI:
     app.include_router(system_router, prefix="/api/v1")
     app.include_router(forwarding_router, prefix="/api/v1")
     app.include_router(aliases_router, prefix="/api/v1")
+    app.include_router(tunnels_router, prefix="/api/v1")
 
     # ── HTTP Bin ──────────────────────────────────────────────────
     app.include_router(httpbin_management_router, prefix="/api/v1")
