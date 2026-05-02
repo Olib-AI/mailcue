@@ -86,6 +86,12 @@ export interface EmailSummary {
   size: number;
   is_signed: boolean;
   is_encrypted: boolean;
+  // Threading fields — populated by the backend when the list is fetched with
+  // `thread_view=true`. Optional because older API builds and non-thread queries
+  // omit them.
+  in_reply_to?: string | null;
+  references?: string[];
+  thread_id?: string;
 }
 
 export interface EmailDetail extends EmailSummary {
