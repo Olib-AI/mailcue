@@ -323,8 +323,15 @@ async fn serve(cfg: EdgeConfig) -> Result<(), ServeError> {
         }
     }
 
-    // Graceful drain.
-    let drain_window = Duration::from_secs(cfg.idle_timeout_secs);
+    // Graceful drain. We use a separate, deliberately short
+    // `shutdown_drain_secs` budget rather than `idle_timeout_secs`:
+    // sidecar peers hold long-lived persistent tunnel connections that
+    // don't close themselves on SIGTERM, so honoring the per-connection
+    // idle timeout would always blow past systemd's `TimeoutStopSec`
+    // and trigger SIGKILL. In-flight Relays inside this window get to
+    // finish; idle / blocked-on-recv connections are aborted at the
+    // boundary via `JoinSet::shutdown`.
+    let drain_window = Duration::from_secs(cfg.shutdown_drain_secs);
     let drain = async {
         let mut guard = connections.lock().await;
         while let Some(res) = guard.join_next().await {
@@ -335,7 +342,7 @@ async fn serve(cfg: EdgeConfig) -> Result<(), ServeError> {
     };
     if timeout(drain_window, drain).await.is_err() {
         warn!(
-            timeout_secs = cfg.idle_timeout_secs,
+            timeout_secs = cfg.shutdown_drain_secs,
             "drain window exceeded; aborting in-flight tasks"
         );
         let mut guard = connections.lock().await;

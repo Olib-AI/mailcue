@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "mailcue-relay-edge"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "base64",
@@ -1065,7 +1065,7 @@ dependencies = [
 
 [[package]]
 name = "mailcue-relay-proto"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "base64",
  "bytes",
@@ -1083,7 +1083,7 @@ dependencies = [
 
 [[package]]
 name = "mailcue-relay-sidecar"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "base64",

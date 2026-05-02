@@ -31,10 +31,11 @@ ExecStart=/usr/local/bin/mailcue-relay-edge run
 
 Restart=on-failure
 RestartSec=5s
-# Must be >= the daemon's idle_timeout_secs (default 120) so the
-# graceful drain on SIGTERM has time to complete in-flight relays
-# before systemd escalates to SIGKILL.
-TimeoutStopSec=180s
+# Must comfortably exceed the daemon's `shutdown_drain_secs` (default
+# 10s; see crates/edge/src/defaults.rs). 30s gives the daemon room to
+# finish its drain + force-abort phase without systemd escalating to
+# SIGKILL.
+TimeoutStopSec=30s
 LimitNOFILE=65536
 
 # ----- filesystem isolation -----

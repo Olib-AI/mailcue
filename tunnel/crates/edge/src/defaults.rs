@@ -33,6 +33,14 @@ pub const MAX_RECIPIENTS_PER_REQUEST: usize = 100;
 /// Idle timeout for in-flight relays during graceful shutdown (seconds).
 pub const IDLE_TIMEOUT_SECS: u64 = 120;
 
+/// Maximum time the SIGTERM drain waits for in-flight tasks before
+/// force-aborting (seconds). Kept short because sidecars hold long-
+/// lived persistent tunnel connections that won't close themselves —
+/// without a tight bound here, systemd's `TimeoutStopSec` always wins
+/// and SIGKILLs the daemon. In-flight Relays inside this window finish
+/// naturally; anything still running gets aborted at the boundary.
+pub const SHUTDOWN_DRAIN_SECS: u64 = 10;
+
 /// Concurrent relays per authenticated client.
 pub const PER_CLIENT_CONCURRENCY: usize = 8;
 

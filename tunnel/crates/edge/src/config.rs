@@ -23,8 +23,12 @@ pub struct EdgeConfig {
     pub max_message_size_bytes: usize,
     /// Maximum recipients per Relay frame.
     pub max_recipients_per_request: usize,
-    /// Idle timeout during graceful shutdown.
+    /// Per-connection idle timeout (also used as the upper bound for
+    /// in-flight relay handlers).
     pub idle_timeout_secs: u64,
+    /// Maximum window the SIGTERM drain waits before force-aborting
+    /// in-flight tasks. See `defaults::SHUTDOWN_DRAIN_SECS`.
+    pub shutdown_drain_secs: u64,
     /// DNS resolvers (empty = use system resolv.conf).
     pub dns_resolvers: Vec<SocketAddr>,
     /// EHLO / HELO override.
@@ -63,6 +67,7 @@ struct FileCfg {
     max_message_size_bytes: Option<usize>,
     max_recipients_per_request: Option<usize>,
     idle_timeout_secs: Option<u64>,
+    shutdown_drain_secs: Option<u64>,
     dns_resolvers: Option<Vec<String>>,
     helo_hostname: Option<String>,
     per_client_concurrency: Option<usize>,
@@ -140,6 +145,9 @@ pub fn load(config_path: &Path, cli: CliOverrides) -> Result<EdgeConfig> {
         .or(file.max_recipients_per_request)
         .unwrap_or(defaults::MAX_RECIPIENTS_PER_REQUEST);
 
+    let shutdown_drain_secs = env_u64("MAILCUE_EDGE_SHUTDOWN_DRAIN_SECS")?
+        .or(file.shutdown_drain_secs)
+        .unwrap_or(defaults::SHUTDOWN_DRAIN_SECS);
     let idle_timeout_secs = env_u64("MAILCUE_EDGE_IDLE_TIMEOUT_SECS")?
         .or(file.idle_timeout_secs)
         .unwrap_or(defaults::IDLE_TIMEOUT_SECS);
@@ -183,6 +191,7 @@ pub fn load(config_path: &Path, cli: CliOverrides) -> Result<EdgeConfig> {
         max_message_size_bytes,
         max_recipients_per_request,
         idle_timeout_secs,
+        shutdown_drain_secs,
         dns_resolvers,
         helo_hostname,
         per_client_concurrency,
