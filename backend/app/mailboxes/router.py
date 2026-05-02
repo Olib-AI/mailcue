@@ -203,6 +203,11 @@ async def list_mailbox_emails(
     page_size: int = Query(50, ge=1, le=200),
     search: str | None = Query(None),
     sort: str = Query("date_desc"),
+    thread_view: bool = Query(
+        False,
+        description="When true, sort the page by (thread_id, date asc) so "
+        "conversations render as contiguous groups.",
+    ),
     _user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
@@ -216,6 +221,7 @@ async def list_mailbox_emails(
         per_page=page_size,
         search=search,
         sort=sort,
+        thread_view=thread_view,
     )
 
 

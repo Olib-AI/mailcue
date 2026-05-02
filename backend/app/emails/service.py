@@ -15,6 +15,7 @@ import logging
 import re
 import secrets
 import time
+from datetime import UTC, datetime
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -81,12 +82,19 @@ async def list_emails(
     per_page: int = 50,
     search: str | None = None,
     sort: str = "date_desc",
+    thread_view: bool = False,
 ) -> EmailListResponse:
     """Fetch a paginated list of email summaries from IMAP.
 
     Uses IMAP SEARCH for filtering and FETCH for header retrieval.
     Pagination is applied client-side on the UID list (IMAP SORT is
     not universally supported).
+
+    When ``thread_view`` is ``True``, the emails on the returned page are
+    re-sorted by ``(thread_id, date asc)`` so the frontend can render
+    conversations as contiguous groups without re-sorting client-side.
+    Pagination still operates on the underlying date-ordered UID list,
+    so the flat-list contract is preserved.
     """
     imap = await _imap_connect(mailbox)
     try:
@@ -163,6 +171,13 @@ async def list_emails(
         # Re-sort items to match the requested page_uids order (IMAP FETCH
         # returns results in ascending UID order regardless of request order).
         items = [items_by_uid[u] for u in page_uids if u in items_by_uid]
+
+        if thread_view:
+            # Group conversations together: thread_id then date ascending
+            # within each thread.  ``datetime.min`` (UTC) is used as the sort
+            # key for missing dates so they sort first deterministically.
+            _epoch = datetime.min.replace(tzinfo=UTC)
+            items.sort(key=lambda e: (e.thread_id, e.date or _epoch))
 
         return EmailListResponse(
             total=total,

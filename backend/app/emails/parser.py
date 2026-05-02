@@ -67,6 +67,14 @@ def parse_email(
 
     message_id = _decode_header_str(msg.get("Message-ID", ""))
 
+    # Threading headers (RFC 5322 §3.6.4)
+    in_reply_to_raw = _decode_header_str(msg.get("In-Reply-To", ""))
+    references_raw = _decode_header_str(msg.get("References", ""))
+    in_reply_to_ids = _parse_message_id_list(in_reply_to_raw)
+    in_reply_to = in_reply_to_ids[0] if in_reply_to_ids else None
+    references = _parse_message_id_list(references_raw)
+    thread_id = compute_thread_id(message_id, in_reply_to, references)
+
     # PGP/MIME detection
     is_signed, is_encrypted = _detect_pgp_mime(msg)
 
@@ -82,6 +90,9 @@ def parse_email(
         is_read=is_read,
         preview=preview,
         message_id=message_id,
+        in_reply_to=in_reply_to,
+        references=references,
+        thread_id=thread_id,
         html_body=html_body,
         text_body=text_body,
         cc_addresses=cc_addrs,
@@ -116,6 +127,15 @@ def parse_email_summary(
 
     message_id = _decode_header_str(msg.get("Message-ID", ""))
 
+    # Threading headers (RFC 5322 §3.6.4) — also surfaced on the list view so
+    # the frontend can group conversations without re-fetching every detail.
+    in_reply_to_raw = _decode_header_str(msg.get("In-Reply-To", ""))
+    references_raw = _decode_header_str(msg.get("References", ""))
+    in_reply_to_ids = _parse_message_id_list(in_reply_to_raw)
+    in_reply_to = in_reply_to_ids[0] if in_reply_to_ids else None
+    references = _parse_message_id_list(references_raw)
+    thread_id = compute_thread_id(message_id, in_reply_to, references)
+
     # PGP/MIME detection
     is_signed, is_encrypted = _detect_pgp_mime(msg)
 
@@ -131,9 +151,55 @@ def parse_email_summary(
         is_read=is_read,
         preview=preview,
         message_id=message_id,
+        in_reply_to=in_reply_to,
+        references=references,
+        thread_id=thread_id,
         is_signed=is_signed,
         is_encrypted=is_encrypted,
     )
+
+
+# ── Threading helpers ────────────────────────────────────────────
+
+
+_MSG_ID_RE: re.Pattern[str] = re.compile(r"<[^<>\s]+>")
+
+
+def _parse_message_id_list(raw: str) -> list[str]:
+    """Return every ``<id@host>`` token found in *raw*, preserving the angle brackets.
+
+    Per RFC 5322 §3.6.4, ``In-Reply-To`` and ``References`` carry one or more
+    whitespace-separated ``msg-id`` tokens.  The header may be folded across
+    multiple lines (continuation lines are prefixed with whitespace) and may
+    contain CFWS (comments / folding white-space) between tokens.  We keep
+    only the angle-bracketed tokens; any free-form text is ignored.
+    """
+    if not raw:
+        return []
+    return _MSG_ID_RE.findall(raw)
+
+
+def compute_thread_id(
+    message_id: str,
+    in_reply_to: str | None,
+    references: list[str],
+) -> str:
+    """Derive a stable thread-id used by the UI to group messages.
+
+    Rules:
+    * If ``In-Reply-To`` is set, the thread-id is the first ``References``
+      entry when non-empty — by convention this is the conversation root —
+      otherwise the ``In-Reply-To`` value itself (fallback when the
+      ``References`` chain is broken, matching Gmail's behavior).
+    * Otherwise (a root / standalone message), the thread-id is the
+      message's own ``Message-ID`` so single-message conversations still
+      group cleanly.
+    """
+    if in_reply_to:
+        if references:
+            return references[0]
+        return in_reply_to
+    return message_id
 
 
 # ── PGP/MIME detection ───────────────────────────────────────────

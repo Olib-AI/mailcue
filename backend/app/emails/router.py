@@ -40,6 +40,10 @@ async def list_all_emails(
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
     search: str | None = Query(None, description="Full-text search query"),
     sort: str = Query("date_desc", description="Sort order (date_asc, date_desc)"),
+    thread_view: bool = Query(
+        False,
+        description="Group conversations: sort the page by (thread_id, date asc).",
+    ),
     _current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
@@ -56,6 +60,7 @@ async def list_all_emails(
         per_page=page_size,
         search=search,
         sort=sort,
+        thread_view=thread_view,
     )
 
 
