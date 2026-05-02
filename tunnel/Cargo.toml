@@ -25,7 +25,7 @@ webpki-roots = "1.0"
 
 # Crypto / Noise
 snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto", "std"] }
-rand = "0.9"
+rand = "0.10"
 zeroize = { version = "1.8", features = ["zeroize_derive"] }
 base64 = "0.22"
 
