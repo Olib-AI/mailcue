@@ -137,8 +137,9 @@ async def test_full_crud_and_tunnels_json(
     assert entry == {
         "id": tunnel_id,
         "name": "edge-paris",
-        "endpoint": "edge.example.com:7843",
-        "server_pubkey": _VALID_PUBKEY_B64,
+        "host": "edge.example.com",
+        "port": 7843,
+        "edge_pubkey": _VALID_PUBKEY_B64,
         "enabled": True,
         "weight": 5,
     }
@@ -162,7 +163,8 @@ async def test_full_crud_and_tunnels_json(
     assert patch_resp.json()["weight"] == 10
 
     payload2 = json.loads(json_path.read_text())
-    assert payload2["tunnels"][0]["endpoint"] == "new.example.com:7844"
+    assert payload2["tunnels"][0]["host"] == "new.example.com"
+    assert payload2["tunnels"][0]["port"] == 7844
     assert payload2["tunnels"][0]["weight"] == 10
 
     # Add a second tunnel and confirm sort-by-name.

@@ -24,6 +24,12 @@ zeroize = { workspace = true }
 rand = { workspace = true }
 tracing = { workspace = true }
 
+# Used by `authorized_clients` file-write helpers to chown freshly
+# created files to match the owner of their parent directory, so
+# `sudo authorize` produces a file the (unprivileged) daemon can read.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 tempfile = "3.10"

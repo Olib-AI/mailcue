@@ -205,9 +205,13 @@ fn append_with_mode(path: &Path, contents: &[u8], mode: u32) -> std::io::Result<
         .mode(mode)
         .open(path)?;
     if !exists {
-        // Re-apply mode in case umask stripped it on creation.
+        // Re-apply mode in case umask stripped it on creation, then
+        // chown the new file to match its parent directory's owner so
+        // an unprivileged daemon (e.g. `mailcue-edge`) can still read
+        // it after `sudo authorize` writes it.
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+        match_parent_owner(path);
     }
     f.write_all(contents)?;
     f.sync_all()?;
@@ -241,8 +245,57 @@ fn write_atomic(path: &Path, contents: &[u8], mode: u32) -> std::io::Result<()> 
         f.sync_all()?;
     }
     fs::set_permissions(&tmp, fs::Permissions::from_mode(mode))?;
+    // Chown the temp file (becomes the final file via rename) to
+    // match its parent directory's owner — see append_with_mode.
+    match_parent_owner(&tmp);
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// Best-effort: chown `path` to match the owner+group of its parent
+/// directory. Silently no-ops if the chown fails (e.g. when running
+/// without privileges or when the parent is unreadable). The intent is
+/// to make `sudo mailcue-relay-edge authorize ...` produce a file that
+/// the unprivileged service user can read, even though the writer
+/// (root) and the reader (e.g. `mailcue-edge`) are different users.
+#[cfg(unix)]
+fn match_parent_owner(path: &Path) {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::fs::MetadataExt;
+
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| Path::new(".").to_path_buf());
+    let meta = match fs::metadata(&parent) {
+        Ok(m) => m,
+        Err(_) => return,
+    };
+    // If the parent is owned by root anyway, there is nothing to do —
+    // the daemon's "other" bits on a 0640 root:root file would still
+    // deny it; the right answer in that scenario is for the operator
+    // to chown the parent dir to the service user (which is what
+    // install-edge.sh already does).
+    let Ok(c_path) = CString::new(path.as_os_str().as_bytes()) else {
+        return;
+    };
+    // Safety: chown(2) is a thread-safe libc call; we pass a valid
+    // CString and POSIX uid/gid values. The crate-level
+    // `deny(unsafe_code)` lint is opted out only at this call site.
+    #[allow(unsafe_code)]
+    let rc = unsafe { libc::chown(c_path.as_ptr(), meta.uid(), meta.gid()) };
+    if rc != 0 {
+        let err = std::io::Error::last_os_error();
+        tracing::debug!(
+            path = %path.display(),
+            uid = meta.uid(),
+            gid = meta.gid(),
+            error = %err,
+            "match_parent_owner chown skipped",
+        );
+    }
 }
 
 #[cfg(not(unix))]

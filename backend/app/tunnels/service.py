@@ -174,7 +174,12 @@ async def set_client_identity(
 
 
 def _build_tunnels_payload(tunnels: list[Tunnel]) -> dict[str, Any]:
-    """Build the on-disk JSON document consumed by ``mailcue-relay-sidecar``."""
+    """Build the on-disk JSON document consumed by ``mailcue-relay-sidecar``.
+
+    Schema mirrors ``tunnel/crates/sidecar/src/tunnels.rs``: the sidecar's
+    deserializer expects ``host`` + ``port`` as separate fields and
+    ``edge_pubkey`` (not ``server_pubkey``).
+    """
     return {
         "version": _TUNNELS_JSON_VERSION,
         "client_static_key_path": _SIDECAR_KEY_PATH,
@@ -183,8 +188,9 @@ def _build_tunnels_payload(tunnels: list[Tunnel]) -> dict[str, Any]:
             {
                 "id": t.id,
                 "name": t.name,
-                "endpoint": f"{t.endpoint_host}:{t.endpoint_port}",
-                "server_pubkey": t.server_pubkey,
+                "host": t.endpoint_host,
+                "port": int(t.endpoint_port),
+                "edge_pubkey": t.server_pubkey,
                 "enabled": bool(t.enabled),
                 "weight": int(t.weight),
             }

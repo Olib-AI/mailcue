@@ -191,6 +191,32 @@ pub async fn handle_relay(
         "relay complete"
     );
 
+    // Surface non-success outcomes at info level so operators don't
+    // need to flip on debug logging just to see why a recipient was
+    // rejected. Successful deliveries stay quiet (the count above is
+    // enough for the happy path).
+    for r in &final_results {
+        match &r.status {
+            RelayStatus::Delivered { .. } => {}
+            RelayStatus::TempFail { reason, smtp_code } => {
+                info!(
+                    recipient = %r.recipient,
+                    smtp_code = ?smtp_code,
+                    reason = %reason,
+                    "delivery temp-fail",
+                );
+            }
+            RelayStatus::PermFail { reason, smtp_code } => {
+                info!(
+                    recipient = %r.recipient,
+                    smtp_code = ?smtp_code,
+                    reason = %reason,
+                    "delivery perm-fail",
+                );
+            }
+        }
+    }
+
     Ok(final_results)
 }
 
