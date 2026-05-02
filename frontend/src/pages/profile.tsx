@@ -116,12 +116,12 @@ function ProfilePage() {
     if (!revokeTarget) return;
     revokeKey.mutate(revokeTarget.id, {
       onSuccess: () => {
-        toast.success(`API key "${revokeTarget.name}" revoked`);
+        toast.success(`API key "${revokeTarget.name}" removed`);
         setRevokeTarget(null);
       },
       onError: (err) => {
         toast.error(
-          err instanceof Error ? err.message : "Failed to revoke API key"
+          err instanceof Error ? err.message : "Failed to remove API key"
         );
       },
     });
@@ -299,14 +299,7 @@ function ProfilePage() {
                   className="flex items-center justify-between rounded-md border p-3"
                 >
                   <div className="space-y-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{k.name}</span>
-                      {!k.is_active && (
-                        <Badge variant="secondary" className="text-xs">
-                          Revoked
-                        </Badge>
-                      )}
-                    </div>
+                    <span className="text-sm font-medium">{k.name}</span>
                     <div className="flex gap-3 text-xs text-muted-foreground">
                       <span>
                         Prefix: <code className="bg-muted px-1 rounded">{k.prefix}...</code>
@@ -317,16 +310,14 @@ function ProfilePage() {
                       )}
                     </div>
                   </div>
-                  {k.is_active && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               ))}
             </div>
@@ -402,18 +393,18 @@ function ProfilePage() {
         </DialogContent>
       </Dialog>
 
-      {/* Revoke API Key Dialog */}
+      {/* Remove API Key Dialog */}
       <Dialog
         open={revokeTarget !== null}
         onOpenChange={(open) => { if (!open) setRevokeTarget(null); }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke API Key</DialogTitle>
+            <DialogTitle>Remove API Key</DialogTitle>
             <DialogDescription>
-              Are you sure you want to revoke{" "}
-              <strong>{revokeTarget?.name}</strong>? Any applications using this
-              key will lose access immediately.
+              Permanently remove <strong>{revokeTarget?.name}</strong>? Any
+              applications using this key will lose access immediately. This
+              cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -428,7 +419,7 @@ function ProfilePage() {
               {revokeKey.isPending && (
                 <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
               )}
-              Revoke
+              Remove
             </Button>
           </DialogFooter>
         </DialogContent>

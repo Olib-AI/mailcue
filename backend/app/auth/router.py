@@ -618,7 +618,7 @@ async def revoke_api_key(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Revoke (deactivate) an API key."""
+    """Revoke an API key by removing it permanently."""
     stmt = select(APIKey).where(
         APIKey.id == key_id,
         APIKey.user_id == current_user.id,
@@ -632,9 +632,10 @@ async def revoke_api_key(
             detail="API key not found",
         )
 
-    api_key.is_active = False
+    name = api_key.name
+    await db.delete(api_key)
     await db.commit()
-    logger.info("API key '%s' revoked by user '%s'.", api_key.name, current_user.username)
+    logger.info("API key '%s' removed by user '%s'.", name, current_user.username)
 
 
 # ── User management (admin) ────────────────────────────────────
