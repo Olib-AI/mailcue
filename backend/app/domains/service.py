@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.domains.models import Domain
-from app.domains.schemas import DnsCheckResponse, DnsRecordInfo
+from app.domains.schemas import DnsCheckResponse, DnsRecordInfo, DomainDnsStateResponse
 
 logger = logging.getLogger("mailcue.domains")
 
@@ -87,17 +87,56 @@ async def _generate_dkim_keys(domain_name: str, selector: str) -> tuple[str, str
 # ── DNS validation ───────────────────────────────────────────────
 
 
+def _join_txt_rdata(rdata: object) -> str:
+    """Concatenate the ``<character-string>``s of a TXT rdata without a separator.
+
+    DNS TXT records are wire-encoded as one-or-more 255-byte
+    ``<character-string>``s (RFC 1035 §3.3.14).  Authentication semantics
+    (SPF RFC 7208 §3.3, DKIM RFC 6376 §3.6.2.2) require the verifier to
+    concatenate them *without* any whitespace, so a stray space inserted by
+    ``str(rdata)`` would corrupt the value (e.g. break a base64 ``p=`` tag).
+    Falls back to ``str()`` if the rdata is not a TXT-shaped object.
+    """
+    strings = getattr(rdata, "strings", None)
+    if strings is None:
+        return str(rdata).strip('"')
+    parts: list[str] = []
+    for chunk in strings:
+        if isinstance(chunk, bytes | bytearray):
+            parts.append(bytes(chunk).decode("utf-8", errors="replace"))
+        else:
+            parts.append(str(chunk))
+    return "".join(parts)
+
+
+def _format_mx_rdata(rdata: object) -> str:
+    """Render an MX rdata as ``"<pref> <host>."`` to match ``expected_value``."""
+    pref = getattr(rdata, "preference", None)
+    exchange = getattr(rdata, "exchange", None)
+    host = str(exchange).rstrip(".") if exchange is not None else ""
+    if pref is None:
+        return f"{host}."
+    return f"{int(pref)} {host}."
+
+
 async def _check_mx(domain_name: str, hostname: str) -> tuple[bool, str | None]:
-    """Check if MX record points to our hostname."""
+    """Check if MX record points to our hostname.
+
+    Returns ``(verified, current_value)`` where ``current_value`` is the
+    full ``"<preference> <host>."`` form so the drift comparison can match
+    the canonical ``expected_value`` exactly.
+    """
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, domain_name, "MX")
+        first_formatted: str | None = None
         for rdata in answers:
-            mx_host = str(rdata.exchange).rstrip(".")
+            formatted = _format_mx_rdata(rdata)
+            if first_formatted is None:
+                first_formatted = formatted
+            mx_host = str(getattr(rdata, "exchange", "")).rstrip(".")
             if mx_host == hostname:
-                return True, mx_host
-        # Return first MX found even if not matching
-        first_mx = str(next(iter(answers)).exchange).rstrip(".") if answers else None
-        return False, first_mx
+                return True, formatted
+        return False, first_formatted
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -109,11 +148,14 @@ async def _check_spf(domain_name: str) -> tuple[bool, str | None]:
     """Check if TXT record contains a valid SPF record."""
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, domain_name, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=spf1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -128,14 +170,19 @@ async def _check_dkim(
     dkim_domain = f"{selector}._domainkey.{domain_name}"
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, dkim_domain, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
-            if "p=" in txt and expected_public_key:
-                # Extract p= value for comparison
-                return True, txt
-            elif "p=" in txt:
-                return True, txt
-        return False, None
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
+            if "p=" in txt:
+                # If we have an expected key, only treat as verified on exact
+                # match.  Otherwise (no expected key recorded yet) accept any
+                # ``p=``-bearing record.
+                if expected_public_key is None or txt == expected_public_key:
+                    return True, txt
+                return False, txt
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -148,11 +195,14 @@ async def _check_dmarc(domain_name: str) -> tuple[bool, str | None]:
     dmarc_domain = f"_dmarc.{domain_name}"
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, dmarc_domain, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=DMARC1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -164,11 +214,14 @@ async def _check_helo_spf(hostname: str) -> tuple[bool, str | None]:
     """Check if the mail server hostname has its own SPF TXT record."""
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, hostname, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=spf1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -181,11 +234,14 @@ async def _check_bimi(domain_name: str) -> tuple[bool, str | None]:
     bimi_domain = f"default._bimi.{domain_name}"
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, bimi_domain, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=BIMI1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -198,11 +254,14 @@ async def _check_mta_sts(domain_name: str) -> tuple[bool, str | None]:
     mta_sts_domain = f"_mta-sts.{domain_name}"
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, mta_sts_domain, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=STSv1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -215,11 +274,14 @@ async def _check_tls_rpt(domain_name: str) -> tuple[bool, str | None]:
     tls_rpt_domain = f"_smtp._tls.{domain_name}"
     try:
         answers = await asyncio.to_thread(dns.resolver.resolve, tls_rpt_domain, "TXT")
+        first_txt: str | None = None
         for rdata in answers:
-            txt = str(rdata).strip('"')
+            txt = _join_txt_rdata(rdata)
+            if first_txt is None:
+                first_txt = txt
             if txt.startswith("v=TLSRPTv1"):
                 return True, txt
-        return False, None
+        return False, first_txt
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -507,20 +569,27 @@ async def remove_domain(name: str, db: AsyncSession) -> None:
     logger.info("Domain '%s' removed.", name)
 
 
-async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
-    """Run live DNS checks for a domain and update cached status."""
-    from app.system.service import get_server_hostname
+# ── DNS state assembly ───────────────────────────────────────────
 
-    stmt = select(Domain).where(Domain.name == name)
-    result = await db.execute(stmt)
-    domain = result.scalar_one_or_none()
 
-    if domain is None:
-        raise ValueError(f"Domain '{name}' not found")
+# Slots for per-record audit timestamps on Domain.  Index aligns with the
+# tuple returned from ``_run_dns_checks``.
+_CANONICAL_RECORD_SLOTS: tuple[str, ...] = (
+    "mx",
+    "spf",
+    "dkim",
+    "dmarc",
+    "mta_sts",
+    "tls_rpt",
+)
 
-    hostname = await get_server_hostname(db)
 
-    # Run all checks concurrently
+async def _run_dns_checks(domain: Domain, hostname: str) -> dict[str, tuple[bool, str | None]]:
+    """Resolve every DNS record type for the domain in parallel.
+
+    Returns a mapping keyed by logical record name (matches
+    ``_CANONICAL_RECORD_SLOTS`` plus ``helo_spf`` and ``bimi``).
+    """
     (
         mx_result,
         spf_result,
@@ -540,40 +609,105 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
         _check_mta_sts(domain.name),
         _check_tls_rpt(domain.name),
     )
+    return {
+        "mx": mx_result,
+        "spf": spf_result,
+        "helo_spf": helo_spf_result,
+        "dkim": dkim_result,
+        "dmarc": dmarc_result,
+        "bimi": bimi_result,
+        "mta_sts": mta_sts_result,
+        "tls_rpt": tls_rpt_result,
+    }
 
-    domain.mx_verified = mx_result[0]
-    domain.spf_verified = spf_result[0]
-    domain.dkim_verified = dkim_result[0]
-    domain.dmarc_verified = dmarc_result[0]
-    domain.mta_sts_verified = mta_sts_result[0]
-    domain.tls_rpt_verified = tls_rpt_result[0]
-    domain.last_dns_check = datetime.now(UTC)
+
+def _stamp_audit_timestamps(
+    domain: Domain,
+    checks: dict[str, tuple[bool, str | None]],
+    now: datetime,
+) -> None:
+    """Advance ``*_last_checked_at`` on every canonical record and
+    ``*_last_verified_at`` only on records that verified."""
+    for slot in _CANONICAL_RECORD_SLOTS:
+        verified, _ = checks[slot]
+        setattr(domain, f"{slot}_last_checked_at", now)
+        if verified:
+            setattr(domain, f"{slot}_last_verified_at", now)
+
+
+def _attach_check_metadata(
+    domain: Domain,
+    records: list[DnsRecordInfo],
+    checks: dict[str, tuple[bool, str | None]],
+) -> None:
+    """Populate ``current_value``, ``drift`` and per-record audit timestamps
+    on a freshly built ``DnsRecordInfo`` list.
+
+    Order MUST match ``_build_dns_records``: MX, SPF, HELO SPF, DKIM, DMARC,
+    BIMI, MTA-STS, TLS-RPT, PTR, A.
+    """
+    # (logical_slot, audit_attr_prefix_or_None) — None means info-only,
+    # no audit timestamps and no drift even if current_value is set.
+    layout: tuple[tuple[str | None, str | None], ...] = (
+        ("mx", "mx"),
+        ("spf", "spf"),
+        ("helo_spf", None),  # informational — not gated on
+        ("dkim", "dkim"),
+        ("dmarc", "dmarc"),
+        ("bimi", None),  # informational — not gated on
+        ("mta_sts", "mta_sts"),
+        ("tls_rpt", "tls_rpt"),
+        (None, None),  # PTR — manual / out-of-band
+        (None, None),  # A   — manual / out-of-band
+    )
+    for record, (slot, audit) in zip(records, layout, strict=True):
+        current: str | None = checks[slot][1] if slot is not None else None
+        record.current_value = current
+        record.drift = (
+            audit is not None and current is not None and current != record.expected_value
+        )
+        if audit is not None:
+            record.last_checked_at = getattr(domain, f"{audit}_last_checked_at")
+            record.last_verified_at = getattr(domain, f"{audit}_last_verified_at")
+
+
+async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
+    """Run live DNS checks for a domain and update cached status.
+
+    This is the only entry-point that flips the canonical ``*_verified``
+    booleans on ``Domain``.  It also stamps the per-record audit
+    timestamps and reports ``current_value`` / ``drift`` per record.
+    """
+    from app.system.service import get_server_hostname
+
+    stmt = select(Domain).where(Domain.name == name)
+    result = await db.execute(stmt)
+    domain = result.scalar_one_or_none()
+
+    if domain is None:
+        raise ValueError(f"Domain '{name}' not found")
+
+    hostname = await get_server_hostname(db)
+    checks = await _run_dns_checks(domain, hostname)
+    now = datetime.now(UTC)
+
+    domain.mx_verified = checks["mx"][0]
+    domain.spf_verified = checks["spf"][0]
+    domain.dkim_verified = checks["dkim"][0]
+    domain.dmarc_verified = checks["dmarc"][0]
+    domain.mta_sts_verified = checks["mta_sts"][0]
+    domain.tls_rpt_verified = checks["tls_rpt"][0]
+    domain.last_dns_check = now
+    _stamp_audit_timestamps(domain, checks, now)
     await db.commit()
 
-    # Build DNS records with current values
     records = _build_dns_records(
         domain,
         hostname,
-        helo_spf_verified=helo_spf_result[0],
-        bimi_verified=bimi_result[0],
+        helo_spf_verified=checks["helo_spf"][0],
+        bimi_verified=checks["bimi"][0],
     )
-    # Attach current values from the check results
-    # Order matches _build_dns_records: MX, SPF, HELO SPF, DKIM, DMARC, BIMI,
-    #   MTA-STS, TLS-RPT, PTR, A
-    current_values: list[str | None] = [
-        mx_result[1],
-        spf_result[1],
-        helo_spf_result[1],
-        dkim_result[1],
-        dmarc_result[1],
-        bimi_result[1],
-        mta_sts_result[1],
-        tls_rpt_result[1],
-        None,  # PTR — informational only
-        None,  # A — informational only
-    ]
-    for record, current_value in zip(records, current_values, strict=False):
-        record.current_value = current_value
+    _attach_check_metadata(domain, records, checks)
 
     all_verified = all(
         [
@@ -595,6 +729,60 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
         tls_rpt_verified=domain.tls_rpt_verified,
         all_verified=all_verified,
         dns_records=records,
+    )
+
+
+async def compute_dns_state(name: str, db: AsyncSession) -> DomainDnsStateResponse:
+    """Read-only DNS drift snapshot for a domain.
+
+    Behaves like ``verify_dns`` in that it issues fresh DNS lookups and
+    persists the per-record ``*_last_checked_at`` / ``*_last_verified_at``
+    timestamps so the UI's "checked N min ago" indicator stays current.
+    Crucially it does NOT touch the canonical ``*_verified`` booleans —
+    those drive production-mode gates and must only flap when a human
+    explicitly hits ``POST /verify-dns``.  Drift detection is real-time
+    and needs no caching.
+    """
+    from app.system.service import get_server_hostname
+
+    stmt = select(Domain).where(Domain.name == name)
+    result = await db.execute(stmt)
+    domain = result.scalar_one_or_none()
+
+    if domain is None:
+        raise ValueError(f"Domain '{name}' not found")
+
+    hostname = await get_server_hostname(db)
+    checks = await _run_dns_checks(domain, hostname)
+    now = datetime.now(UTC)
+
+    _stamp_audit_timestamps(domain, checks, now)
+    await db.commit()
+
+    records = _build_dns_records(
+        domain,
+        hostname,
+        helo_spf_verified=checks["helo_spf"][0],
+        bimi_verified=checks["bimi"][0],
+    )
+    _attach_check_metadata(domain, records, checks)
+
+    has_drift = any(r.drift for r in records)
+    # Only canonical (audited) records contribute to has_missing — info-only
+    # records like HELO SPF, BIMI, PTR, A leave ``last_checked_at`` unset and
+    # are excluded by design.
+    has_missing = any(r.current_value is None and r.last_checked_at is not None for r in records)
+    last_dns_check = max(
+        (r.last_checked_at for r in records if r.last_checked_at is not None),
+        default=None,
+    )
+
+    return DomainDnsStateResponse(
+        domain=domain.name,
+        records=records,
+        has_drift=has_drift,
+        has_missing=has_missing,
+        last_dns_check=last_dns_check,
     )
 
 

@@ -47,9 +47,12 @@ class DnsRecordInfo(BaseModel):
     record_type: str
     hostname: str
     expected_value: str
-    verified: bool
     current_value: str | None = None
+    verified: bool
     purpose: str
+    last_checked_at: datetime | None = None
+    last_verified_at: datetime | None = None
+    drift: bool = False
 
 
 class DomainResponse(BaseModel):
@@ -97,3 +100,18 @@ class DnsCheckResponse(BaseModel):
     tls_rpt_verified: bool = False
     all_verified: bool
     dns_records: list[DnsRecordInfo]
+
+
+class DomainDnsStateResponse(BaseModel):
+    """Read-only snapshot of every published DNS record vs the expected value.
+
+    Designed to be polled cheaply from the admin UI to surface drift without
+    flipping the canonical ``*_verified`` booleans (only ``POST /verify-dns``
+    does that).
+    """
+
+    domain: str
+    records: list[DnsRecordInfo]
+    has_drift: bool
+    has_missing: bool
+    last_dns_check: datetime | None
