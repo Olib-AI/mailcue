@@ -21,8 +21,14 @@ import type {
 export const emailKeys = {
   all: ["emails"] as const,
   lists: () => [...emailKeys.all, "list"] as const,
-  list: (mailbox: string, folder: string, search?: string) =>
-    [...emailKeys.lists(), mailbox, folder, search ?? ""] as const,
+  list: (mailbox: string, folder: string, search?: string, threadView = false) =>
+    [
+      ...emailKeys.lists(),
+      mailbox,
+      folder,
+      search ?? "",
+      threadView ? "threaded" : "flat",
+    ] as const,
   details: () => [...emailKeys.all, "detail"] as const,
   detail: (mailbox: string, uid: string) =>
     [...emailKeys.details(), mailbox, uid] as const,
@@ -37,10 +43,11 @@ const PAGE_SIZE = 50;
 export function useEmails(
   mailbox: string | null,
   folder: string,
-  search?: string
+  search?: string,
+  threadView: boolean = false
 ) {
   return useInfiniteQuery({
-    queryKey: emailKeys.list(mailbox ?? "", folder, search),
+    queryKey: emailKeys.list(mailbox ?? "", folder, search, threadView),
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams({
         folder,
@@ -48,6 +55,7 @@ export function useEmails(
         page_size: String(PAGE_SIZE),
       });
       if (search) params.set("search", search);
+      if (threadView) params.set("thread_view", "true");
       return api.get<EmailListResponse>(
         `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails?${params.toString()}`
       );

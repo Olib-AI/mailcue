@@ -5,6 +5,16 @@ type Theme = "light" | "dark" | "system";
 
 type ComposeMode = "new" | "reply" | "reply-all" | "forward";
 
+type MailViewMode = "conversations" | "messages";
+
+const MAIL_VIEW_MODE_KEY = "mailcue.mail.view_mode";
+
+function getInitialMailViewMode(): MailViewMode {
+  if (typeof window === "undefined") return "conversations";
+  const stored = window.localStorage.getItem(MAIL_VIEW_MODE_KEY);
+  return stored === "messages" ? "messages" : "conversations";
+}
+
 interface ComposeContext {
   mode: ComposeMode;
   originalEmail: EmailDetailType;
@@ -40,6 +50,15 @@ interface UIState {
   // Selected email
   selectedEmailUid: string | null;
   setSelectedEmailUid: (uid: string | null) => void;
+
+  // Selected thread (Conversations view) — when set, the reading pane shows
+  // the whole thread instead of a single email.
+  selectedThreadId: string | null;
+  setSelectedThreadId: (threadId: string | null) => void;
+
+  // Mail view mode (Conversations vs flat Messages)
+  mailViewMode: MailViewMode;
+  setMailViewMode: (mode: MailViewMode) => void;
 
   // Selected mailbox
   selectedMailbox: string | null;
@@ -86,13 +105,37 @@ export const useUIStore = create<UIState>((set) => {
     selectedEmailUid: null,
     setSelectedEmailUid: (uid) => set({ selectedEmailUid: uid }),
 
+    selectedThreadId: null,
+    setSelectedThreadId: (threadId) => set({ selectedThreadId: threadId }),
+
+    mailViewMode: getInitialMailViewMode(),
+    setMailViewMode: (mode) => {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(MAIL_VIEW_MODE_KEY, mode);
+      }
+      set({
+        mailViewMode: mode,
+        // Switching modes invalidates the current selection
+        selectedEmailUid: null,
+        selectedThreadId: null,
+      });
+    },
+
     selectedMailbox: null,
     setSelectedMailbox: (mailbox) =>
-      set({ selectedMailbox: mailbox, selectedEmailUid: null }),
+      set({
+        selectedMailbox: mailbox,
+        selectedEmailUid: null,
+        selectedThreadId: null,
+      }),
 
     selectedFolder: "INBOX",
     setSelectedFolder: (folder) =>
-      set({ selectedFolder: folder, selectedEmailUid: null }),
+      set({
+        selectedFolder: folder,
+        selectedEmailUid: null,
+        selectedThreadId: null,
+      }),
 
     composeOpen: false,
     composeContext: null,
