@@ -45,4 +45,4 @@ gethostname = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-tempfile = "3.10"
+tempfile = "3.27"
