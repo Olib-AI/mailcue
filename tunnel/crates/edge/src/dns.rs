@@ -4,13 +4,15 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use hickory_resolver::TokioAsyncResolver;
-use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
+use hickory_resolver::TokioResolver;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig};
+use hickory_resolver::net::runtime::TokioRuntimeProvider;
+use hickory_resolver::net::{DnsError, NetError};
 
 /// Async MX resolver, share-friendly via [`Arc`].
 #[derive(Clone)]
 pub struct MxResolver {
-    inner: Arc<TokioAsyncResolver>,
+    inner: Arc<TokioResolver>,
 }
 
 /// One MX answer.
@@ -31,22 +33,23 @@ impl MxResolver {
     /// Returns an error if the system resolver cannot be probed.
     pub fn new(nameservers: &[SocketAddr]) -> Result<Self> {
         let resolver = if nameservers.is_empty() {
-            TokioAsyncResolver::tokio_from_system_conf()
+            // hickory 0.26 replaced `TokioAsyncResolver::tokio_from_system_conf()`
+            // with the builder pattern; `builder_tokio` reads the system
+            // configuration (`/etc/resolv.conf` on Unix, registry on Windows).
+            TokioResolver::builder_tokio()
                 .context("read system resolver configuration")?
+                .build()
+                .context("build system tokio resolver")?
         } else {
-            let mut cfg = ResolverConfig::new();
-            for &addr in nameservers {
-                cfg.add_name_server(NameServerConfig {
-                    socket_addr: addr,
-                    protocol: Protocol::Udp,
-                    tls_dns_name: None,
-                    trust_negative_responses: false,
-                    bind_addr: None,
-                });
-            }
-            let mut opts = ResolverOpts::default();
-            opts.timeout = std::time::Duration::from_secs(5);
-            TokioAsyncResolver::tokio(cfg, opts)
+            let name_servers: Vec<NameServerConfig> = nameservers
+                .iter()
+                .map(|a| NameServerConfig::udp(a.ip()))
+                .collect();
+            let cfg = ResolverConfig::from_parts(None, vec![], name_servers);
+            let mut builder =
+                TokioResolver::builder_with_config(cfg, TokioRuntimeProvider::default());
+            builder.options_mut().timeout = std::time::Duration::from_secs(5);
+            builder.build().context("build custom tokio resolver")?
         };
         Ok(Self {
             inner: Arc::new(resolver),
@@ -65,11 +68,9 @@ impl MxResolver {
         let lookup = match self.inner.mx_lookup(domain).await {
             Ok(l) => l,
             Err(e) => {
-                let kind = e.kind();
-                if matches!(
-                    kind,
-                    hickory_resolver::error::ResolveErrorKind::NoRecordsFound { .. }
-                ) {
+                // hickory 0.26 surfaces "no records" via the structured
+                // `NetError::Dns(DnsError::NoRecordsFound(_))` variant.
+                if matches!(&e, NetError::Dns(DnsError::NoRecordsFound(_))) {
                     // Implicit-MX fallback — RFC 5321 §5.1.
                     return Ok(vec![MxRecord {
                         host: domain.trim_end_matches('.').to_string(),
@@ -80,11 +81,17 @@ impl MxResolver {
             }
         };
 
+        // hickory 0.26 returns the generic `Lookup` from `mx_lookup`; iterate
+        // over the answer records and extract `RData::MX` payloads.
         let mut out: Vec<MxRecord> = lookup
+            .answers()
             .iter()
-            .map(|m| MxRecord {
-                host: m.exchange().to_utf8().trim_end_matches('.').to_string(),
-                preference: m.preference(),
+            .filter_map(|r| match &r.data {
+                hickory_resolver::proto::rr::RData::MX(mx) => Some(MxRecord {
+                    host: mx.exchange.to_utf8().trim_end_matches('.').to_string(),
+                    preference: mx.preference,
+                }),
+                _ => None,
             })
             .filter(|r| !r.host.is_empty() && r.host != ".")
             .collect();

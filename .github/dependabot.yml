@@ -43,3 +43,29 @@ updates:
     labels:
       - "dependencies"
     open-pull-requests-limit: 5
+
+  # Cargo (Rust tunnel workspace)
+  - package-ecosystem: "cargo"
+    directory: "/tunnel"
+    schedule:
+      interval: "weekly"
+    reviewers:
+      - "Olib-AI"
+    labels:
+      - "dependencies"
+      - "rust"
+    open-pull-requests-limit: 10
+    groups:
+      tokio-stack:
+        patterns:
+          - "tokio*"
+          - "hyper*"
+          - "http-body*"
+      tracing-stack:
+        patterns:
+          - "tracing*"
+      rustls-stack:
+        patterns:
+          - "rustls*"
+          - "webpki-roots"
+          - "tokio-rustls"

@@ -80,11 +80,13 @@ where
         .parse()
         .map_err(|e: snow::Error| HandshakeError::Pattern(e.to_string()))?;
 
-    let builder = Builder::new(params).local_private_key(local_static_private);
+    // snow 0.10 changed `local_private_key` and `remote_public_key` to
+    // return `Result<Self, Error>` instead of `Self`.
+    let builder = Builder::new(params).local_private_key(local_static_private)?;
 
     let mut state: HandshakeState = match role {
         HandshakeRole::Initiator { remote_static } => builder
-            .remote_public_key(&remote_static)
+            .remote_public_key(&remote_static)?
             .build_initiator()?,
         HandshakeRole::Responder => builder.build_responder()?,
     };

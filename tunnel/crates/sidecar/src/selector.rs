@@ -73,8 +73,9 @@ impl Selector {
 }
 
 fn uniform<'a>(candidates: &[&'a Tunnel]) -> Option<&'a Tunnel> {
-    let mut rng = rand::thread_rng();
-    let idx = rng.gen_range(0..candidates.len());
+    // rand 0.9: `thread_rng()`/`gen_range` were renamed to `rng()`/`random_range`.
+    let mut rng = rand::rng();
+    let idx = rng.random_range(0..candidates.len());
     Some(candidates[idx])
 }
 
@@ -83,8 +84,8 @@ fn weighted<'a>(candidates: &[&'a Tunnel]) -> Option<&'a Tunnel> {
     if total == 0 {
         return uniform(candidates);
     }
-    let mut rng = rand::thread_rng();
-    let mut roll = rng.gen_range(0..total);
+    let mut rng = rand::rng();
+    let mut roll = rng.random_range(0..total);
     for t in candidates {
         let w = u64::from(t.weight.max(1));
         if roll < w {
