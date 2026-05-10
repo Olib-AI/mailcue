@@ -26,7 +26,7 @@
     "@tiptap/starter-kit": "^3.22.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dompurify": "^3.4.1",
+    "dompurify": "^3.4.2",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
