@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import re
 import subprocess
@@ -462,12 +463,65 @@ async def _reload_mail_services() -> None:
 # ── High-level API ───────────────────────────────────────────────
 
 
-async def _list_active_tunnel_hosts(db: AsyncSession) -> list[str]:
-    """Return the deduped, ordered list of enabled tunnel ``endpoint_host``s.
+def _read_tunnel_hosts_from_json(path: str | Path) -> list[str]:
+    """Read enabled relay hosts from the sidecar's ``tunnels.json``.
 
-    These are the relay hostnames that an outbound MAIL FROM uses, so they
-    are exactly the ``a:`` mechanisms the apex SPF record must authorise.
-    Empty list when no tunnels are configured (single-host deployment).
+    The sidecar (``mailcue-relay-sidecar``) treats this file as its single
+    source of truth — it loads it on boot and reloads on inotify.  Any
+    relay listed here is one that outbound mail might actually egress
+    through, so the apex SPF must authorise it.
+
+    Returns an empty list when the file is missing, unreadable, or its
+    schema doesn't match.  Never raises — SPF generation must not depend
+    on the sidecar's filesystem being available.
+    """
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except (OSError, FileNotFoundError):
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Could not parse tunnels.json at %s — invalid JSON.", path)
+        return []
+    entries = data.get("tunnels") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return []
+    seen: set[str] = set()
+    hosts: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        # ``enabled`` defaults to True so a hand-written file that omits
+        # the field is treated as live (matching the sidecar's behaviour).
+        if entry.get("enabled", True) is False:
+            continue
+        host_value = entry.get("host")
+        if not isinstance(host_value, str):
+            continue
+        host = host_value.strip().rstrip(".").lower()
+        if host and host not in seen:
+            seen.add(host)
+            hosts.append(host)
+    return hosts
+
+
+async def _list_active_tunnel_hosts(db: AsyncSession) -> list[str]:
+    """Return the deduped, ordered list of relay hostnames outbound mail
+    may egress through.
+
+    These are the relay hostnames an outbound MAIL FROM uses, so they are
+    exactly the ``a:`` mechanisms the apex SPF record must authorise.
+    Source-of-truth precedence:
+
+      1. The ``tunnels`` DB table — populated when an admin configures
+         tunnels via the API.
+      2. ``/etc/mailcue-sidecar/tunnels.json`` — populated by hand or by
+         older deployments that bootstrap the sidecar config out-of-band.
+         Read directly so externally-managed sidecars still get accurate
+         SPF guidance without forcing operators to mirror their config
+         into the DB.
+      3. Empty list — single-host deployment with no relays.
     """
     stmt = select(Tunnel).where(Tunnel.enabled.is_(True)).order_by(Tunnel.name)
     result = await db.execute(stmt)
@@ -478,7 +532,9 @@ async def _list_active_tunnel_hosts(db: AsyncSession) -> list[str]:
         if host and host not in seen:
             seen.add(host)
             hosts.append(host)
-    return hosts
+    if hosts:
+        return hosts
+    return await asyncio.to_thread(_read_tunnel_hosts_from_json, settings.tunnels_config_path)
 
 
 def _build_spf_expected(hostname: str, tunnel_hosts: list[str]) -> str:

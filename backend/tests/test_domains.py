@@ -28,6 +28,7 @@ from app.domains.service import (
     _join_txt_rdata,
     _normalize_dkim_txt,
     _parse_zonefile_txt,
+    _read_tunnel_hosts_from_json,
 )
 from app.tunnels.models import Tunnel
 
@@ -496,6 +497,105 @@ async def test_spf_expected_includes_every_enabled_tunnel(
     assert spf_rec["current_value"] == expected_spf
     assert spf_rec["drift"] is False
     assert body["has_drift"] is False
+
+
+# ── Tests: tunnels.json fallback for externally-managed sidecars ─
+
+
+def test_read_tunnel_hosts_from_json_returns_enabled_hosts(tmp_path: Any) -> None:
+    """``tunnels.json`` is the sidecar's source of truth — operators who
+    bootstrap it directly (rather than via the API) must still get an
+    SPF that authorises every relay."""
+    import json as _json
+
+    cfg = tmp_path / "tunnels.json"
+    cfg.write_text(
+        _json.dumps(
+            {
+                "version": 1,
+                "tunnels": [
+                    {"name": "us", "host": "Relay-US.EXAMPLE.com.", "enabled": True},
+                    {"name": "de", "host": "relay-de.example.com", "enabled": True},
+                    {"name": "old", "host": "relay-old.example.com", "enabled": False},
+                    # Duplicate host across entries — must dedupe.
+                    {"name": "us-2", "host": "relay-us.example.com"},
+                ],
+            }
+        )
+    )
+    hosts = _read_tunnel_hosts_from_json(cfg)
+    # Order preserved, dot-normalised + lowercased, disabled dropped, duplicate dropped.
+    assert hosts == ["relay-us.example.com", "relay-de.example.com"]
+
+
+def test_read_tunnel_hosts_from_json_handles_missing_and_garbage(tmp_path: Any) -> None:
+    """Must never raise: SPF generation has to keep working even when the
+    sidecar isn't deployed or its config is mid-rewrite."""
+    assert _read_tunnel_hosts_from_json(tmp_path / "does-not-exist.json") == []
+
+    bad = tmp_path / "tunnels.json"
+    bad.write_text("not json {")
+    assert _read_tunnel_hosts_from_json(bad) == []
+
+    # Schema-mismatched JSON (top-level list, no ``tunnels`` key, etc).
+    bad.write_text("[1, 2, 3]")
+    assert _read_tunnel_hosts_from_json(bad) == []
+    bad.write_text('{"tunnels": "not-a-list"}')
+    assert _read_tunnel_hosts_from_json(bad) == []
+
+
+async def test_spf_falls_through_to_tunnels_json_when_db_empty(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+    tmp_path: Any,
+) -> None:
+    """The actual user-reported regression: a deployment that bootstrapped
+    the sidecar by hand (no API calls) had zero ``Tunnel`` rows, so SPF
+    fell back to the single-host default even though the live DNS listed
+    multiple relays.  With the JSON fallback in place, the expected SPF
+    must reflect the relays declared in ``tunnels.json``."""
+    import json as _json
+
+    cfg = tmp_path / "tunnels.json"
+    cfg.write_text(
+        _json.dumps(
+            {
+                "version": 1,
+                "tunnels": [
+                    {"name": "us", "host": "relay-us.example.com", "enabled": True},
+                    {"name": "de", "host": "relay-de.example.com", "enabled": True},
+                ],
+            }
+        )
+    )
+
+    from app.config import settings as _settings
+
+    monkeypatch.setattr(_settings, "tunnels_config_path", str(cfg), raising=False)
+
+    expected_spf = "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+        spf_value=expected_spf,
+    )
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.get(f"/api/v1/domains/{seed_domain.name}/dns-state")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    spf_rec = next(
+        r
+        for r in body["records"]
+        if r["record_type"] == "TXT" and r["hostname"] == seed_domain.name
+    )
+    assert spf_rec["expected_value"] == expected_spf
+    assert spf_rec["drift"] is False
 
 
 # ── Tests: MTA-STS id is operator-chosen ─────────────────────────

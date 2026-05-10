@@ -133,7 +133,7 @@ Append (replace with the FQDN you set as rDNS for **this** VPS — see
 
 ```ini
 [Service]
-Environment=MAILCUE_EDGE_HELO_HOSTNAME=relay-us.olib.email
+Environment=MAILCUE_EDGE_HELO_HOSTNAME=relay-us.example.com
 ```
 
 Then `sudo systemctl restart mailcue-relay-edge`.
@@ -141,7 +141,7 @@ Then `sudo systemctl restart mailcue-relay-edge`.
 You can also set it in `/etc/mailcue-edge/config.toml`:
 
 ```toml
-helo_hostname = "relay-us.olib.email"
+helo_hostname = "relay-us.example.com"
 ```
 
 ---
@@ -154,15 +154,15 @@ relay through needs **all five** of the following set up before it can
 deliver mail. Skipping any one of them produces a 5xx rejection that
 looks like a tunnel bug but isn't.
 
-For each VPS hostname (e.g. `relay-us.olib.email`):
+For each VPS hostname (e.g. `relay-us.example.com`):
 
 | # | Direction | What | Where set | Verify |
 |---|---|---|---|---|
-| 1 | **Forward (A)**: hostname → IPv4 | Your DNS provider | `dig +short A relay-us.olib.email` |
-| 2 | **Forward (AAAA)**: hostname → IPv6 (if the VPS has IPv6 — most do) | Your DNS provider | `dig +short AAAA relay-us.olib.email` |
-| 3 | **Reverse (PTR) v4**: IPv4 → hostname | OVH (or other VPS provider) manager | `dig +short -x 51.81.202.4` |
-| 4 | **Reverse (PTR) v6**: IPv6 → hostname | OVH manager (separate row from v4!) | `dig +short -x 2604:2dc0:202:300::24de` |
-| 5 | **SPF** for the apex domain (`olib.email`) covering both IP families of every relay | Your DNS provider | `dig +short TXT olib.email` |
+| 1 | **Forward (A)**: hostname → IPv4 | Your DNS provider | `dig +short A relay-us.example.com` |
+| 2 | **Forward (AAAA)**: hostname → IPv6 (if the VPS has IPv6 — most do) | Your DNS provider | `dig +short AAAA relay-us.example.com` |
+| 3 | **Reverse (PTR) v4**: IPv4 → hostname | OVH (or other VPS provider) manager | `dig +short -x 192.0.2.4` |
+| 4 | **Reverse (PTR) v6**: IPv6 → hostname | OVH manager (separate row from v4!) | `dig +short -x 2001:db8::24de` |
+| 5 | **SPF** for the apex domain (`example.com`) covering both IP families of every relay | Your DNS provider | `dig +short TXT example.com` |
 
 Two recurring traps:
 
@@ -171,14 +171,14 @@ Two recurring traps:
   rDNS unset or pointing at a generic `vps-…` domain. Gmail will use
   whichever family the VPS picks for the outbound connection (often v6
   if available) and reject if PTR doesn't match.
-- **SPF is set on the relay hostname (`relay-us.olib.email`) but not
-  on the apex (`olib.email`).** Gmail's SPF check runs against the
+- **SPF is set on the relay hostname (`relay-us.example.com`) but not
+  on the apex (`example.com`).** Gmail's SPF check runs against the
   envelope `MAIL FROM` domain. Real Mailcue traffic will use
-  `From: user@olib.email`, so the apex must authorize *every* relay
+  `From: user@example.com`, so the apex must authorize *every* relay
   IP. Use the `a:` mechanism — it covers both A and AAAA records:
 
   ```text
-  olib.email.   IN  TXT  "v=spf1 mx a:relay-us.olib.email a:relay-de.olib.email -all"
+  example.com.   IN  TXT  "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"
   ```
 
   This automatically authorizes all IPs of all named relay hosts; you
@@ -349,7 +349,7 @@ Common causes (read these in order):
   Your apex SPF doesn't authorize the IP that actually carried the
   outbound connection. Re-check that the SPF record covers *both*
   IPv4 and IPv6 of the relay (use the `a:` mechanism, see "DNS
-  prerequisites" above). Then verify with `dig +short TXT olib.email`.
+  prerequisites" above). Then verify with `dig +short TXT example.com`.
 - **`550 5.7.1 ... does not meet IPv6 sending guidelines regarding
   PTR records`** — the IPv6 PTR for the source IP is missing or wrong.
   Set it in OVH manager (separate row from the IPv4 PTR), then re-test.
