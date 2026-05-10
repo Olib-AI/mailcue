@@ -203,7 +203,7 @@ async def test_order_numbers_xml(client: AsyncClient, bandwidth_provider: dict):
   </ExistingTelephoneNumberOrderType>
 </Order>"""
     resp = await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/orders",
+        f"/sandbox/bandwidth/api/accounts/{acc}/orders",
         content=xml_body,
         headers={**_auth(bandwidth_provider), "Content-Type": "application/xml"},
     )
@@ -223,7 +223,7 @@ async def test_port_in_xml_lifecycle(client: AsyncClient, bandwidth_provider: di
   <LoaType>CARRIER</LoaType>
 </LnpOrder>"""
     resp = await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/portIns",
+        f"/sandbox/bandwidth/api/accounts/{acc}/portIns",
         content=xml_body,
         headers={**_auth(bandwidth_provider), "Content-Type": "application/xml"},
     )
@@ -237,7 +237,7 @@ async def test_port_in_xml_lifecycle(client: AsyncClient, bandwidth_provider: di
     port_id = m.group(1)
     await asyncio.sleep(0.3)
     fetch = await client.get(
-        f"/sandbox/bandwidth/accounts/{acc}/portIns/{port_id}",
+        f"/sandbox/bandwidth/api/accounts/{acc}/portIns/{port_id}",
         headers=_auth(bandwidth_provider),
     )
     assert fetch.status_code == 200
@@ -250,7 +250,7 @@ async def test_port_in_xml_lifecycle(client: AsyncClient, bandwidth_provider: di
 async def test_csp_brand_and_campaign(client: AsyncClient, bandwidth_provider: dict):
     acc = _acct(bandwidth_provider)
     brand = await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/csp/brands",
+        f"/sandbox/bandwidth/api/accounts/{acc}/csp/brands",
         json={
             "entityType": "PRIVATE_PROFIT",
             "displayName": "ACME",
@@ -265,13 +265,13 @@ async def test_csp_brand_and_campaign(client: AsyncClient, bandwidth_provider: d
 
     await asyncio.sleep(0.2)
     fetch = await client.get(
-        f"/sandbox/bandwidth/accounts/{acc}/csp/brands/{brand_id}",
+        f"/sandbox/bandwidth/api/accounts/{acc}/csp/brands/{brand_id}",
         headers=_auth(bandwidth_provider),
     )
     assert fetch.json()["status"] in {"PENDING", "APPROVED"}
 
     camp = await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/csp/campaigns",
+        f"/sandbox/bandwidth/api/accounts/{acc}/csp/campaigns",
         json={
             "brandId": brand_id,
             "usecase": "MARKETING",
@@ -284,7 +284,7 @@ async def test_csp_brand_and_campaign(client: AsyncClient, bandwidth_provider: d
     camp_id = camp.json()["accountCampaignId"]
     await asyncio.sleep(0.2)
     fetch = await client.get(
-        f"/sandbox/bandwidth/accounts/{acc}/csp/campaigns/{camp_id}",
+        f"/sandbox/bandwidth/api/accounts/{acc}/csp/campaigns/{camp_id}",
         headers=_auth(bandwidth_provider),
     )
     assert fetch.json()["status"] in {"PENDING", "APPROVED"}
@@ -305,13 +305,13 @@ async def test_messaging_settings_binding(client: AsyncClient, bandwidth_provide
   </ExistingTelephoneNumberOrderType>
 </Order>"""
     await client.post(
-        f"/sandbox/bandwidth/accounts/{acc}/orders",
+        f"/sandbox/bandwidth/api/accounts/{acc}/orders",
         content=xml_body,
         headers={**_auth(bandwidth_provider), "Content-Type": "application/xml"},
     )
     # Bind messaging application
     bind = await client.put(
-        f"/sandbox/bandwidth/accounts/{acc}/phonenumbers/3125550000/messagingsettings",
+        f"/sandbox/bandwidth/api/accounts/{acc}/phonenumbers/3125550000/messagingsettings",
         content="<MessagingSettings><ApplicationSettings><ApplicationId>msg-app-1</ApplicationId></ApplicationSettings></MessagingSettings>",
         headers={**_auth(bandwidth_provider), "Content-Type": "application/xml"},
     )
@@ -320,7 +320,7 @@ async def test_messaging_settings_binding(client: AsyncClient, bandwidth_provide
 
     # Release
     rel = await client.delete(
-        f"/sandbox/bandwidth/accounts/{acc}/phonenumbers/3125550000",
+        f"/sandbox/bandwidth/api/accounts/{acc}/phonenumbers/3125550000",
         headers=_auth(bandwidth_provider),
     )
     assert rel.status_code == 204
