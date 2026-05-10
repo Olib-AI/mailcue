@@ -541,6 +541,12 @@ export interface UpdateAliasRequest {
 
 // --- Production Status Types ---
 
+export interface FeatureFlags {
+  inject: boolean;
+  messaging_sandbox: boolean;
+  httpbin: boolean;
+}
+
 export interface ProductionStatus {
   mode: string;
   tls_configured: boolean;
@@ -550,6 +556,7 @@ export interface ProductionStatus {
   dovecot_tls_required: boolean;
   secure_cookies: boolean;
   acme_configured: boolean;
+  features: FeatureFlags;
 }
 
 // --- Flag Types ---

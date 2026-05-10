@@ -301,6 +301,12 @@ async def upload_tls(
 # ── Production status ────────────────────────────────────────────
 
 
+class FeatureFlags(BaseModel):
+    inject: bool
+    messaging_sandbox: bool
+    httpbin: bool
+
+
 class ProductionStatusResponse(BaseModel):
     mode: str
     tls_configured: bool
@@ -310,6 +316,7 @@ class ProductionStatusResponse(BaseModel):
     dovecot_tls_required: bool
     secure_cookies: bool
     acme_configured: bool
+    features: FeatureFlags
 
 
 @router.get("/production-status", response_model=ProductionStatusResponse)

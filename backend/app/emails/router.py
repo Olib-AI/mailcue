@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.emails.schemas import (
@@ -28,6 +29,19 @@ from app.emails.service import (
     send_email,
 )
 from app.mailboxes.router import verify_mailbox_access
+
+
+def _require_non_production() -> None:
+    """Block test-only endpoints when running in production mode.
+
+    Inject is a test-data fixture: it bypasses SMTP/DKIM/SPF and APPENDs
+    straight into IMAP.  Allowing it in production would let an admin
+    create messages that *appear* delivered without ever passing through
+    the normal authentication path — a real foot-gun on a public server.
+    """
+    if settings.is_production:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
 
 router = APIRouter(prefix="/emails", tags=["Emails"])
 
@@ -132,7 +146,11 @@ async def send_new_email(
     return {"message": "Email accepted for delivery", "message_id": message_id}
 
 
-@router.post("/inject", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/inject",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_require_non_production)],
+)
 async def inject_single_email(
     body: InjectEmailRequest,
     _admin: User = Depends(require_admin),
@@ -151,6 +169,7 @@ async def inject_single_email(
     "/bulk-inject",
     response_model=BulkInjectResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(_require_non_production)],
 )
 async def bulk_inject_emails(
     body: BulkInjectRequest,

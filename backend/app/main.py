@@ -285,11 +285,19 @@ def create_app() -> FastAPI:
     app.include_router(tunnels_router, prefix="/api/v1")
 
     # ── HTTP Bin ──────────────────────────────────────────────────
-    app.include_router(httpbin_management_router, prefix="/api/v1")
-    app.include_router(httpbin_catch_all_router, prefix="/httpbin")
+    # Test-only debugging endpoint.  Production hosts never want a
+    # request-echo service mounted alongside real mail traffic — at
+    # best it's noise in logs, at worst it leaks request metadata.
+    if not settings.is_production:
+        app.include_router(httpbin_management_router, prefix="/api/v1")
+        app.include_router(httpbin_catch_all_router, prefix="/httpbin")
 
     # ── Sandbox (management API under /api/v1, provider routes at /sandbox/) ──
-    if settings.sandbox_enabled:
+    # The messaging sandbox emulates third-party SMS/voice/IM provider
+    # APIs for local development.  It must NOT run in production: a real
+    # mail server has no business exposing fake Twilio/Bandwidth/Telnyx
+    # endpoints to the internet.
+    if settings.sandbox_enabled and not settings.is_production:
         app.include_router(sandbox_router, prefix="/api/v1")
         # Admin-scope helpers (CA info + idempotent provider seeding).
         # Gated by MAILCUE_SANDBOX_ADMIN_TOKEN; see app.sandbox.admin.

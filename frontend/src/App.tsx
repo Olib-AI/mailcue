@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 import { useEffect } from "react";
 import { ProtectedRoute } from "@/components/auth/protected-route";
+import { FeatureRoute } from "@/components/auth/feature-route";
 import { AppShell } from "@/components/layout/app-shell";
 import { LoginPage } from "@/pages/login";
 import { MailPage } from "@/pages/mail";
@@ -51,8 +52,22 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/dev-tools" element={<DevToolsPage />} />
-                <Route path="/messaging" element={<MessagingPage />} />
-                <Route path="/http-bin" element={<HttpBinPage />} />
+                <Route
+                  path="/messaging"
+                  element={
+                    <FeatureRoute flag="messaging_sandbox">
+                      <MessagingPage />
+                    </FeatureRoute>
+                  }
+                />
+                <Route
+                  path="/http-bin"
+                  element={
+                    <FeatureRoute flag="httpbin">
+                      <HttpBinPage />
+                    </FeatureRoute>
+                  }
+                />
                 <Route path="/forwarding-rules" element={<ForwardingRulesPage />} />
                 <Route path="/aliases" element={<AliasesPage />} />
               </Route>

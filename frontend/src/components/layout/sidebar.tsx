@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUIStore } from "@/stores/ui-store";
 import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useAuth } from "@/hooks/use-auth";
+import { useFeatures } from "@/hooks/use-features";
 import type { FolderName } from "@/types/api";
 
 const FOLDER_ICONS: Record<FolderName, typeof Inbox> = {
@@ -67,6 +68,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.is_admin ?? false;
+  const { features } = useFeatures();
 
   const { data: mailboxData, isLoading: mailboxesLoading } = useMailboxes();
   const mailboxes = mailboxData?.mailboxes ?? [];
@@ -268,7 +270,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               {!sidebarCollapsed && <span>Users</span>}
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && features.inject && (
             <button
               type="button"
               onClick={() => void navigate("/admin?tab=inject")}
@@ -283,7 +285,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               {!sidebarCollapsed && <span>Inject Email</span>}
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && features.messaging_sandbox && (
             <button
               type="button"
               onClick={() => void navigate("/messaging")}
@@ -298,7 +300,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               {!sidebarCollapsed && <span>Messaging</span>}
             </button>
           )}
-          {isAdmin && (
+          {isAdmin && features.httpbin && (
             <button
               type="button"
               onClick={() => void navigate("/http-bin")}

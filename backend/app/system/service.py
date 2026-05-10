@@ -303,6 +303,14 @@ async def get_production_status(db: AsyncSession) -> dict:
         "dovecot_tls_required": settings.is_production and tls_configured,
         "secure_cookies": settings.is_production,
         "acme_configured": bool(settings.acme_email),
+        # Test-only feature surface.  These mirror the conditional router
+        # registration in ``app.main`` and the ``/inject`` route guard so
+        # the UI can hide menu items it would otherwise dead-link to.
+        "features": {
+            "inject": not settings.is_production,
+            "messaging_sandbox": settings.sandbox_enabled and not settings.is_production,
+            "httpbin": not settings.is_production,
+        },
     }
 
 
