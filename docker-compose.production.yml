@@ -57,9 +57,15 @@ services:
       - letsencrypt-data:/etc/letsencrypt
       # DKIM keys (persisted so keys don't regenerate on restart)
       - dkim-data:/etc/opendkim/keys
+      # Self-signed CA + server cert (persisted so they don't regenerate
+      # on every container recreate — first-boot regen of a 4096-bit CA
+      # plus 2048-bit server cert can blow past S6_CMD_WAIT_FOR_SERVICES_MAXTIME
+      # on a constrained host and crash-loop the container).
+      - mailcue-tls:/etc/ssl/mailcue
       # If using custom certs, mount them here:
       # - ./certs:/etc/ssl/mailcue/custom:ro
 
 volumes:
   letsencrypt-data:
   dkim-data:
+  mailcue-tls:

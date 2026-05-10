@@ -35,7 +35,14 @@ ENV MAILCUE_MODE=test \
     MAILCUE_TLS_CERT_PATH="" \
     MAILCUE_TLS_KEY_PATH="" \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
-    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=30000
+    # First-boot init does heavy work synchronously: 4096-bit CA + server
+    # cert generation, 2048-bit DKIM key generation, OpenDMARC config,
+    # alembic migrations.  On a slow / entropy-starved host the cert step
+    # alone can take 30+ seconds, so the previous 30 000 ms ceiling sent
+    # the container into a crash-loop in production.  5 minutes is the
+    # smallest value that's safe on a constrained VPS without disabling
+    # the timeout entirely.
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=300000
 
 # System packages
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

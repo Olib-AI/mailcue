@@ -61,11 +61,13 @@ services:
     volumes:
       - mailcue-data:/var/mail/vhosts          # Email storage (Maildir)
       - mailcue-db:/var/lib/mailcue            # Database + GPG keys
-      - letsencrypt-data:/etc/letsencrypt      # TLS certificates
+      - mailcue-tls:/etc/ssl/mailcue           # Self-signed CA + server cert (avoids regen on every recreate)
+      - letsencrypt-data:/etc/letsencrypt      # ACME-issued TLS certificates
       - dkim-data:/etc/opendkim/keys           # DKIM signing keys
 
 volumes:
   mailcue-data:
   mailcue-db:
+  mailcue-tls:
   letsencrypt-data:
   dkim-data:
