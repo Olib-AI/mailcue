@@ -24,7 +24,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.domains.models import Domain
-from app.domains.service import _join_txt_rdata
+from app.domains.service import (
+    _join_txt_rdata,
+    _normalize_dkim_txt,
+    _parse_zonefile_txt,
+)
+from app.tunnels.models import Tunnel
 
 # ── DNS resolver stub helpers ─────────────────────────────────────
 
@@ -386,3 +391,209 @@ async def test_dns_state_missing_record_marks_has_missing(
     assert dmarc_rec["current_value"] is None
     assert dmarc_rec["drift"] is False  # cannot drift if not published
     assert dmarc_rec["last_checked_at"] is not None
+
+
+# ── Tests: parser helpers ─────────────────────────────────────────
+
+
+def test_parse_zonefile_txt_concatenates_chunks_without_separator() -> None:
+    """opendkim-genkey emits multi-string zone-file syntax — joining the
+    quoted contents must NOT introduce a space, otherwise the stored value
+    won't match what the resolver returns."""
+    raw = (
+        'mail._domainkey IN  TXT  ( "v=DKIM1; h=sha256; k=rsa; "\n'
+        '\t  "p=MIIB...JCV79b"\n'
+        '\t  "jABGCrQtb...AQAB" ) ; ----- DKIM key mail for example.com'
+    )
+    assert _parse_zonefile_txt(raw) == "v=DKIM1; h=sha256; k=rsa; p=MIIB...JCV79bjABGCrQtb...AQAB"
+
+
+def test_normalize_dkim_strips_stray_space_in_legacy_value() -> None:
+    """Legacy DB rows have a stray space at the chunk boundary inside ``p=``.
+    Normalisation must remove every whitespace from the base64 blob while
+    leaving the SPF-style header intact."""
+    legacy = "v=DKIM1; h=sha256; k=rsa; p=MIIB...R2 /CMP...AQAB"
+    assert _normalize_dkim_txt(legacy) == "v=DKIM1; h=sha256; k=rsa; p=MIIB...R2/CMP...AQAB"
+
+
+def test_normalize_dkim_passes_through_value_with_no_p_tag() -> None:
+    assert _normalize_dkim_txt("(DKIM key not yet generated)") == ("(DKIM key not yet generated)")
+    assert _normalize_dkim_txt(None) is None
+
+
+# ── Tests: tunnel-aware SPF expected ─────────────────────────────
+
+
+async def test_spf_expected_includes_every_enabled_tunnel(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """When sidecar tunnels are configured, the apex SPF expected value
+    must enumerate each relay's hostname (``a:`` mechanism) with a hard
+    fail.  Without this the operator's accurate multi-relay SPF shows as
+    drift forever."""
+    _engine, factory = _engine_and_session
+    async with factory() as session:
+        session.add(
+            Tunnel(
+                id="t-us",
+                name="us",
+                endpoint_host="relay-us.example.com",
+                endpoint_port=7843,
+                server_pubkey="A" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        session.add(
+            Tunnel(
+                id="t-de",
+                name="de",
+                endpoint_host="relay-de.example.com",
+                endpoint_port=7843,
+                server_pubkey="B" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        # Disabled tunnel must NOT contribute to the expected SPF.
+        session.add(
+            Tunnel(
+                id="t-old",
+                name="old",
+                endpoint_host="relay-old.example.com",
+                endpoint_port=7843,
+                server_pubkey="C" * 64,
+                enabled=False,
+                weight=1,
+            )
+        )
+        await session.commit()
+
+    expected_spf = "v=spf1 mx a:relay-de.example.com a:relay-us.example.com -all"
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+        spf_value=expected_spf,
+    )
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.get(f"/api/v1/domains/{seed_domain.name}/dns-state")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    spf_rec = next(
+        r
+        for r in body["records"]
+        if r["record_type"] == "TXT" and r["hostname"] == seed_domain.name
+    )
+    assert spf_rec["expected_value"] == expected_spf
+    assert spf_rec["current_value"] == expected_spf
+    assert spf_rec["drift"] is False
+    assert body["has_drift"] is False
+
+
+# ── Tests: MTA-STS id is operator-chosen ─────────────────────────
+
+
+async def test_mta_sts_drift_is_false_for_any_published_id(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """The MTA-STS ``id=`` tag is operator-chosen and only changes when the
+    policy file does — Mailcue does not control it.  Drift detection must
+    accept any well-formed ``v=STSv1; id=…`` even though the displayed
+    expected_value carries a different id."""
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    plan[(f"_mta-sts.{seed_domain.name}", "TXT")] = [_TxtRdata(b"v=STSv1; id=1778404880")]
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.get(f"/api/v1/domains/{seed_domain.name}/dns-state")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    mta_sts_rec = next(
+        r
+        for r in body["records"]
+        if r["record_type"] == "TXT" and r["hostname"] == f"_mta-sts.{seed_domain.name}"
+    )
+    assert mta_sts_rec["current_value"] == "v=STSv1; id=1778404880"
+    assert mta_sts_rec["drift"] is False
+    # The expected_value must be stable (not derived from datetime.now).
+    assert mta_sts_rec["expected_value"].startswith("v=STSv1; id=")
+
+
+async def test_mta_sts_drift_is_true_for_malformed_record(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """A record that doesn't carry an ``id=`` tag is genuine drift."""
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    plan[(f"_mta-sts.{seed_domain.name}", "TXT")] = [_TxtRdata(b"v=STSv1; id=")]
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.get(f"/api/v1/domains/{seed_domain.name}/dns-state")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    mta_sts_rec = next(
+        r
+        for r in body["records"]
+        if r["record_type"] == "TXT" and r["hostname"] == f"_mta-sts.{seed_domain.name}"
+    )
+    assert mta_sts_rec["drift"] is True
+
+
+# ── Tests: legacy stray-space DKIM verification ──────────────────
+
+
+async def test_verify_dns_with_legacy_stray_space_dkim_still_verifies(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """A DB row whose stored DKIM has a stray space at the chunk boundary
+    must still verify against a correctly-resolved DNS answer."""
+    _engine, factory = _engine_and_session
+    clean = "v=DKIM1; k=rsa; p=AAAAAAAAAAAA0123456789ABCDEFGHIJKLMNOP"
+    legacy = "v=DKIM1; k=rsa; p=AAAAAAAAAAAA 0123456789ABCDEFGHIJKLMNOP"
+    async with factory() as session:
+        result = await session.execute(select(Domain).where(Domain.name == seed_domain.name))
+        d = result.scalar_one()
+        d.dkim_public_key_txt = legacy
+        await session.commit()
+
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=clean,
+    )
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["dkim_verified"] is True, body

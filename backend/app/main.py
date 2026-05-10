@@ -171,19 +171,29 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                         "Could not auto-register domain '%s' (may already exist).",
                         settings.domain,
                     )
-            elif existing_domain.dkim_public_key_txt and (
-                "IN\tTXT" in existing_domain.dkim_public_key_txt
-                or '" "' in existing_domain.dkim_public_key_txt
-            ):
-                # Clean up raw opendkim-genkey format stored from before
-                # the parser fix.
-                raw = existing_domain.dkim_public_key_txt
-                txt_part = raw.split("(", 1)[-1].rsplit(")", 1)[0]
-                txt_part = txt_part.replace('"', "").replace("\t", " ")
-                txt_part = " ".join(txt_part.split())
-                existing_domain.dkim_public_key_txt = txt_part.strip()
-                await session.commit()
-                logger.info("Cleaned up DKIM public key for '%s'.", settings.domain)
+    # One-shot DKIM normalisation across every domain row.  Two legacy
+    # shapes get rewritten in place:
+    #   1. raw opendkim-genkey zone-file fragments (multi-string with a
+    #      ``"IN\tTXT"`` header) — left over from before the parser fix.
+    #   2. parsed values with a stray space at the multi-string chunk
+    #      boundary inside ``p=`` — the bug that made every drift
+    #      comparison fail in production.
+    async with AsyncSessionLocal() as session:
+        from app.domains.service import _normalize_dkim_txt, _parse_zonefile_txt
+
+        result = await session.execute(select(Domain))
+        for d in result.scalars().all():
+            current = d.dkim_public_key_txt
+            if not current:
+                continue
+            if "IN\tTXT" in current or '" "' in current:
+                cleaned = _parse_zonefile_txt(current)
+            else:
+                cleaned = _normalize_dkim_txt(current) or current
+            if cleaned and cleaned != current:
+                d.dkim_public_key_txt = cleaned
+                logger.info("Normalised DKIM public key for '%s'.", d.name)
+        await session.commit()
 
     # Restore custom TLS certificates from DB to filesystem (the cert
     # directory is not volume-mounted, so certs are lost on restart).

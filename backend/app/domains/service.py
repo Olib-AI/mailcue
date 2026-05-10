@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.domains.models import Domain
 from app.domains.schemas import DnsCheckResponse, DnsRecordInfo, DomainDnsStateResponse
+from app.tunnels.models import Tunnel
 
 logger = logging.getLogger("mailcue.domains")
 
@@ -60,15 +62,16 @@ async def _generate_dkim_keys(domain_name: str, selector: str) -> tuple[str, str
         public_key_txt: str | None = None
         if txt_file.exists():
             raw = txt_file.read_text()
-            # Parse the opendkim-genkey output into a clean single-line
-            # DNS TXT value.  The raw format looks like:
-            #   mail._domainkey\tIN\tTXT\t( "v=DKIM1; ..." \n\t"p=MIIB..." ) ; comment
-            # Strip the zone-file wrapper, comments, quotes, and whitespace
-            # to produce: v=DKIM1; h=sha256; k=rsa; p=MIIB...
-            txt_part = raw.split("(", 1)[-1].rsplit(")", 1)[0]  # between ( )
-            txt_part = txt_part.replace('"', "").replace("\t", " ")
-            txt_part = " ".join(txt_part.split())  # collapse whitespace
-            public_key_txt = txt_part.strip()
+            # opendkim-genkey emits zone-file syntax with the value split
+            # across multiple ``<character-string>``s, e.g.:
+            #   mail._domainkey IN TXT ( "v=DKIM1; h=sha256; k=rsa; "
+            #                            "p=MIIB...JCV79b"
+            #                            "jABGCrQtb...AQAB" ) ; comment
+            # RFC 6376 §3.6.2.2 requires verifiers to concatenate the
+            # strings with NO separator — the DNS resolver returns
+            # ``...JCV79bjABGCrQtb...`` not ``...JCV79b jABGCrQtb...``.
+            # We must do the same when storing the canonical form.
+            public_key_txt = _parse_zonefile_txt(raw)
 
         # Fix ownership for OpenDKIM
         for path in key_dir.iterdir():
@@ -107,6 +110,38 @@ def _join_txt_rdata(rdata: object) -> str:
         else:
             parts.append(str(chunk))
     return "".join(parts)
+
+
+_ZONEFILE_TXT_RE = re.compile(r'"([^"]*)"')
+
+
+def _parse_zonefile_txt(raw: str) -> str:
+    """Extract a single canonical TXT value from a BIND zone-file fragment.
+
+    Concatenates every ``"..."`` ``<character-string>`` with NO separator,
+    matching how DNS resolvers join multi-string TXT records (RFC 1035
+    §3.3.14, RFC 6376 §3.6.2.2).  Any text outside the quoted strings —
+    record header, parentheses, comments, whitespace between strings — is
+    discarded.
+    """
+    chunks = _ZONEFILE_TXT_RE.findall(raw)
+    return "".join(chunks).strip()
+
+
+def _normalize_dkim_txt(txt: str | None) -> str | None:
+    """Strip whitespace from inside a DKIM ``p=`` base64 blob.
+
+    Handles legacy DB rows that stored the value with a stray space at the
+    chunk boundary inserted by the previous ``replace('"', "") + split()``
+    parser.  Base64 has no whitespace, so any space inside ``p=`` was
+    spurious and would never match what the resolver returns.
+    """
+    if txt is None:
+        return None
+    head, sep, tail = txt.partition("p=")
+    if not sep:
+        return txt
+    return f"{head}p={''.join(tail.split())}"
 
 
 def _format_mx_rdata(rdata: object) -> str:
@@ -178,8 +213,12 @@ async def _check_dkim(
             if "p=" in txt:
                 # If we have an expected key, only treat as verified on exact
                 # match.  Otherwise (no expected key recorded yet) accept any
-                # ``p=``-bearing record.
-                if expected_public_key is None or txt == expected_public_key:
+                # ``p=``-bearing record.  Compare normalised forms so a
+                # whitespace-corrupted legacy DB row still verifies against
+                # a correctly-resolved DNS answer.
+                if expected_public_key is None or _normalize_dkim_txt(txt) == _normalize_dkim_txt(
+                    expected_public_key
+                ):
                     return True, txt
                 return False, txt
         return False, first_txt
@@ -423,14 +462,63 @@ async def _reload_mail_services() -> None:
 # ── High-level API ───────────────────────────────────────────────
 
 
+async def _list_active_tunnel_hosts(db: AsyncSession) -> list[str]:
+    """Return the deduped, ordered list of enabled tunnel ``endpoint_host``s.
+
+    These are the relay hostnames that an outbound MAIL FROM uses, so they
+    are exactly the ``a:`` mechanisms the apex SPF record must authorise.
+    Empty list when no tunnels are configured (single-host deployment).
+    """
+    stmt = select(Tunnel).where(Tunnel.enabled.is_(True)).order_by(Tunnel.name)
+    result = await db.execute(stmt)
+    seen: set[str] = set()
+    hosts: list[str] = []
+    for t in result.scalars().all():
+        host = (t.endpoint_host or "").strip().rstrip(".").lower()
+        if host and host not in seen:
+            seen.add(host)
+            hosts.append(host)
+    return hosts
+
+
+def _build_spf_expected(hostname: str, tunnel_hosts: list[str]) -> str:
+    """Render the apex SPF expected value.
+
+    With sidecar tunnels deployed, the relays do the actual delivery — the
+    apex SPF must list each relay's hostname (``a:`` covers both A and AAAA)
+    and use a hard fail (``-all``) since relay set is fully enumerated.
+    Without tunnels we fall back to soft-fail to avoid breaking deliveries
+    if the operator has additional senders we don't know about.
+    """
+    if tunnel_hosts:
+        a_records = " ".join(f"a:{h}" for h in tunnel_hosts)
+        return f"v=spf1 mx {a_records} -all"
+    return f"v=spf1 mx a:{hostname} ~all"
+
+
+def _build_mta_sts_expected(domain: Domain) -> str:
+    """Render a stable MTA-STS expected value.
+
+    The ``id`` tag in ``v=STSv1; id=...`` is operator-chosen and only needs
+    to change when the policy file changes.  Deriving it from
+    ``domain.created_at`` (or a constant fallback) keeps the displayed
+    "expected" string stable across requests; drift detection further
+    accepts any well-formed ``id=`` value as matching.
+    """
+    ts = int(domain.created_at.timestamp()) if domain.created_at is not None else 1
+    return f"v=STSv1; id={ts}"
+
+
 def _build_dns_records(
     domain: Domain,
     hostname: str,
     *,
     helo_spf_verified: bool = False,
     bimi_verified: bool = False,
+    tunnel_hosts: list[str] | None = None,
 ) -> list[DnsRecordInfo]:
     """Build the list of required DNS records for a domain."""
+    tunnel_hosts = tunnel_hosts or []
     records: list[DnsRecordInfo] = [
         DnsRecordInfo(
             record_type="MX",
@@ -442,7 +530,7 @@ def _build_dns_records(
         DnsRecordInfo(
             record_type="TXT",
             hostname=domain.name,
-            expected_value=f"v=spf1 mx a:{hostname} ~all",
+            expected_value=_build_spf_expected(hostname, tunnel_hosts),
             verified=domain.spf_verified,
             purpose="Authorize this server to send email for the domain (SPF)",
         ),
@@ -480,7 +568,7 @@ def _build_dns_records(
         DnsRecordInfo(
             record_type="TXT",
             hostname=f"_mta-sts.{domain.name}",
-            expected_value=f"v=STSv1; id={int(datetime.now(UTC).timestamp())}",
+            expected_value=_build_mta_sts_expected(domain),
             verified=domain.mta_sts_verified,
             purpose="MTA-STS policy enabling strict TLS for inbound email (RFC 8461)",
         ),
@@ -635,6 +723,31 @@ def _stamp_audit_timestamps(
             setattr(domain, f"{slot}_last_verified_at", now)
 
 
+def _record_matches(slot: str, expected: str, current: str) -> bool:
+    """Return True if ``current`` is semantically equivalent to ``expected``.
+
+    For most records this is byte-equality.  Three slots get looser checks:
+
+    - ``dkim``: whitespace inside ``p=`` is meaningless (base64 is
+      whitespace-free), so legacy DB rows with a stray space at the
+      multi-string chunk boundary still match a clean DNS value.
+    - ``mta_sts``: the ``id=`` tag is operator-chosen and only needs to
+      change when the policy file does.  Any well-formed ``v=STSv1; id=…``
+      is treated as matching.
+    - ``spf``: collapse runs of whitespace before comparing so DNS providers
+      that re-pretty-print the value don't trip false drift.
+    """
+    if slot == "dkim":
+        return _normalize_dkim_txt(expected) == _normalize_dkim_txt(current)
+    if slot == "mta_sts":
+        prefix = "v=STSv1; id="
+        stripped = current.strip()
+        return stripped.startswith(prefix) and len(stripped) > len(prefix)
+    if slot == "spf":
+        return " ".join(expected.split()) == " ".join(current.split())
+    return expected == current
+
+
 def _attach_check_metadata(
     domain: Domain,
     records: list[DnsRecordInfo],
@@ -664,7 +777,9 @@ def _attach_check_metadata(
         current: str | None = checks[slot][1] if slot is not None else None
         record.current_value = current
         record.drift = (
-            audit is not None and current is not None and current != record.expected_value
+            audit is not None
+            and current is not None
+            and not _record_matches(audit, record.expected_value, current)
         )
         if audit is not None:
             record.last_checked_at = getattr(domain, f"{audit}_last_checked_at")
@@ -688,6 +803,7 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
         raise ValueError(f"Domain '{name}' not found")
 
     hostname = await get_server_hostname(db)
+    tunnel_hosts = await _list_active_tunnel_hosts(db)
     checks = await _run_dns_checks(domain, hostname)
     now = datetime.now(UTC)
 
@@ -706,6 +822,7 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
         hostname,
         helo_spf_verified=checks["helo_spf"][0],
         bimi_verified=checks["bimi"][0],
+        tunnel_hosts=tunnel_hosts,
     )
     _attach_check_metadata(domain, records, checks)
 
@@ -753,6 +870,7 @@ async def compute_dns_state(name: str, db: AsyncSession) -> DomainDnsStateRespon
         raise ValueError(f"Domain '{name}' not found")
 
     hostname = await get_server_hostname(db)
+    tunnel_hosts = await _list_active_tunnel_hosts(db)
     checks = await _run_dns_checks(domain, hostname)
     now = datetime.now(UTC)
 
@@ -764,6 +882,7 @@ async def compute_dns_state(name: str, db: AsyncSession) -> DomainDnsStateRespon
         hostname,
         helo_spf_verified=checks["helo_spf"][0],
         bimi_verified=checks["bimi"][0],
+        tunnel_hosts=tunnel_hosts,
     )
     _attach_check_metadata(domain, records, checks)
 
