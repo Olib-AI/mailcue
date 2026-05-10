@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -315,7 +315,10 @@ def create_app() -> FastAPI:
 
         # Public CA distribution — fase's image build curl's this at
         # build-time to pin the CA fingerprint into the trust store.
-        from fastapi.responses import FileResponse, PlainTextResponse
+        # ``FileResponse`` / ``PlainTextResponse`` are imported at module
+        # scope — re-importing here would shadow the global, which then
+        # raises ``UnboundLocalError`` from later route decorators if the
+        # surrounding ``if`` skips this block (e.g. in production mode).
 
         @app.get("/sandbox/provider_ca.crt", include_in_schema=False)
         async def _provider_ca_file() -> FileResponse:

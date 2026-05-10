@@ -80,3 +80,31 @@ async def test_inject_route_guarded_by_dependency(
         json={"emails": []},
     )
     assert bulk.status_code == 404
+
+
+def test_create_app_starts_cleanly_in_production_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: ``create_app()`` must not raise when the sandbox/httpbin
+    blocks are skipped.
+
+    The original gating (v2.0.6) had a ``from fastapi.responses import
+    FileResponse, PlainTextResponse`` *inside* the sandbox-only block.
+    Python treats any name assigned anywhere in a function as local to
+    that function, so when the block was skipped in production the
+    later ``@app.get(... response_class=PlainTextResponse ...)`` decorator
+    raised ``UnboundLocalError`` — every prod container crashed on boot
+    and nginx returned 502 for every request.
+
+    Sandbox+httpbin both off, hosting reduced to the bare API surface, is
+    exactly the production deployment shape, so import the create_app
+    factory fresh under those flags and assert it returns an app."""
+    monkeypatch.setattr(settings, "mode", "production", raising=False)
+    monkeypatch.setattr(settings, "sandbox_enabled", False, raising=False)
+
+    from app.main import create_app
+
+    app = create_app()
+    # If we got here at all the bug is fixed; the route count assertion
+    # is a sanity check that something was actually registered.
+    assert len(app.routes) > 0
