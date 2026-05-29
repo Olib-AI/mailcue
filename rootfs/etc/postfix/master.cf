@@ -23,6 +23,12 @@ submission inet n       -       n       -       -       smtpd
   -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
   -o smtpd_milters=unix:/var/run/opendkim/opendkim.sock
   -o non_smtpd_milters=unix:/var/run/opendkim/opendkim.sock
+  # RFC 6409: as the submission/originating agent, backfill Date and
+  # Message-ID when a client omits them (otherwise SpamAssassin flags
+  # MISSING_DATE/MISSING_MID). Applied in cleanup, after the opendkim
+  # milter signs, so the DKIM signature is unaffected. Scoped to 587 so
+  # genuinely inbound mail on port 25 is preserved as received.
+  -o always_add_missing_headers=yes
 
 # ---- Standard Postfix internal services -------------------------------------
 # Chroot disabled for all services (Docker container, no need for chroot isolation)
