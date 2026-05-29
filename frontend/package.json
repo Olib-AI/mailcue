@@ -23,7 +23,7 @@
     "@tiptap/extensions": "^3.22.5",
     "@tiptap/pm": "^3.23.1",
     "@tiptap/react": "^3.22.5",
-    "@tiptap/starter-kit": "^3.23.1",
+    "@tiptap/starter-kit": "^3.23.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.2",
