@@ -36,43 +36,93 @@ async def sync_filesystem_mailboxes(db: AsyncSession) -> None:
     but the API only lists mailboxes from the database.  This function
     bridges that gap by scanning ``/var/mail/vhosts/{domain}/{user}/``
     and inserting missing ``Mailbox`` rows.
+
+    Catch-all delivery has no authenticated application user attached to it,
+    so dynamically discovered mailboxes are assigned to the configured admin
+    account.  That preserves multi-user mailbox isolation while restoring the
+    single admin inbox view used by the testing workflow.
     """
     vhosts = Path(settings.mail_storage_path)
     if not vhosts.is_dir():
         return
 
-    # Collect all existing addresses from the DB for fast lookup
-    stmt = select(Mailbox.address)
+    catchall_owner_id = await _get_catchall_owner_user_id(db)
+
+    # Collect all existing mailboxes from the DB for fast lookup.  Keeping
+    # the row lets us backfill active orphan rows created by older catch-all
+    # sync code, not just create brand new rows.
+    stmt = select(Mailbox)
     result = await db.execute(stmt)
-    known_addresses: set[str] = {row[0] for row in result.all()}
+    known_mailboxes: dict[str, Mailbox] = {
+        mailbox.address.lower(): mailbox for mailbox in result.scalars().all()
+    }
 
     new_count = 0
+    backfilled_count = 0
     for domain_dir in vhosts.iterdir():
         if not domain_dir.is_dir():
             continue
-        domain = domain_dir.name
+        domain = domain_dir.name.lower()
         for user_dir in domain_dir.iterdir():
             if not user_dir.is_dir():
                 continue
-            local_part = user_dir.name
-            address = f"{local_part}@{domain}"
-            if address in known_addresses:
-                continue
             # Check it's actually a Maildir (has cur/new/tmp subdirs)
             if not (user_dir / "cur").is_dir():
+                continue
+            local_part = user_dir.name.lower()
+            address = f"{local_part}@{domain}"
+            existing = known_mailboxes.get(address)
+            if existing is not None:
+                if (
+                    existing.is_active
+                    and existing.user_id is None
+                    and catchall_owner_id is not None
+                ):
+                    existing.user_id = catchall_owner_id
+                    backfilled_count += 1
                 continue
             mailbox = Mailbox(
                 address=address,
                 display_name=local_part,
                 domain=domain,
+                user_id=catchall_owner_id,
             )
             db.add(mailbox)
-            known_addresses.add(address)
+            known_mailboxes[address] = mailbox
             new_count += 1
 
-    if new_count > 0:
+    if new_count > 0 or backfilled_count > 0:
         await db.commit()
-        logger.info("Auto-discovered %d mailbox(es) from filesystem.", new_count)
+        logger.info(
+            "Auto-discovered %d mailbox(es) and backfilled %d owner(s) from filesystem.",
+            new_count,
+            backfilled_count,
+        )
+
+
+async def _get_catchall_owner_user_id(db: AsyncSession) -> str | None:
+    """Return the admin user that should own catch-all discovered mailboxes."""
+    configured_admin_stmt = select(User).where(
+        User.username == settings.admin_user,
+        User.is_admin.is_(True),
+        User.is_active.is_(True),
+    )
+    result = await db.execute(configured_admin_stmt)
+    configured_admin = result.scalar_one_or_none()
+    if configured_admin is not None:
+        return configured_admin.id
+
+    first_admin_stmt = (
+        select(User)
+        .where(
+            User.is_admin.is_(True),
+            User.is_active.is_(True),
+        )
+        .order_by(User.created_at.asc())
+    )
+    result = await db.execute(first_admin_stmt)
+    first_admin = result.scalars().first()
+    return first_admin.id if first_admin is not None else None
 
 
 async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mailbox]:
