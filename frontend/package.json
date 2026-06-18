@@ -15,7 +15,7 @@
     "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-query": "^5.100.14",
     "@tiptap/core": "3.23.6",
-    "@tiptap/extension-color": "3.23.6",
+    "@tiptap/extension-color": "3.27.0",
     "@tiptap/extension-link": "3.23.6",
     "@tiptap/extension-placeholder": "3.23.6",
     "@tiptap/extension-text-style": "3.23.6",
