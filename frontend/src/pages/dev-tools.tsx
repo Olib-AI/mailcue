@@ -12,6 +12,7 @@ import {
   Loader2,
   Download,
   Bot,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -804,6 +805,118 @@ function IntegrationsTab() {
 }
 
 // ---------------------------------------------------------------------------
+// MCP Tab
+// ---------------------------------------------------------------------------
+
+function McpTab() {
+  const origin = getOrigin();
+
+  const claudeCommand = `claude mcp add mailcue \\
+  --env MAILCUE_BASE_URL=${origin} \\
+  --env MAILCUE_API_KEY=mc_your_api_key \\
+  -- npx -y mailcue-mcp@latest`;
+
+  const jsonConfig = JSON.stringify(
+    {
+      mcpServers: {
+        mailcue: {
+          command: "npx",
+          args: ["-y", "mailcue-mcp@latest"],
+          env: {
+            MAILCUE_BASE_URL: origin,
+            MAILCUE_API_KEY: "mc_your_api_key",
+          },
+        },
+      },
+    },
+    null,
+    2
+  );
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            MailCue MCP Server
+          </CardTitle>
+          <CardDescription>
+            Give an AI agent its own mailbox. The{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+              mailcue-mcp
+            </code>{" "}
+            server lets agents read, search, send, reply to, and delete email
+            over the Model Context Protocol. <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">MAILCUE_BASE_URL</code>{" "}
+            is pre-filled with this server.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Claude */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Bot className="h-4 w-4" />
+              Add to Claude Code
+            </p>
+            <CodeBlock code={claudeCommand} language="bash" />
+            <p className="text-xs text-muted-foreground">
+              Restart Claude Code after adding, then run{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+                /mcp
+              </code>{" "}
+              to see the tools.
+            </p>
+          </div>
+
+          {/* JSON for other agents */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium flex items-center gap-2">
+              <Code2 className="h-4 w-4" />
+              Other MCP clients (JSON)
+            </p>
+            <CodeBlock code={jsonConfig} language="json" />
+            <p className="text-xs text-muted-foreground">
+              Drop this into your client&apos;s{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+                mcp.json
+              </code>{" "}
+              (or equivalent MCP server config).
+            </p>
+          </div>
+
+          {/* Single-mailbox lock */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Lock to a single mailbox (optional)</p>
+            <p className="text-xs text-muted-foreground">
+              Add{" "}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
+                MAILCUE_MAILBOX=agent@your-domain
+              </code>{" "}
+              to confine the agent to one inbox — it sends from that address and
+              cannot access any other mailbox. Omit it for full multi-mailbox
+              access.
+            </p>
+          </div>
+
+          {/* API key */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Required environment variable</p>
+            <CopyField label="MAILCUE_API_KEY" value="mc_..." mono />
+            <p className="text-xs text-muted-foreground">
+              Create an API key from your{" "}
+              <a href="/profile" className="underline">
+                Profile page
+              </a>
+              .
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 
 function DevToolsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -844,6 +957,10 @@ function DevToolsPage() {
             <Bot className="mr-1.5 h-3.5 w-3.5" />
             Integrations
           </TabsTrigger>
+          <TabsTrigger value="mcp">
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            MCP
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="connection">
@@ -864,6 +981,10 @@ function DevToolsPage() {
 
         <TabsContent value="integrations">
           <IntegrationsTab />
+        </TabsContent>
+
+        <TabsContent value="mcp">
+          <McpTab />
         </TabsContent>
       </Tabs>
     </div>

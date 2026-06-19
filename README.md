@@ -19,7 +19,7 @@
 
 MailCue is an all-in-one email testing server that packages **Postfix**, **Dovecot**, **OpenDKIM**, **OpenDMARC**, **SpamAssassin**, a **FastAPI** REST API, and a **React** web UI into a single Docker container managed by **s6-overlay**. Unlike simple SMTP catchers, MailCue provides a fully-featured mail stack -- complete with IMAP/POP3 access, DKIM signing, DMARC verification, spam filtering, TLS, GPG encryption, and a modern web interface -- so you can test email workflows exactly as they will behave in production.
 
-**[Features](#features)** · **[Quick Start](#quick-start)** · **[Production Deployment](#production-deployment)** · **[Configuration](#configuration)** · **[API Reference](#api-reference)** · **[CI/CD](#using-in-cicd)** · **[Contributing](#contributing)**
+**[Features](#features)** · **[Quick Start](#quick-start)** · **[Production Deployment](#production-deployment)** · **[Configuration](#configuration)** · **[API Reference](#api-reference)** · **[MCP Server](#mcp-server-ai-agents)** · **[CI/CD](#using-in-cicd)** · **[Contributing](#contributing)**
 
 <p align="center">
   <img src="examples/regular-email.png" alt="MailCue inbox showing a rich HTML invoice email" width="860" />
@@ -765,6 +765,65 @@ Sandbox routes inherit the same TLS stack as the rest of the MailCue HTTP API. I
 ## HTTP Bin
 
 A built-in request inspector at `/http-bin` in the UI. Create bins, point webhooks or any HTTP client at the bin URL, and inspect every captured request -- method, headers, query params, and body -- in real time. Useful for verifying webhook payloads without leaving MailCue.
+
+## MCP Server (AI agents)
+
+MailCue ships an official [Model Context Protocol](https://modelcontextprotocol.io)
+server, [`mailcue-mcp`](sdks/mcp-node), that gives an AI agent **its own
+mailbox**. The agent reads, searches, sends, replies to, and deletes email
+directly over MCP — managing an inbox the way a person uses a mail client. It is
+built on the `mailcue` Node SDK and talks to any MailCue server over the REST API.
+
+### Add to Claude Code
+
+```bash
+claude mcp add mailcue \
+  --env MAILCUE_BASE_URL=https://mail.example.com \
+  --env MAILCUE_API_KEY=mc_your_api_key \
+  -- npx -y mailcue-mcp@latest
+```
+
+### Other MCP clients (JSON)
+
+```json
+{
+  "mcpServers": {
+    "mailcue": {
+      "command": "npx",
+      "args": ["-y", "mailcue-mcp@latest"],
+      "env": {
+        "MAILCUE_BASE_URL": "https://mail.example.com",
+        "MAILCUE_API_KEY": "mc_your_api_key"
+      }
+    }
+  }
+}
+```
+
+Generate an API key from the web UI **Profile** page (or `POST /api/v1/auth/api-keys`).
+The web UI also has a ready-to-copy config under **Developer Tools > MCP**, with
+`MAILCUE_BASE_URL` pre-filled for your server.
+
+### Configuration
+
+| Variable               | Required | Default                 | Description |
+|------------------------|----------|-------------------------|-------------|
+| `MAILCUE_API_KEY`      | yes\*    | —                       | MailCue `X-API-Key` (`mc_...`). |
+| `MAILCUE_BEARER_TOKEN` | yes\*    | —                       | JWT alternative to the API key. |
+| `MAILCUE_BASE_URL`     | no       | `http://localhost:8088` | Your MailCue server URL. |
+| `MAILCUE_MAILBOX`      | no       | —                       | Lock the agent to a single mailbox. |
+
+\* Provide **either** `MAILCUE_API_KEY` (preferred) or `MAILCUE_BEARER_TOKEN`.
+
+**Single-mailbox lock:** when `MAILCUE_MAILBOX` is set, the server removes the
+`mailbox` argument from every tool, forces sends to that address, and hides
+mailbox discovery — so the agent owns exactly one inbox and cannot reach any
+other. Leave it unset for a multi-mailbox operator agent.
+
+**Tools:** `list_emails`, `search_emails`, `get_email`, `send_email`,
+`reply_email`, `delete_email`, `mailbox_stats` (plus `list_mailboxes` when not
+locked). The server also exposes MCP `instructions` that orient the agent on how
+to triage and reply safely. Full docs: [`sdks/mcp-node/README.md`](sdks/mcp-node/README.md).
 
 ## Contributing
 
