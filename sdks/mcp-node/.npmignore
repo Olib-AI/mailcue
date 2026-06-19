@@ -1,0 +1,11 @@
+src/
+node_modules/
+*.log
+.DS_Store
+tsconfig.json
+tsup.config.ts
+eslint.config.js
+.github/
+.vscode/
+.idea/
+*.tsbuildinfo

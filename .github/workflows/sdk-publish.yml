@@ -5,13 +5,14 @@ on:
     tags:
       - "python-sdk-v*"
       - "node-sdk-v*"
+      - "mcp-node-v*"
   workflow_dispatch:
     inputs:
       target:
         description: "Which SDK to publish"
         required: true
         type: choice
-        options: [python, node]
+        options: [python, node, mcp-node]
 
 jobs:
   publish-python:
@@ -104,6 +105,52 @@ jobs:
           npm run lint
           npm run typecheck
           npm run test
+          npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+
+  publish-mcp-node:
+    name: Publish MCP server to npm
+    if: startsWith(github.ref, 'refs/tags/mcp-node-v') || github.event.inputs.target == 'mcp-node'
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: sdks/mcp-node
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+          cache-dependency-path: sdks/mcp-node/package-lock.json
+
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install --prefix=/tmp/npm-latest -g npm@11 && echo "/tmp/npm-latest/bin" >> "$GITHUB_PATH"
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify version matches tag
+        if: startsWith(github.ref, 'refs/tags/mcp-node-v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#mcp-node-v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package version ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Lint, type, build
+        run: |
+          npm run lint
+          npm run typecheck
           npm run build
 
       - name: Publish to npm
