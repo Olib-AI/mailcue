@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Mailcue } from '../src/index.js';
+import { Mailcue, TimeoutError } from '../src/index.js';
 
 interface RecordedCall {
   url: string;
@@ -147,5 +147,81 @@ describe('emails resource', () => {
     const body = bodyOut as Record<string, unknown>;
     const atts = body['attachments'] as Array<Record<string, string>>;
     expect(atts[0]!['data']).toBe(Buffer.from('hello', 'utf-8').toString('base64'));
+  });
+});
+
+describe('emails.waitFor', () => {
+  function listResp(emails: unknown[]): Response {
+    return new Response(
+      JSON.stringify({ total: emails.length, page: 1, page_size: 50, emails, has_more: false }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
+  function summary(subject = 'Welcome'): Record<string, unknown> {
+    return {
+      uid: '1',
+      mailbox: 'user@test.com',
+      from_address: 'welcome@app.com',
+      to_addresses: ['user@test.com'],
+      subject,
+      date: null,
+      has_attachments: false,
+      is_read: false,
+      preview: 'hi',
+      message_id: '',
+      size: 0,
+      is_signed: false,
+    };
+  }
+
+  it('returns matching emails', async () => {
+    const f = (async () => listResp([summary('Welcome')])) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    const found = await mc.emails.waitFor({
+      mailbox: 'user@test.com',
+      subject: 'Welcome',
+      timeoutMs: 1000,
+      intervalMs: 20,
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]!.subject).toBe('Welcome');
+  });
+
+  it('throws TimeoutError when nothing matches', async () => {
+    const f = (async () => listResp([])) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    await expect(
+      mc.emails.waitFor({ mailbox: 'user@test.com', timeoutMs: 120, intervalMs: 30 }),
+    ).rejects.toBeInstanceOf(TimeoutError);
+  });
+
+  it('polls until an email appears', async () => {
+    let n = 0;
+    const f = (async () => {
+      n += 1;
+      return listResp(n < 2 ? [] : [summary('Welcome')]);
+    }) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    const found = await mc.emails.waitFor({
+      mailbox: 'user@test.com',
+      subject: 'Welcome',
+      timeoutMs: 1000,
+      intervalMs: 20,
+    });
+    expect(found).toHaveLength(1);
+    expect(n).toBeGreaterThanOrEqual(2);
+  });
+
+  it('filters out non-matching subjects', async () => {
+    const f = (async () => listResp([summary('Newsletter')])) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    await expect(
+      mc.emails.waitFor({
+        mailbox: 'user@test.com',
+        subject: 'Welcome',
+        timeoutMs: 120,
+        intervalMs: 30,
+      }),
+    ).rejects.toBeInstanceOf(TimeoutError);
   });
 });

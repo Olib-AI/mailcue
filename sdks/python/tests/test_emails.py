@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 
 import httpx
+import pytest
 
 
 def test_send_basic_html(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
@@ -172,3 +173,89 @@ async def test_async_send(make_async_client) -> None:  # type: ignore[no-untyped
             text="hello",
         )
     assert result.message_id == "<async@local>"
+
+
+# ── wait_for polling helper ──────────────────────────────────────
+
+
+def _list_json(emails):  # type: ignore[no-untyped-def]
+    return {"total": len(emails), "page": 1, "page_size": 50, "emails": emails, "has_more": False}
+
+
+def _summary(subject="Welcome", to=None, from_address="welcome@app.com", uid="1"):  # type: ignore[no-untyped-def]
+    return {
+        "uid": uid,
+        "mailbox": "user@test.com",
+        "from_address": from_address,
+        "from_name": "",
+        "to_addresses": to or ["user@test.com"],
+        "subject": subject,
+        "has_attachments": False,
+        "is_read": False,
+        "preview": "hi",
+        "message_id": "",
+    }
+
+
+def test_wait_for_returns_match(make_client) -> None:  # type: ignore[no-untyped-def]
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_list_json([_summary(subject="Welcome")]))
+
+    client = make_client(handler)
+    found = client.emails.wait_for(
+        mailbox="user@test.com", subject="Welcome", timeout=2.0, interval=0.05
+    )
+    assert len(found) == 1
+    assert found[0].subject == "Welcome"
+
+
+def test_wait_for_times_out(make_client) -> None:  # type: ignore[no-untyped-def]
+    from mailcue.exceptions import TimeoutError as MailcueTimeoutError
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_list_json([]))
+
+    client = make_client(handler)
+    with pytest.raises(MailcueTimeoutError):
+        client.emails.wait_for(mailbox="user@test.com", timeout=0.2, interval=0.05)
+
+
+def test_wait_for_polls_until_present(make_client) -> None:  # type: ignore[no-untyped-def]
+    state = {"n": 0}
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        state["n"] += 1
+        emails = [] if state["n"] < 2 else [_summary(subject="Welcome")]
+        return httpx.Response(200, json=_list_json(emails))
+
+    client = make_client(handler)
+    found = client.emails.wait_for(
+        mailbox="user@test.com", subject="Welcome", timeout=2.0, interval=0.02
+    )
+    assert len(found) == 1
+    assert state["n"] >= 2
+
+
+def test_wait_for_filters_non_matching(make_client) -> None:  # type: ignore[no-untyped-def]
+    from mailcue.exceptions import TimeoutError as MailcueTimeoutError
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_list_json([_summary(subject="Newsletter")]))
+
+    client = make_client(handler)
+    with pytest.raises(MailcueTimeoutError):
+        client.emails.wait_for(
+            mailbox="user@test.com", subject="Welcome", timeout=0.2, interval=0.05
+        )
+
+
+async def test_async_wait_for_returns_match(make_async_client) -> None:  # type: ignore[no-untyped-def]
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_list_json([_summary(subject="Welcome")]))
+
+    client, _http = make_async_client(handler)
+    async with client:
+        found = await client.emails.wait_for(
+            mailbox="user@test.com", subject="Welcome", timeout=2.0, interval=0.05
+        )
+    assert len(found) == 1

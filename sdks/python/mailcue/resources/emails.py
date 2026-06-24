@@ -2,21 +2,44 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Union
 
+from mailcue.exceptions import TimeoutError as MailcueTimeoutError
 from mailcue.resources._base import AsyncResource, SyncResource
 from mailcue.types import (
     BulkInjectResponse,
     EmailDetail,
     EmailListResponse,
+    EmailSummary,
     SendResult,
 )
 
 AttachmentInput = Mapping[str, Any]
 AttachmentContent = Union[bytes, str, Path]
+
+_DEFAULT_WAIT_TIMEOUT = 10.0
+_DEFAULT_WAIT_INTERVAL = 0.5
+
+
+def _summary_matches(
+    email: EmailSummary,
+    subject: Optional[str],
+    from_address: Optional[str],
+    to_address: Optional[str],
+) -> bool:
+    """Case-insensitive substring match of a summary against the filters."""
+    if subject is not None and subject.lower() not in email.subject.lower():
+        return False
+    if from_address is not None and from_address.lower() not in email.from_address.lower():
+        return False
+    if to_address is None:
+        return True
+    return any(to_address.lower() in addr.lower() for addr in email.to_addresses)
 
 
 def _encode_attachment_content(content: AttachmentContent) -> str:
@@ -375,6 +398,49 @@ class Emails(SyncResource):
         response = self._transport.request("POST", "/emails/bulk-inject", json=payload)
         return BulkInjectResponse.model_validate(response.json())
 
+    def wait_for(
+        self,
+        *,
+        mailbox: str,
+        folder: str = "INBOX",
+        search: Optional[str] = None,
+        subject: Optional[str] = None,
+        from_address: Optional[str] = None,
+        to_address: Optional[str] = None,
+        min_count: int = 1,
+        timeout: float = _DEFAULT_WAIT_TIMEOUT,
+        interval: float = _DEFAULT_WAIT_INTERVAL,
+        page_size: int = 50,
+    ) -> List[EmailSummary]:
+        """Poll a mailbox until matching emails arrive, or raise on timeout.
+
+        Lists the folder every ``interval`` seconds and keeps the summaries
+        that match the optional ``subject`` / ``from_address`` / ``to_address``
+        substrings (case-insensitive) on top of the server-side ``search``.
+        Returns the matches once at least ``min_count`` are present. Raises
+        :class:`mailcue.TimeoutError` if that does not happen within
+        ``timeout`` seconds. Useful for end-to-end tests in CI.
+
+        Example:
+            >>> client.emails.wait_for(
+            ...     mailbox="user@test.com", subject="Welcome", timeout=10
+            ... )
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            listing = self.list(mailbox=mailbox, folder=folder, search=search, page_size=page_size)
+            matches = [
+                e for e in listing.emails if _summary_matches(e, subject, from_address, to_address)
+            ]
+            if len(matches) >= min_count:
+                return matches
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise MailcueTimeoutError(
+                    f"No matching email arrived in mailbox '{mailbox}' within {timeout}s"
+                )
+            time.sleep(min(interval, remaining))
+
 
 class AsyncEmails(AsyncResource):
     """Asynchronous ``emails`` resource."""
@@ -530,3 +596,35 @@ class AsyncEmails(AsyncResource):
         payload = {"emails": [dict(e) for e in emails]}
         response = await self._transport.request("POST", "/emails/bulk-inject", json=payload)
         return BulkInjectResponse.model_validate(response.json())
+
+    async def wait_for(
+        self,
+        *,
+        mailbox: str,
+        folder: str = "INBOX",
+        search: Optional[str] = None,
+        subject: Optional[str] = None,
+        from_address: Optional[str] = None,
+        to_address: Optional[str] = None,
+        min_count: int = 1,
+        timeout: float = _DEFAULT_WAIT_TIMEOUT,
+        interval: float = _DEFAULT_WAIT_INTERVAL,
+        page_size: int = 50,
+    ) -> List[EmailSummary]:
+        """Async variant of :meth:`Emails.wait_for`."""
+        deadline = time.monotonic() + timeout
+        while True:
+            listing = await self.list(
+                mailbox=mailbox, folder=folder, search=search, page_size=page_size
+            )
+            matches = [
+                e for e in listing.emails if _summary_matches(e, subject, from_address, to_address)
+            ]
+            if len(matches) >= min_count:
+                return matches
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise MailcueTimeoutError(
+                    f"No matching email arrived in mailbox '{mailbox}' within {timeout}s"
+                )
+            await asyncio.sleep(min(interval, remaining))

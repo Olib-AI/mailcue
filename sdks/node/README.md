@@ -84,6 +84,21 @@ for (const summary of inbox.emails) {
 await mc.emails.delete(inbox.emails[0].uid, { mailbox: 'user@example.com' });
 ```
 
+## Waiting for an email (CI)
+
+`waitFor` polls a mailbox until matching messages arrive, or rejects with a
+`TimeoutError` after `timeoutMs`. Filters (`subject`, `from`, `to`) are
+case-insensitive substrings on top of the server-side `search`.
+
+```ts
+const found = await mc.emails.waitFor({
+  mailbox: 'user@test.com',
+  subject: 'Welcome',
+  timeoutMs: 10000,
+});
+console.log(found.length);
+```
+
 ## Mailboxes, domains, aliases, GPG, API keys, system
 
 ```ts

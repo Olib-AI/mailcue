@@ -1,3 +1,4 @@
+import { TimeoutError } from '../errors.js';
 import type { Transport } from '../transport.js';
 import { camelize, snakeify } from '../transport.js';
 import type {
@@ -5,12 +6,40 @@ import type {
   EmailDetail,
   EmailListResponse,
   EmailQueryParams,
+  EmailSummary,
   InjectEmailParams,
   InjectResult,
   ListEmailsParams,
   SendEmailParams,
   SendResult,
+  WaitForEmailParams,
 } from '../types.js';
+
+function summaryMatches(email: EmailSummary, p: WaitForEmailParams): boolean {
+  if (p.subject && !email.subject.toLowerCase().includes(p.subject.toLowerCase())) return false;
+  if (p.from && !email.fromAddress.toLowerCase().includes(p.from.toLowerCase())) return false;
+  if (p.to && !email.toAddresses.some((a) => a.toLowerCase().includes(p.to!.toLowerCase())))
+    return false;
+  return true;
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const t = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(t);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 interface WireSendAttachment {
   filename: string;
@@ -237,5 +266,44 @@ export class EmailsResource {
     if (options.signal) reqOpts.signal = options.signal;
     const raw = await this.transport.request<unknown>(reqOpts);
     return camelize(raw) as BulkInjectResponse;
+  }
+
+  /**
+   * Poll a mailbox until matching emails arrive, or throw on timeout.
+   *
+   * Lists the folder every `intervalMs` and keeps the summaries that match the
+   * optional `subject` / `from` / `to` substrings (case-insensitive) on top of
+   * the server-side `search`. Resolves with the matches once at least
+   * `minCount` are present; rejects with a `TimeoutError` otherwise. Useful for
+   * end-to-end tests in CI.
+   */
+  async waitFor(
+    params: WaitForEmailParams,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailSummary[]> {
+    const timeoutMs = params.timeoutMs ?? 10000;
+    const intervalMs = params.intervalMs ?? 500;
+    const minCount = params.minCount ?? 1;
+    const deadline = Date.now() + timeoutMs;
+
+    for (;;) {
+      const listParams: ListEmailsParams = { mailbox: params.mailbox };
+      if (params.folder !== undefined) listParams.folder = params.folder;
+      if (params.search !== undefined) listParams.search = params.search;
+      listParams.pageSize = params.pageSize ?? 50;
+
+      const listing = await this.list(listParams, options);
+      const matches = listing.emails.filter((e) => summaryMatches(e, params));
+      if (matches.length >= minCount) return matches;
+
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        throw new TimeoutError(
+          `No matching email arrived in mailbox '${params.mailbox}' within ${timeoutMs}ms`,
+          timeoutMs,
+        );
+      }
+      await delay(Math.min(intervalMs, remaining), options.signal);
+    }
   }
 }

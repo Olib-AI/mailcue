@@ -61,6 +61,22 @@ detail = client.emails.get(inbox.emails[0].uid, mailbox="user@example.com")
 print(detail.text_body)
 ```
 
+## Waiting for an email (CI)
+
+`wait_for` polls a mailbox until matching messages arrive, or raises
+`mailcue.TimeoutError` after `timeout` seconds. Filters (`subject`,
+`from_address`, `to_address`) are case-insensitive substrings on top of the
+server-side `search`.
+
+```python
+found = client.emails.wait_for(
+    mailbox="user@test.com",
+    subject="Welcome",
+    timeout=10,
+)
+assert len(found) == 1
+```
+
 ## Attachments
 
 `attachments` accepts raw `bytes`, `str`, or a `pathlib.Path`. The SDK

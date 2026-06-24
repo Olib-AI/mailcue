@@ -41,6 +41,19 @@ export interface ListEmailsParams {
   sort?: string;
 }
 
+export interface WaitForEmailParams {
+  mailbox: string;
+  folder?: string;
+  search?: string;
+  subject?: string;
+  from?: string;
+  to?: string;
+  minCount?: number;
+  timeoutMs?: number;
+  intervalMs?: number;
+  pageSize?: number;
+}
+
 export interface EmailSummary {
   uid: string;
   mailbox: string;
