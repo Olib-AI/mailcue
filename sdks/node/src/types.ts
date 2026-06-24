@@ -318,6 +318,12 @@ export interface ApiKeyCreateParams {
   allowedMailboxes?: string[];
 }
 
+export interface ApiKeyUpdateParams {
+  name?: string;
+  scopes?: string[];
+  allowedMailboxes?: string[];
+}
+
 export interface HealthResponse {
   status: string;
   [key: string]: unknown;

@@ -48,6 +48,20 @@ class APIKeyCreateRequest(BaseModel):
     allowed_mailboxes: list[str] | None = None
 
 
+class APIKeyUpdateRequest(BaseModel):
+    """Update an existing API key's name and/or permissions in place.
+
+    Only the fields included in the request are changed; the key's secret
+    value is never touched, so integrations already using it keep working.
+    When ``scopes`` or ``allowed_mailboxes`` is included as an empty list
+    (or ``null``), it resets to full access / all mailboxes respectively.
+    """
+
+    name: str | None = None
+    scopes: list[str] | None = None
+    allowed_mailboxes: list[str] | None = None
+
+
 class RefreshRequest(BaseModel):
     """Explicitly pass a refresh token (alternative to cookie)."""
 

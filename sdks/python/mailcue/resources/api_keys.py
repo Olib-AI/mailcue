@@ -54,6 +54,33 @@ class ApiKeys(SyncResource):
         response = self._transport.request("POST", "/auth/api-keys", json=body)
         return CreatedApiKey.model_validate(response.json())
 
+    def update(
+        self,
+        key_id: str,
+        name: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
+        allowed_mailboxes: Optional[List[str]] = None,
+    ) -> ApiKey:
+        """Update an API key's metadata without regenerating its secret.
+
+        Only the fields you pass are changed. The raw ``key`` is never
+        returned again.
+
+        Example:
+            >>> client.api_keys.update("01HXY...", scopes=["email:read"])
+        """
+        body: Dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if scopes is not None:
+            body["scopes"] = scopes
+        if allowed_mailboxes is not None:
+            body["allowed_mailboxes"] = allowed_mailboxes
+        response = self._transport.request(
+            "PATCH", f"/auth/api-keys/{key_id}", json=body
+        )
+        return ApiKey.model_validate(response.json())
+
     def delete(self, key_id: str) -> None:
         """Revoke an API key by ID.
 
@@ -85,6 +112,26 @@ class AsyncApiKeys(AsyncResource):
             body["allowed_mailboxes"] = allowed_mailboxes
         response = await self._transport.request("POST", "/auth/api-keys", json=body)
         return CreatedApiKey.model_validate(response.json())
+
+    async def update(
+        self,
+        key_id: str,
+        name: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
+        allowed_mailboxes: Optional[List[str]] = None,
+    ) -> ApiKey:
+        """Async variant of :meth:`ApiKeys.update`."""
+        body: Dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if scopes is not None:
+            body["scopes"] = scopes
+        if allowed_mailboxes is not None:
+            body["allowed_mailboxes"] = allowed_mailboxes
+        response = await self._transport.request(
+            "PATCH", f"/auth/api-keys/{key_id}", json=body
+        )
+        return ApiKey.model_validate(response.json())
 
     async def delete(self, key_id: str) -> None:
         """Async variant of :meth:`ApiKeys.delete`."""

@@ -5,6 +5,7 @@ import {
   ShieldOff,
   User,
   Plus,
+  Pencil,
   Trash2,
   Loader2,
   Copy,
@@ -15,8 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Card,
   CardContent,
@@ -38,15 +37,23 @@ import {
   useApiKeys,
   useApiKeyScopes,
   useCreateApiKey,
+  useUpdateApiKey,
   useRevokeApiKey,
 } from "@/hooks/use-api-keys";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { TOTPSetupDialog } from "@/components/auth/totp-setup-dialog";
 import { TOTPDisableDialog } from "@/components/auth/totp-disable-dialog";
-import { cn, formatEmailDate } from "@/lib/utils";
-import type { ApiKeyScope, CreateAPIKeyRequest } from "@/types/api";
-
-type AccessMode = "full" | "custom";
+import {
+  ApiKeyPermissionsForm,
+  type AccessMode,
+  type ScopeGroup,
+} from "@/components/api-keys/api-key-permissions-form";
+import { formatEmailDate } from "@/lib/utils";
+import type {
+  APIKey,
+  CreateAPIKeyRequest,
+  UpdateAPIKeyRequest,
+} from "@/types/api";
 
 function ProfilePage() {
   const { user, refreshUser } = useAuth();
@@ -58,19 +65,28 @@ function ProfilePage() {
   const { data: apiKeys, isLoading: keysLoading } = useApiKeys();
   const { data: scopeCatalog } = useApiKeyScopes();
   const createKey = useCreateApiKey();
+  const updateKey = useUpdateApiKey();
   const revokeKey = useRevokeApiKey();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKeyValue, setCreatedKeyValue] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
 
-  // API key permissions
+  // Create-dialog permissions
   const [accessMode, setAccessMode] = useState<AccessMode>("full");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
   const [restrictMailboxes, setRestrictMailboxes] = useState(false);
   const [selectedMailboxes, setSelectedMailboxes] = useState<Set<string>>(
     new Set()
   );
+
+  // Edit-dialog state
+  const [editTarget, setEditTarget] = useState<APIKey | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editAccessMode, setEditAccessMode] = useState<AccessMode>("full");
+  const [editScopes, setEditScopes] = useState<Set<string>>(new Set());
+  const [editRestrictMailboxes, setEditRestrictMailboxes] = useState(false);
+  const [editMailboxes, setEditMailboxes] = useState<Set<string>>(new Set());
 
   // Display name
   const { data: mailboxData } = useMailboxes();
@@ -85,7 +101,7 @@ function ProfilePage() {
     const visible = (scopeCatalog?.scopes ?? []).filter(
       (s) => user?.is_admin || !s.admin_only
     );
-    const groups: { group: string; scopes: ApiKeyScope[] }[] = [];
+    const groups: ScopeGroup[] = [];
     for (const scope of visible) {
       let entry = groups.find((g) => g.group === scope.group);
       if (!entry) {
@@ -113,6 +129,71 @@ function ProfilePage() {
       else next.add(address);
       return next;
     });
+  };
+
+  const toggleEditScope = (value: string) => {
+    setEditScopes((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+
+  const toggleEditMailbox = (address: string) => {
+    setEditMailboxes((prev) => {
+      const next = new Set(prev);
+      if (next.has(address)) next.delete(address);
+      else next.add(address);
+      return next;
+    });
+  };
+
+  const openEditDialog = (key: APIKey) => {
+    const isFull = key.scopes.includes("*");
+    setEditTarget(key);
+    setEditName(key.name);
+    setEditAccessMode(isFull ? "full" : "custom");
+    setEditScopes(new Set(isFull ? [] : key.scopes));
+    const hasMailboxes =
+      Array.isArray(key.allowed_mailboxes) && key.allowed_mailboxes.length > 0;
+    setEditRestrictMailboxes(hasMailboxes);
+    setEditMailboxes(new Set(hasMailboxes ? key.allowed_mailboxes ?? [] : []));
+  };
+
+  const closeEditDialog = () => {
+    setEditTarget(null);
+  };
+
+  const editCustomWithNoScopes =
+    editAccessMode === "custom" && editScopes.size === 0;
+
+  const handleUpdateKey = () => {
+    if (!editTarget) return;
+    if (!editName.trim() || editCustomWithNoScopes) return;
+
+    const data: UpdateAPIKeyRequest = {
+      name: editName.trim(),
+      scopes: editAccessMode === "full" ? ["*"] : Array.from(editScopes),
+      allowed_mailboxes: editRestrictMailboxes
+        ? Array.from(editMailboxes)
+        : [],
+    };
+
+    updateKey.mutate(
+      { keyId: editTarget.id, data },
+      {
+        onSuccess: () => {
+          toast.success("API key updated");
+          closeEditDialog();
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to update API key"
+          );
+        },
+      }
+    );
   };
 
   const [displayName, setDisplayName] = useState("");
@@ -402,14 +483,26 @@ function ProfilePage() {
                         : "All mailboxes"}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => openEditDialog(k)}
+                      aria-label={`Edit permissions for ${k.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
+                      aria-label={`Remove ${k.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -461,151 +554,18 @@ function ProfilePage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Access</Label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setAccessMode("full")}
-                    className={cn(
-                      "rounded-md border p-3 text-left transition-colors",
-                      accessMode === "full"
-                        ? "border-primary bg-primary/5"
-                        : "hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-sm font-medium">Full access</span>
-                    <p className="text-xs text-muted-foreground">
-                      Key can use every available scope.
-                    </p>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAccessMode("custom")}
-                    className={cn(
-                      "rounded-md border p-3 text-left transition-colors",
-                      accessMode === "custom"
-                        ? "border-primary bg-primary/5"
-                        : "hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-sm font-medium">
-                      Custom permissions
-                    </span>
-                    <p className="text-xs text-muted-foreground">
-                      Restrict the key to specific scopes.
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {accessMode === "custom" && (
-                <div className="space-y-2">
-                  <Label>Permissions</Label>
-                  {scopeGroups.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Loading permissions...
-                    </p>
-                  ) : (
-                    <ScrollArea className="max-h-64 rounded-md border">
-                      <div className="space-y-4 p-3">
-                        {scopeGroups.map((group) => (
-                          <div key={group.group} className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                              {group.group}
-                            </p>
-                            <div className="space-y-2">
-                              {group.scopes.map((scope) => (
-                                <label
-                                  key={scope.value}
-                                  className="flex cursor-pointer items-start gap-2.5"
-                                >
-                                  <Checkbox
-                                    checked={selectedScopes.has(scope.value)}
-                                    onCheckedChange={() =>
-                                      toggleScope(scope.value)
-                                    }
-                                    className="mt-0.5"
-                                  />
-                                  <span className="space-y-0.5">
-                                    <span className="block text-sm leading-none">
-                                      {scope.label}
-                                    </span>
-                                    <span className="block text-xs text-muted-foreground">
-                                      {scope.description}
-                                    </span>
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                  {customWithNoScopes && (
-                    <p className="text-xs text-muted-foreground">
-                      Select at least one permission.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <Label>Mailboxes</Label>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => setRestrictMailboxes(false)}
-                    className={cn(
-                      "rounded-md border p-3 text-left transition-colors",
-                      !restrictMailboxes
-                        ? "border-primary bg-primary/5"
-                        : "hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-sm font-medium">All my mailboxes</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRestrictMailboxes(true)}
-                    className={cn(
-                      "rounded-md border p-3 text-left transition-colors",
-                      restrictMailboxes
-                        ? "border-primary bg-primary/5"
-                        : "hover:border-primary/50"
-                    )}
-                  >
-                    <span className="text-sm font-medium">
-                      Limit to specific mailboxes
-                    </span>
-                  </button>
-                </div>
-                {restrictMailboxes && (
-                  <ScrollArea className="max-h-40 rounded-md border">
-                    <div className="space-y-2 p-3">
-                      {mailboxes.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          No mailboxes available.
-                        </p>
-                      ) : (
-                        mailboxes.map((mb) => (
-                          <label
-                            key={mb.id}
-                            className="flex cursor-pointer items-center gap-2.5"
-                          >
-                            <Checkbox
-                              checked={selectedMailboxes.has(mb.address)}
-                              onCheckedChange={() => toggleMailbox(mb.address)}
-                            />
-                            <span className="text-sm">{mb.address}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                )}
-              </div>
+              <ApiKeyPermissionsForm
+                accessMode={accessMode}
+                onAccessModeChange={setAccessMode}
+                scopeGroups={scopeGroups}
+                selectedScopes={selectedScopes}
+                onToggleScope={toggleScope}
+                restrictMailboxes={restrictMailboxes}
+                onRestrictMailboxesChange={setRestrictMailboxes}
+                mailboxes={mailboxes}
+                selectedMailboxes={selectedMailboxes}
+                onToggleMailbox={toggleMailbox}
+              />
 
               <DialogFooter>
                 <Button
@@ -630,6 +590,68 @@ function ProfilePage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit API Key Dialog */}
+      <Dialog
+        open={editTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) closeEditDialog();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit API Key</DialogTitle>
+            <DialogDescription>
+              Update this key&apos;s permissions. The key&apos;s secret stays
+              the same.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-key-name">Key Name</Label>
+              <Input
+                id="edit-key-name"
+                placeholder="e.g. CI Pipeline, Monitoring"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+            </div>
+
+            <ApiKeyPermissionsForm
+              accessMode={editAccessMode}
+              onAccessModeChange={setEditAccessMode}
+              scopeGroups={scopeGroups}
+              selectedScopes={editScopes}
+              onToggleScope={toggleEditScope}
+              restrictMailboxes={editRestrictMailboxes}
+              onRestrictMailboxesChange={setEditRestrictMailboxes}
+              mailboxes={mailboxes}
+              selectedMailboxes={editMailboxes}
+              onToggleMailbox={toggleEditMailbox}
+            />
+
+            <DialogFooter>
+              <Button variant="outline" onClick={closeEditDialog}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateKey}
+                disabled={
+                  !editName.trim() ||
+                  editCustomWithNoScopes ||
+                  updateKey.isPending
+                }
+              >
+                {updateKey.isPending && (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                )}
+                Save
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

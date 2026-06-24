@@ -1,6 +1,6 @@
 import type { Transport } from '../transport.js';
 import { camelize } from '../transport.js';
-import type { ApiKey, ApiKeyCreateParams, ApiKeyCreated } from '../types.js';
+import type { ApiKey, ApiKeyCreateParams, ApiKeyCreated, ApiKeyUpdateParams } from '../types.js';
 
 type Opts = { signal?: AbortSignal };
 
@@ -37,6 +37,21 @@ export class ApiKeysResource {
     if (options.signal) reqOpts.signal = options.signal;
     const raw = await this.transport.request<unknown>(reqOpts);
     return camelize(raw) as ApiKeyCreated;
+  }
+
+  async update(keyId: string, params: ApiKeyUpdateParams, options: Opts = {}): Promise<ApiKey> {
+    const body: Record<string, unknown> = {};
+    if (params.name !== undefined) body.name = params.name;
+    if (params.scopes !== undefined) body.scopes = params.scopes;
+    if (params.allowedMailboxes !== undefined) body.allowed_mailboxes = params.allowedMailboxes;
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'PATCH',
+      path: `/api/v1/auth/api-keys/${encodeURIComponent(keyId)}`,
+      body,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as ApiKey;
   }
 
   async delete(keyId: string, options: Opts = {}): Promise<void> {

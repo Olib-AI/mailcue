@@ -5,6 +5,7 @@ import type {
   APIKeyCreated,
   CreateAPIKeyRequest,
   ScopeCatalogResponse,
+  UpdateAPIKeyRequest,
 } from "@/types/api";
 
 const apiKeyKeys = {
@@ -33,6 +34,17 @@ export function useCreateApiKey() {
   return useMutation({
     mutationFn: (data: CreateAPIKeyRequest) =>
       api.post<APIKeyCreated>("/auth/api-keys", data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: apiKeyKeys.all });
+    },
+  });
+}
+
+export function useUpdateApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ keyId, data }: { keyId: string; data: UpdateAPIKeyRequest }) =>
+      api.patch<APIKey>(`/auth/api-keys/${keyId}`, data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: apiKeyKeys.all });
     },

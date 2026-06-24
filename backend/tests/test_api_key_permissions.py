@@ -259,6 +259,89 @@ async def test_create_key_rejects_unowned_mailbox(perm_client) -> None:
     assert resp.status_code == 400
 
 
+async def _only_key_id(client, key: str) -> str:
+    listed = await client.get("/api/v1/auth/api-keys", headers={"X-API-Key": key})
+    assert listed.status_code == 200
+    return listed.json()[0]["id"]
+
+
+async def test_update_narrows_key_in_place(perm_client) -> None:
+    """Tightening a full-access key keeps the same secret but enforces new scopes."""
+    client, factory = perm_client
+    async with factory() as s:
+        key = await _make_key(s, scopes=["*"])
+    key_id = await _only_key_id(client, key)
+
+    resp = await client.patch(
+        f"/api/v1/auth/api-keys/{key_id}",
+        headers={"X-API-Key": key},
+        json={"scopes": ["email:read"]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["scopes"] == ["email:read"]
+
+    # The very same secret is now rejected for an action it lost.
+    send = await client.post(
+        "/api/v1/emails/send",
+        headers={"X-API-Key": key},
+        json={"from_address": MB_A, "to": ["x@y.com"], "subject": "h", "text": "y"},
+    )
+    assert send.status_code == 403
+
+
+async def test_update_restricts_mailbox_in_place(perm_client) -> None:
+    client, factory = perm_client
+    async with factory() as s:
+        key = await _make_key(s, scopes=["*"])
+    key_id = await _only_key_id(client, key)
+
+    resp = await client.patch(
+        f"/api/v1/auth/api-keys/{key_id}",
+        headers={"X-API-Key": key},
+        json={"allowed_mailboxes": [MB_A]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["allowed_mailboxes"] == [MB_A]
+
+    blocked = await client.get(
+        "/api/v1/emails", params={"mailbox": MB_B}, headers={"X-API-Key": key}
+    )
+    assert blocked.status_code == 403
+
+
+async def test_update_cannot_escalate_beyond_caller(perm_client) -> None:
+    """A scoped key (even with apikey:manage) cannot widen a key past itself."""
+    client, factory = perm_client
+    async with factory() as s:
+        key = await _make_key(s, scopes=["email:read", "apikey:read", "apikey:manage"])
+    key_id = await _only_key_id(client, key)
+
+    resp = await client.patch(
+        f"/api/v1/auth/api-keys/{key_id}",
+        headers={"X-API-Key": key},
+        json={"scopes": ["*"]},
+    )
+    assert resp.status_code == 403
+
+
+async def test_update_name_and_reset_scopes(perm_client) -> None:
+    """Empty scopes reset to full access (allowed for a full-access caller)."""
+    client, factory = perm_client
+    async with factory() as s:
+        key = await _make_key(s, scopes=["*"])
+    key_id = await _only_key_id(client, key)
+
+    resp = await client.patch(
+        f"/api/v1/auth/api-keys/{key_id}",
+        headers={"X-API-Key": key},
+        json={"name": "renamed", "scopes": []},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "renamed"
+    assert body["scopes"] == ["*"]
+
+
 async def test_scope_catalog_lists_scopes(perm_client) -> None:
     client, factory = perm_client
     async with factory() as s:

@@ -16,6 +16,7 @@ from app.auth.schemas import (
     APIKeyCreatedResponse,
     APIKeyCreateRequest,
     APIKeyResponse,
+    APIKeyUpdateRequest,
     ChangePasswordRequest,
     LoginRequest,
     LoginStepResponse,
@@ -604,6 +605,31 @@ async def _resolve_allowed_mailboxes(
     return wanted
 
 
+def _enforce_grant_within_caller(
+    auth: AuthContext, scopes: list[str], allowed_mailboxes: list[str] | None
+) -> None:
+    """Reject a grant broader than the API key making the request.
+
+    Stops privilege escalation when one API key creates or edits another.
+    Interactive sessions (JWT / cookie) are exempt -- they are the owner.
+    """
+    if not auth.is_api_key:
+        return
+    if not scopes_mod.is_subset(scopes, auth.scopes):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot grant scopes broader than the API key making this request",
+        )
+    parent_mailboxes = auth.allowed_mailboxes
+    if parent_mailboxes is not None and (
+        allowed_mailboxes is None or not set(allowed_mailboxes) <= set(parent_mailboxes)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot grant mailbox access broader than the API key making this request",
+        )
+
+
 @router.post(
     "/api-keys",
     response_model=APIKeyCreatedResponse,
@@ -629,25 +655,7 @@ async def create_api_key(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     allowed_mailboxes = await _resolve_allowed_mailboxes(body.allowed_mailboxes, user, db)
-
-    # Privilege guard: a request authenticated *with an API key* may only
-    # mint a key no broader than itself. Interactive sessions are exempt.
-    if auth.is_api_key:
-        if not scopes_mod.is_subset(requested_scopes, auth.scopes):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot grant scopes broader than the API key making this request",
-            )
-        # When the parent key is mailbox-restricted, the child must be
-        # restricted to a subset of the same mailboxes.
-        parent_mailboxes = auth.allowed_mailboxes
-        if parent_mailboxes is not None and (
-            allowed_mailboxes is None or not set(allowed_mailboxes) <= set(parent_mailboxes)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Cannot grant mailbox access broader than the API key making this request",
-            )
+    _enforce_grant_within_caller(auth, requested_scopes, allowed_mailboxes)
 
     raw_key = generate_api_key()
     prefix = api_key_prefix(raw_key)
@@ -700,6 +708,69 @@ async def list_api_keys(
     )
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+@router.patch(
+    "/api-keys/{key_id}",
+    response_model=APIKeyResponse,
+    dependencies=[Depends(require_scope(scopes_mod.APIKEY_MANAGE))],
+)
+async def update_api_key(
+    key_id: str,
+    body: APIKeyUpdateRequest,
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> APIKey:
+    """Update an existing API key's name and/or permissions in place.
+
+    The key's secret value is **not** regenerated, so integrations already
+    using it keep working under the new permissions -- the intended path for
+    tightening legacy full-access keys. Only fields present in the request
+    body are changed.
+    """
+    user = auth.user
+    stmt = select(APIKey).where(APIKey.id == key_id, APIKey.user_id == user.id)
+    api_key = (await db.execute(stmt)).scalar_one_or_none()
+    if api_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    fields = body.model_fields_set
+
+    # Resolve the *effective* scopes/mailboxes after the patch (unchanged
+    # fields keep the key's current values) so the privilege guard sees the
+    # full resulting grant.
+    if "scopes" in fields:
+        try:
+            new_scopes = scopes_mod.normalize_scopes(body.scopes)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        new_scopes = list(api_key.scopes)
+
+    if "allowed_mailboxes" in fields:
+        new_mailboxes = await _resolve_allowed_mailboxes(body.allowed_mailboxes, user, db)
+    else:
+        new_mailboxes = api_key.allowed_mailboxes
+
+    _enforce_grant_within_caller(auth, new_scopes, new_mailboxes)
+
+    if "name" in fields and body.name is not None:
+        api_key.name = body.name
+    if "scopes" in fields:
+        api_key.scopes = new_scopes
+    if "allowed_mailboxes" in fields:
+        api_key.allowed_mailboxes = new_mailboxes
+
+    await db.commit()
+    await db.refresh(api_key)
+    logger.info(
+        "API key '%s' updated by user '%s' (scopes=%s, mailboxes=%s).",
+        api_key.name,
+        user.username,
+        api_key.scopes,
+        api_key.allowed_mailboxes if api_key.allowed_mailboxes is not None else "all",
+    )
+    return api_key
 
 
 @router.delete(

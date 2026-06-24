@@ -436,6 +436,12 @@ export interface CreateAPIKeyRequest {
   allowed_mailboxes?: string[];
 }
 
+export interface UpdateAPIKeyRequest {
+  name?: string;
+  scopes?: string[];
+  allowed_mailboxes?: string[];
+}
+
 export interface ApiKeyScope {
   value: string;
   group: string;
