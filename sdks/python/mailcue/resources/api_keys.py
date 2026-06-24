@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from mailcue.resources._base import AsyncResource, SyncResource
 from mailcue.types import ApiKey, CreatedApiKey
@@ -26,14 +26,32 @@ class ApiKeys(SyncResource):
         response = self._transport.request("GET", "/auth/api-keys")
         return _parse_list(response.json())
 
-    def create(self, name: str) -> CreatedApiKey:
+    def create(
+        self,
+        name: str,
+        scopes: Optional[List[str]] = None,
+        allowed_mailboxes: Optional[List[str]] = None,
+    ) -> CreatedApiKey:
         """Create a new API key. The raw ``key`` is only returned once.
 
+        ``scopes`` restricts the key's permissions; omit (or pass an empty
+        list) for full access. ``allowed_mailboxes`` limits the key to the
+        listed mailboxes; omit for all of the owner's mailboxes.
+
         Example:
-            >>> created = client.api_keys.create("ci-bot")
+            >>> created = client.api_keys.create(
+            ...     "ci-bot",
+            ...     scopes=["email:read"],
+            ...     allowed_mailboxes=["bot@example.com"],
+            ... )
             >>> created.key
         """
-        response = self._transport.request("POST", "/auth/api-keys", json={"name": name})
+        body: Dict[str, Any] = {"name": name}
+        if scopes is not None:
+            body["scopes"] = scopes
+        if allowed_mailboxes is not None:
+            body["allowed_mailboxes"] = allowed_mailboxes
+        response = self._transport.request("POST", "/auth/api-keys", json=body)
         return CreatedApiKey.model_validate(response.json())
 
     def delete(self, key_id: str) -> None:
@@ -53,9 +71,19 @@ class AsyncApiKeys(AsyncResource):
         response = await self._transport.request("GET", "/auth/api-keys")
         return _parse_list(response.json())
 
-    async def create(self, name: str) -> CreatedApiKey:
+    async def create(
+        self,
+        name: str,
+        scopes: Optional[List[str]] = None,
+        allowed_mailboxes: Optional[List[str]] = None,
+    ) -> CreatedApiKey:
         """Async variant of :meth:`ApiKeys.create`."""
-        response = await self._transport.request("POST", "/auth/api-keys", json={"name": name})
+        body: Dict[str, Any] = {"name": name}
+        if scopes is not None:
+            body["scopes"] = scopes
+        if allowed_mailboxes is not None:
+            body["allowed_mailboxes"] = allowed_mailboxes
+        response = await self._transport.request("POST", "/auth/api-keys", json=body)
         return CreatedApiKey.model_validate(response.json())
 
     async def delete(self, key_id: str) -> None:

@@ -5,6 +5,7 @@ import {
   ConflictError,
   Mailcue,
   NotFoundError,
+  PermissionError,
   RateLimitError,
   ServerError,
   ValidationError,
@@ -25,12 +26,35 @@ describe('transport error mapping', () => {
     await expect(mc.system.health()).rejects.toBeInstanceOf(AuthenticationError);
   });
 
-  it('maps 403 to AuthorizationError (subclass of AuthenticationError)', async () => {
+  it('maps 403 to PermissionError (subclass of AuthorizationError)', async () => {
     const f = (async () => jsonResp(403, { error: 'no' })) as unknown as typeof fetch;
     const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
     const err = await mc.system.health().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionError);
     expect(err).toBeInstanceOf(AuthorizationError);
     expect(err).toBeInstanceOf(AuthenticationError);
+  });
+
+  it('parses the missing scope from a 403 permission error', async () => {
+    const f = (async () =>
+      jsonResp(403, {
+        detail: "API key is missing the required 'email:send' permission",
+      })) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    const err = await mc.system.health().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionError);
+    expect((err as PermissionError).scope).toBe('email:send');
+  });
+
+  it('leaves scope undefined for a mailbox-restriction 403', async () => {
+    const f = (async () =>
+      jsonResp(403, {
+        detail: 'This API key is not permitted to access this mailbox',
+      })) as unknown as typeof fetch;
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f, maxRetries: 0 });
+    const err = await mc.system.health().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionError);
+    expect((err as PermissionError).scope).toBeUndefined();
   });
 
   it('maps 404 to NotFoundError', async () => {

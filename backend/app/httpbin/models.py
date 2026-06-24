@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -52,8 +53,8 @@ class HttpBinRequest(Base):
     )
     method: Mapped[str] = mapped_column(String(10), nullable=False)
     path: Mapped[str] = mapped_column(String(2000), default="/", nullable=False)
-    headers: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
-    query_params: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
+    headers: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    query_params: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     body: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
     remote_addr: Mapped[str | None] = mapped_column(String(45), nullable=True)

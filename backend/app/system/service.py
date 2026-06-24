@@ -7,6 +7,7 @@ import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -98,7 +99,7 @@ def _validate_cert_key_pair(
     return cert
 
 
-def _extract_cert_metadata(cert: x509.Certificate) -> dict:
+def _extract_cert_metadata(cert: x509.Certificate) -> dict[str, Any]:
     """Extract CN, SAN DNS names, validity dates, SHA-256 fingerprint."""
     cn_attrs = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
     common_name = cn_attrs[0].value if cn_attrs else None
@@ -179,7 +180,7 @@ async def _reload_tls_services() -> None:
             logger.debug("%s not found — skipping reload.", cmd[0])
 
 
-async def get_tls_certificate_status(db: AsyncSession) -> dict | None:
+async def get_tls_certificate_status(db: AsyncSession) -> dict[str, Any] | None:
     """Return TLS certificate metadata from DB. Never returns PEM content."""
     stmt = select(TlsCertificate).where(TlsCertificate.id == 1)
     result = await db.execute(stmt)
@@ -202,7 +203,7 @@ async def upload_tls_certificate(
     key_pem: str,
     ca_pem: str | None,
     db: AsyncSession,
-) -> dict:
+) -> dict[str, Any]:
     """Validate, store, deploy, and reload a custom TLS certificate."""
     cert = _validate_cert_key_pair(cert_pem, key_pem)
 
@@ -260,7 +261,7 @@ async def upload_tls_certificate(
     }
 
 
-async def get_production_status(db: AsyncSession) -> dict:
+async def get_production_status(db: AsyncSession) -> dict[str, Any]:
     """Compute a production-readiness report from config and filesystem state."""
     from app.domains.models import Domain
 

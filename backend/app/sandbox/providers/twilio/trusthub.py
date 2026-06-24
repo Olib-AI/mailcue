@@ -54,7 +54,11 @@ async def _parse_form(request: Request) -> dict[str, Any]:
         form = await request.form()
         out: dict[str, Any] = {}
         for key in form:
-            vals = form.getlist(key) if hasattr(form, "getlist") else [form.get(key)]
+            vals = (
+                form.getlist(key)
+                if hasattr(form, "getlist")
+                else ([v] if (v := form.get(key)) is not None else [])
+            )
             if len(vals) > 1:
                 out[key] = [str(v) for v in vals if v]
             else:

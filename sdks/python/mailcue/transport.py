@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json as _json
 import random
+import re
 import time
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
@@ -19,11 +20,11 @@ from mailcue._version import __version__
 from mailcue.auth import AuthStrategy
 from mailcue.exceptions import (
     AuthenticationError,
-    AuthorizationError,
     ConflictError,
     MailcueError,
     NetworkError,
     NotFoundError,
+    PermissionDeniedError,
     RateLimitError,
     ServerError,
     TimeoutError,
@@ -33,6 +34,14 @@ from mailcue.exceptions import (
 DEFAULT_BASE_URL = "http://localhost:8088"
 _API_PREFIX = "/api/v1"
 _RETRY_STATUSES = frozenset({502, 503, 504})
+
+# Matches the backend's "... missing the required 'email:send' permission".
+_MISSING_SCOPE_RE = re.compile(r"required '([^']+)' permission")
+
+
+def _missing_scope(message: str) -> Optional[str]:
+    match = _MISSING_SCOPE_RE.search(message)
+    return match.group(1) if match else None
 
 JsonBody = Union[Dict[str, Any], List[Any]]
 
@@ -94,7 +103,13 @@ def _raise_for_status(response: httpx.Response) -> None:
     if status == 401:
         raise AuthenticationError(message, status_code=status, detail=detail, response_body=body)
     if status == 403:
-        raise AuthorizationError(message, status_code=status, detail=detail, response_body=body)
+        raise PermissionDeniedError(
+            message,
+            scope=_missing_scope(message),
+            status_code=status,
+            detail=detail,
+            response_body=body,
+        )
     if status == 404:
         raise NotFoundError(message, status_code=status, detail=detail, response_body=body)
     if status == 409:

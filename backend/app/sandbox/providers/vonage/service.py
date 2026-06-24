@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
@@ -47,7 +47,7 @@ async def resolve_messages_bearer(db: AsyncSession, token: str) -> SandboxProvid
     return await resolve_provider_by_credential(db, "vonage", "application_id", str(app_id))
 
 
-def _decode_jwt_payload(token: str) -> dict | None:
+def _decode_jwt_payload(token: str) -> dict[str, Any] | None:
     parts = token.split(".")
     if len(parts) != 3:
         return None
@@ -56,7 +56,8 @@ def _decode_jwt_payload(token: str) -> dict | None:
         raw = base64.urlsafe_b64decode(padded.encode())
         import json as _json
 
-        return _json.loads(raw.decode())
+        decoded = _json.loads(raw.decode())
+        return decoded if isinstance(decoded, dict) else None
     except Exception:
         return None
 

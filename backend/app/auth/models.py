@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -73,5 +73,13 @@ class APIKey(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # ── Permissions ──────────────────────────────────────────────
+    # ``scopes`` is a list of ``resource:action`` strings (see
+    # app.auth.scopes); ``["*"]`` means full access. ``allowed_mailboxes``
+    # restricts the key to specific mailbox addresses; ``None`` (or empty)
+    # means every mailbox the owner has.
+    scopes: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=lambda: ["*"])
+    allowed_mailboxes: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=None)
 
     user: Mapped[User] = relationship("User", back_populates="api_keys")

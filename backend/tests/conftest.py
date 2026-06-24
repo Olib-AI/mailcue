@@ -66,7 +66,7 @@ async def client(_engine_and_session) -> AsyncIterator[AsyncClient]:
     _engine, factory = _engine_and_session
 
     from app.auth.models import User
-    from app.dependencies import get_current_user
+    from app.dependencies import AuthContext, get_auth, get_current_user
     from app.main import app
 
     # Create a test user directly in the database
@@ -90,8 +90,13 @@ async def client(_engine_and_session) -> AsyncIterator[AsyncClient]:
     async def _override_get_current_user() -> User:
         return test_user
 
+    async def _override_get_auth() -> AuthContext:
+        # Interactive session: full scopes, no mailbox restriction.
+        return AuthContext(user=test_user, api_key=None)
+
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _override_get_current_user
+    app.dependency_overrides[get_auth] = _override_get_auth
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:

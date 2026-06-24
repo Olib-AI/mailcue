@@ -304,6 +304,8 @@ export interface ApiKey {
   createdAt: string;
   lastUsedAt: string | null;
   isActive: boolean;
+  scopes: string[];
+  allowedMailboxes: string[] | null;
 }
 
 export interface ApiKeyCreated extends ApiKey {
@@ -312,6 +314,8 @@ export interface ApiKeyCreated extends ApiKey {
 
 export interface ApiKeyCreateParams {
   name: string;
+  scopes?: string[];
+  allowedMailboxes?: string[];
 }
 
 export interface HealthResponse {

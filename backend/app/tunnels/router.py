@@ -7,9 +7,10 @@ import logging
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_scope
 from app.tunnels.schemas import (
     TunnelClientIdentityRequest,
     TunnelClientIdentityResponse,
@@ -39,7 +40,11 @@ router = APIRouter(prefix="/tunnels", tags=["Tunnels"])
 # ── Client identity (must precede ``/{tunnel_id}`` routes) ───────
 
 
-@router.get("/client-identity", response_model=TunnelClientIdentityResponse)
+@router.get(
+    "/client-identity",
+    response_model=TunnelClientIdentityResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_READ))],
+)
 async def get_client_identity(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -49,7 +54,11 @@ async def get_client_identity(
     return TunnelClientIdentityResponse.model_validate(row, from_attributes=True)
 
 
-@router.put("/client-identity", response_model=TunnelClientIdentityResponse)
+@router.put(
+    "/client-identity",
+    response_model=TunnelClientIdentityResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
+)
 async def upsert_client_identity(
     body: TunnelClientIdentityRequest,
     _admin: User = Depends(require_admin),
@@ -67,7 +76,11 @@ async def upsert_client_identity(
 # ── Reload config helper ─────────────────────────────────────────
 
 
-@router.post("/reload-config", response_model=TunnelReloadConfigResponse)
+@router.post(
+    "/reload-config",
+    response_model=TunnelReloadConfigResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
+)
 async def reload_tunnels_config(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -85,7 +98,11 @@ async def reload_tunnels_config(
 # ── Tunnel CRUD ──────────────────────────────────────────────────
 
 
-@router.get("", response_model=list[TunnelResponse])
+@router.get(
+    "",
+    response_model=list[TunnelResponse],
+    dependencies=[Depends(require_scope(scopes.TUNNEL_READ))],
+)
 async def list_all_tunnels(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -95,7 +112,12 @@ async def list_all_tunnels(
     return [TunnelResponse.model_validate(t, from_attributes=True) for t in tunnels]
 
 
-@router.post("", response_model=TunnelResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=TunnelResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
+)
 async def create_new_tunnel(
     body: TunnelCreate,
     _admin: User = Depends(require_admin),
@@ -106,7 +128,11 @@ async def create_new_tunnel(
     return TunnelResponse.model_validate(tunnel, from_attributes=True)
 
 
-@router.get("/{tunnel_id}", response_model=TunnelResponse)
+@router.get(
+    "/{tunnel_id}",
+    response_model=TunnelResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_READ))],
+)
 async def get_one_tunnel(
     tunnel_id: str,
     _admin: User = Depends(require_admin),
@@ -117,7 +143,11 @@ async def get_one_tunnel(
     return TunnelResponse.model_validate(tunnel, from_attributes=True)
 
 
-@router.patch("/{tunnel_id}", response_model=TunnelResponse)
+@router.patch(
+    "/{tunnel_id}",
+    response_model=TunnelResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
+)
 async def patch_tunnel(
     tunnel_id: str,
     body: TunnelUpdate,
@@ -133,6 +163,7 @@ async def patch_tunnel(
     "/{tunnel_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
 )
 async def delete_one_tunnel(
     tunnel_id: str,
@@ -143,7 +174,11 @@ async def delete_one_tunnel(
     await delete_tunnel(tunnel_id, db)
 
 
-@router.post("/{tunnel_id}/check", response_model=TunnelHealthCheckResponse)
+@router.post(
+    "/{tunnel_id}/check",
+    response_model=TunnelHealthCheckResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_MANAGE))],
+)
 async def check_tunnel(
     tunnel_id: str,
     _admin: User = Depends(require_admin),

@@ -34,9 +34,18 @@ class RegisterRequest(BaseModel):
 
 
 class APIKeyCreateRequest(BaseModel):
-    """Create a new API key for the current user."""
+    """Create a new API key for the current user.
+
+    ``scopes`` is a list of ``resource:action`` permission strings (see
+    ``app.auth.scopes``); omit or pass ``["*"]`` for full access.
+    ``allowed_mailboxes`` restricts the key to specific mailbox
+    addresses; omit (or pass an empty list) for all of the owner's
+    mailboxes.
+    """
 
     name: str
+    scopes: list[str] | None = None
+    allowed_mailboxes: list[str] | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -148,6 +157,8 @@ class APIKeyResponse(BaseModel):
     created_at: datetime
     last_used_at: datetime | None = None
     is_active: bool
+    scopes: list[str] = ["*"]
+    allowed_mailboxes: list[str] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -156,6 +167,22 @@ class APIKeyCreatedResponse(APIKeyResponse):
     """Extends ``APIKeyResponse`` with the raw key -- returned only at creation time."""
 
     key: str
+
+
+class ScopeInfo(BaseModel):
+    """A single permission scope, used to render the create-key UI."""
+
+    value: str
+    group: str
+    label: str
+    description: str
+    admin_only: bool
+
+
+class ScopeCatalogResponse(BaseModel):
+    """The full catalogue of available API-key scopes."""
+
+    scopes: list[ScopeInfo]
 
 
 class TOTPSetupResponse(BaseModel):

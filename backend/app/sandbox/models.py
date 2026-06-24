@@ -31,7 +31,7 @@ class SandboxProvider(Base):
     )
     provider_type: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    credentials: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)  # type: ignore[assignment]
+    credentials: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -56,7 +56,7 @@ class SandboxConversation(Base):
     external_id: Mapped[str] = mapped_column(String(100), nullable=False)
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     conversation_type: Mapped[str] = mapped_column(String(50), default="direct", nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
     messages: Mapped[list[SandboxMessage]] = relationship(
@@ -84,9 +84,9 @@ class SandboxMessage(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str] = mapped_column(String(50), default="text", nullable=False)
     external_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    raw_request: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
-    raw_response: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
-    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
+    raw_request: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    raw_response: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
@@ -104,7 +104,7 @@ class SandboxWebhookEndpoint(Base):
     )
     url: Mapped[str] = mapped_column(String(500), nullable=False)
     secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    event_types: Mapped[list] = mapped_column(JSON, default=list, nullable=False)  # type: ignore[assignment]
+    event_types: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
@@ -131,7 +131,7 @@ class SandboxWebhookDelivery(Base):
         nullable=True,
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)  # type: ignore[assignment]
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     response_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempt: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

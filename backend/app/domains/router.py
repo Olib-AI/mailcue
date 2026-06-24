@@ -10,9 +10,10 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_scope
 from app.domains.models import Domain
 from app.domains.schemas import (
     DnsCheckResponse,
@@ -66,7 +67,11 @@ def _domain_to_response(domain: Domain) -> DomainResponse:
     )
 
 
-@router.get("", response_model=DomainListResponse)
+@router.get(
+    "",
+    response_model=DomainListResponse,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_READ))],
+)
 async def list_all_domains(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -79,7 +84,12 @@ async def list_all_domains(
     )
 
 
-@router.post("", response_model=DomainResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=DomainResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_MANAGE))],
+)
 async def create_domain(
     body: DomainCreateRequest,
     _admin: User = Depends(require_admin),
@@ -99,7 +109,11 @@ async def create_domain(
     return _domain_to_response(domain)
 
 
-@router.get("/{name}", response_model=DomainDetailResponse)
+@router.get(
+    "/{name}",
+    response_model=DomainDetailResponse,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_READ))],
+)
 async def get_domain(
     name: str,
     _admin: User = Depends(require_admin),
@@ -158,7 +172,12 @@ async def get_domain(
     )
 
 
-@router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_MANAGE))],
+)
 async def delete_domain(
     name: str,
     _admin: User = Depends(require_admin),
@@ -187,7 +206,11 @@ async def mta_sts_policy(
     return f"version: STSv1\nmode: testing\nmx: {hostname}\nmax_age: 86400\n"
 
 
-@router.post("/{name}/verify-dns", response_model=DnsCheckResponse)
+@router.post(
+    "/{name}/verify-dns",
+    response_model=DnsCheckResponse,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_MANAGE))],
+)
 async def verify_domain_dns(
     name: str,
     _admin: User = Depends(require_admin),
@@ -203,7 +226,11 @@ async def verify_domain_dns(
         ) from exc
 
 
-@router.get("/{name}/dns-state", response_model=DomainDnsStateResponse)
+@router.get(
+    "/{name}/dns-state",
+    response_model=DomainDnsStateResponse,
+    dependencies=[Depends(require_scope(scopes.DOMAIN_READ))],
+)
 async def get_dns_state(
     name: str,
     _admin: User = Depends(require_admin),

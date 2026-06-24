@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -41,8 +42,8 @@ class CapturedRequestResponse(BaseModel):
     bin_id: str
     method: str
     path: str
-    headers: dict  # type: ignore[assignment]
-    query_params: dict  # type: ignore[assignment]
+    headers: dict[str, Any]
+    query_params: dict[str, Any]
     body: str | None = None
     content_type: str | None = None
     remote_addr: str | None = None

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes as scopes_mod
 from app.auth.models import APIKey, User
 from app.auth.schemas import (
     AdminResetPasswordRequest,
@@ -20,6 +21,8 @@ from app.auth.schemas import (
     LoginStepResponse,
     RefreshRequest,
     RegisterRequest,
+    ScopeCatalogResponse,
+    ScopeInfo,
     TokenResponse,
     TOTPConfirmRequest,
     TOTPDisableRequest,
@@ -52,7 +55,8 @@ from app.auth.utils import (
 )
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import AuthContext, get_auth, get_current_user, require_admin, require_scope
+from app.mailboxes.models import Mailbox
 from app.rate_limit import limiter
 
 logger = logging.getLogger("mailcue.auth")
@@ -555,34 +559,118 @@ async def refresh(
 # ── API Keys ─────────────────────────────────────────────────────
 
 
+@router.get("/api-keys/scopes", response_model=ScopeCatalogResponse)
+async def list_api_key_scopes(
+    _current_user: User = Depends(get_current_user),
+) -> ScopeCatalogResponse:
+    """List every permission scope an API key can be granted."""
+    return ScopeCatalogResponse(
+        scopes=[
+            ScopeInfo(
+                value=s.value,
+                group=s.group,
+                label=s.label,
+                description=s.description,
+                admin_only=s.admin_only,
+            )
+            for s in scopes_mod.SCOPES
+        ]
+    )
+
+
+async def _resolve_allowed_mailboxes(
+    requested: list[str] | None, user: User, db: AsyncSession
+) -> list[str] | None:
+    """Normalise and authorise a requested mailbox allow-list.
+
+    Returns ``None`` (no restriction) when *requested* is empty. Every
+    requested address must be an active mailbox owned by *user*.
+    """
+    if not requested:
+        return None
+
+    wanted = sorted({addr.strip().lower() for addr in requested if addr.strip()})
+    if not wanted:
+        return None
+
+    result = await db.execute(select(Mailbox.address).where(Mailbox.user_id == user.id))
+    owned = {addr.lower() for (addr,) in result.all()}
+    invalid = [addr for addr in wanted if addr not in owned]
+    if invalid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Not your mailbox(es): {', '.join(invalid)}",
+        )
+    return wanted
+
+
 @router.post(
     "/api-keys",
     response_model=APIKeyCreatedResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes_mod.APIKEY_MANAGE))],
 )
 async def create_api_key(
     body: APIKeyCreateRequest,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> APIKeyCreatedResponse:
     """Generate a new API key for the current user.
 
-    The raw key value is returned **only once** in this response.
+    The raw key value is returned **only once** in this response. A key
+    created via another API key cannot grant scopes or mailboxes broader
+    than the key that created it (no privilege escalation).
     """
+    user = auth.user
+
+    try:
+        requested_scopes = scopes_mod.normalize_scopes(body.scopes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    allowed_mailboxes = await _resolve_allowed_mailboxes(body.allowed_mailboxes, user, db)
+
+    # Privilege guard: a request authenticated *with an API key* may only
+    # mint a key no broader than itself. Interactive sessions are exempt.
+    if auth.is_api_key:
+        if not scopes_mod.is_subset(requested_scopes, auth.scopes):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot grant scopes broader than the API key making this request",
+            )
+        # When the parent key is mailbox-restricted, the child must be
+        # restricted to a subset of the same mailboxes.
+        parent_mailboxes = auth.allowed_mailboxes
+        if parent_mailboxes is not None and (
+            allowed_mailboxes is None or not set(allowed_mailboxes) <= set(parent_mailboxes)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot grant mailbox access broader than the API key making this request",
+            )
+
     raw_key = generate_api_key()
     prefix = api_key_prefix(raw_key)
 
     api_key = APIKey(
-        user_id=current_user.id,
+        user_id=user.id,
         key_hash=hash_password(raw_key),
         name=body.name,
         prefix=prefix,
+        scopes=requested_scopes,
+        allowed_mailboxes=allowed_mailboxes,
     )
     db.add(api_key)
     await db.commit()
     await db.refresh(api_key)
 
-    logger.info("API key '%s' created for user '%s'.", body.name, current_user.username)
+    logger.info(
+        "API key '%s' created for user '%s' with scopes %s (mailboxes=%s).",
+        body.name,
+        user.username,
+        requested_scopes,
+        allowed_mailboxes if allowed_mailboxes is not None else "all",
+    )
 
     return APIKeyCreatedResponse(
         id=api_key.id,
@@ -591,11 +679,17 @@ async def create_api_key(
         created_at=api_key.created_at,
         last_used_at=api_key.last_used_at,
         is_active=api_key.is_active,
+        scopes=api_key.scopes,
+        allowed_mailboxes=api_key.allowed_mailboxes,
         key=raw_key,
     )
 
 
-@router.get("/api-keys", response_model=list[APIKeyResponse])
+@router.get(
+    "/api-keys",
+    response_model=list[APIKeyResponse],
+    dependencies=[Depends(require_scope(scopes_mod.APIKEY_READ))],
+)
 async def list_api_keys(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -612,6 +706,7 @@ async def list_api_keys(
     "/api-keys/{key_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+    dependencies=[Depends(require_scope(scopes_mod.APIKEY_MANAGE))],
 )
 async def revoke_api_key(
     key_id: str,

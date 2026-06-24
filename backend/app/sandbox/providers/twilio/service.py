@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -450,31 +451,31 @@ async def build_call_status_callback(
 
 
 def build_message_sid() -> str:
-    return "SM" + __import__("uuid").uuid4().hex
+    return "SM" + uuid.uuid4().hex
 
 
 def build_call_sid() -> str:
-    return "CA" + __import__("uuid").uuid4().hex
+    return "CA" + uuid.uuid4().hex
 
 
 def build_incoming_number_sid() -> str:
-    return "PN" + __import__("uuid").uuid4().hex
+    return "PN" + uuid.uuid4().hex
 
 
 def build_port_sid() -> str:
-    return "PO" + __import__("uuid").uuid4().hex
+    return "PO" + uuid.uuid4().hex
 
 
 def build_brand_sid() -> str:
-    return "BN" + __import__("uuid").uuid4().hex
+    return "BN" + uuid.uuid4().hex
 
 
 def build_campaign_sid() -> str:
-    return "QE" + __import__("uuid").uuid4().hex
+    return "QE" + uuid.uuid4().hex
 
 
 def build_customer_profile_sid() -> str:
-    return "BU" + __import__("uuid").uuid4().hex
+    return "BU" + uuid.uuid4().hex
 
 
 def now_iso() -> str:

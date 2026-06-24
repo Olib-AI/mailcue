@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select
 
 from app.httpbin.models import HttpBinBin, HttpBinRequest
 
@@ -85,8 +85,8 @@ async def capture_request(
     bin_id: str,
     method: str,
     path: str,
-    headers: dict,
-    query_params: dict,
+    headers: dict[str, Any],
+    query_params: dict[str, Any],
     body: str | None,
     content_type: str | None,
     remote_addr: str | None,
@@ -140,4 +140,4 @@ async def clear_requests(db: AsyncSession, bin_id: str) -> int:
     stmt = delete(HttpBinRequest).where(HttpBinRequest.bin_id == bin_id)
     result = await db.execute(stmt)
     await db.commit()
-    return result.rowcount  # type: ignore[union-attr]
+    return cast("CursorResult[Any]", result).rowcount

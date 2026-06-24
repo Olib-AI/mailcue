@@ -288,7 +288,7 @@ async def get_attachment(
         if part.get_content_maintype() == "multipart":
             continue
         payload = part.get_payload(decode=True)
-        if payload is None:
+        if not isinstance(payload, bytes):
             continue
         counter += 1
         if str(counter) == part_id:

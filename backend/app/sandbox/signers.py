@@ -200,14 +200,18 @@ def make_vonage_messages_signer(
         header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode("utf-8"))
         payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
         signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-        if alg == "RS256":
-            sig = key.sign(  # type: ignore[union-attr]
+        if isinstance(key, rsa.RSAPrivateKey):
+            sig = key.sign(
                 signing_input,
                 padding.PKCS1v15(),
                 _hashes.SHA256(),
             )
-        else:  # EdDSA
-            sig = key.sign(signing_input)  # type: ignore[union-attr]
+        elif isinstance(key, ed25519.Ed25519PrivateKey):  # EdDSA
+            sig = key.sign(signing_input)
+        else:
+            raise ValueError(
+                f"Vonage signer requires an RSA or Ed25519 private key; got {type(key).__name__}",
+            )
         token = f"{header_b64}.{payload_b64}.{_b64url(sig)}"
         merged = dict(headers)
         merged["Authorization"] = f"Bearer {token}"

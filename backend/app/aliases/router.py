@@ -20,16 +20,21 @@ from app.aliases.service import (
     list_aliases,
     update_alias,
 )
+from app.auth import scopes
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_scope
 
 logger = logging.getLogger("mailcue.aliases")
 
 router = APIRouter(prefix="/aliases", tags=["Aliases"])
 
 
-@router.get("", response_model=AliasListResponse)
+@router.get(
+    "",
+    response_model=AliasListResponse,
+    dependencies=[Depends(require_scope(scopes.ALIAS_READ))],
+)
 async def list_all_aliases(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -42,7 +47,12 @@ async def list_all_aliases(
     )
 
 
-@router.post("", response_model=AliasResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=AliasResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes.ALIAS_MANAGE))],
+)
 async def create_new_alias(
     body: AliasCreateRequest,
     _admin: User = Depends(require_admin),
@@ -53,7 +63,11 @@ async def create_new_alias(
     return AliasResponse.model_validate(alias, from_attributes=True)
 
 
-@router.get("/{alias_id}", response_model=AliasResponse)
+@router.get(
+    "/{alias_id}",
+    response_model=AliasResponse,
+    dependencies=[Depends(require_scope(scopes.ALIAS_READ))],
+)
 async def get_one_alias(
     alias_id: int,
     _admin: User = Depends(require_admin),
@@ -64,7 +78,11 @@ async def get_one_alias(
     return AliasResponse.model_validate(alias, from_attributes=True)
 
 
-@router.put("/{alias_id}", response_model=AliasResponse)
+@router.put(
+    "/{alias_id}",
+    response_model=AliasResponse,
+    dependencies=[Depends(require_scope(scopes.ALIAS_MANAGE))],
+)
 async def update_existing_alias(
     alias_id: int,
     body: AliasUpdateRequest,
@@ -76,7 +94,12 @@ async def update_existing_alias(
     return AliasResponse.model_validate(alias, from_attributes=True)
 
 
-@router.delete("/{alias_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{alias_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_scope(scopes.ALIAS_MANAGE))],
+)
 async def delete_existing_alias(
     alias_id: int,
     _admin: User = Depends(require_admin),

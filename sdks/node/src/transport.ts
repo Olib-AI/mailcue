@@ -1,10 +1,10 @@
 import {
   AuthenticationError,
-  AuthorizationError,
   ConflictError,
   MailcueError,
   NetworkError,
   NotFoundError,
+  PermissionError,
   RateLimitError,
   ServerError,
   TimeoutError,
@@ -156,11 +156,20 @@ function parseRetryAfter(value: string | null): number | undefined {
   return undefined;
 }
 
+// Matches the backend's "... missing the required 'email:send' permission".
+const MISSING_SCOPE_RE = /required '([^']+)' permission/;
+
 function mapHttpError(status: number, parsed: ParsedError, requestId?: string): MailcueError {
   const ctx = { status, body: parsed.body, ...(requestId ? { requestId } : {}) };
   if (status === 400 || status === 422) return new ValidationError(parsed.message, ctx);
   if (status === 401) return new AuthenticationError(parsed.message, ctx);
-  if (status === 403) return new AuthorizationError(parsed.message, ctx);
+  if (status === 403) {
+    const match = MISSING_SCOPE_RE.exec(parsed.message);
+    return new PermissionError(parsed.message, {
+      ...ctx,
+      ...(match ? { scope: match[1] } : {}),
+    });
+  }
   if (status === 404) return new NotFoundError(parsed.message, ctx);
   if (status === 409) return new ConflictError(parsed.message, ctx);
   if (status >= 500) return new ServerError(parsed.message, ctx);

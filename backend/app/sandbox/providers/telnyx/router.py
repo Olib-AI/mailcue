@@ -80,7 +80,7 @@ async def _resolve(db: AsyncSession, authorization: str | None) -> Any:
     return provider
 
 
-def _telnyx_signer(priv_b64: str):
+def _telnyx_signer(priv_b64: str) -> SigningFn:
     async def sign(headers: dict[str, str], body: bytes) -> dict[str, str]:
         ts = str(int(datetime.now(UTC).timestamp()))
         sig = sign_webhook(priv_b64, body, ts)

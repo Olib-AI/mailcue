@@ -15,8 +15,9 @@ from collections.abc import AsyncGenerator
 from fastapi import APIRouter, Depends
 from sse_starlette.sse import EventSourceResponse
 
+from app.auth import scopes
 from app.auth.models import User
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_scope
 from app.events.bus import event_bus
 
 logger = logging.getLogger("mailcue.events")
@@ -53,7 +54,10 @@ async def _event_generator(
         event_bus.unsubscribe(client_id)
 
 
-@router.get("/stream")
+@router.get(
+    "/stream",
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def event_stream(
     current_user: User = Depends(get_current_user),
 ) -> EventSourceResponse:

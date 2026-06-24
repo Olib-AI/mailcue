@@ -9,12 +9,14 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from sqlalchemy import event
+from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import ConnectionPoolEntry
 
 from app.config import settings
 
@@ -31,7 +33,10 @@ engine = create_async_engine(
 if settings.database_encryption_key:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _set_sqlcipher_key(dbapi_connection, connection_record):
+    def _set_sqlcipher_key(
+        dbapi_connection: DBAPIConnection,
+        connection_record: ConnectionPoolEntry,
+    ) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute(f"PRAGMA key='{settings.database_encryption_key}'")
         cursor.close()

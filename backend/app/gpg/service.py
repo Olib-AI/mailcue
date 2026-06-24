@@ -13,9 +13,11 @@ import json
 import logging
 import urllib.request
 from email import policy
+from email.message import Message
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Any, cast
 
 import gnupg
 from sqlalchemy import select
@@ -226,7 +228,7 @@ KEYSERVER_UPLOAD_URL = "https://keys.openpgp.org/vks/v1/upload"
 KEYSERVER_VERIFY_URL = "https://keys.openpgp.org/vks/v1/request-verify"
 
 
-def _upload_to_keyserver(armored_key: str) -> dict:
+def _upload_to_keyserver(armored_key: str) -> dict[str, Any]:
     """Upload an armored public key to keys.openpgp.org (blocking)."""
     req = urllib.request.Request(
         KEYSERVER_UPLOAD_URL,
@@ -235,10 +237,10 @@ def _upload_to_keyserver(armored_key: str) -> dict:
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())
+        return cast("dict[str, Any]", json.loads(resp.read()))
 
 
-def _request_verify(token: str, addresses: list[str]) -> dict:
+def _request_verify(token: str, addresses: list[str]) -> dict[str, Any]:
     """Request email verification for published key (blocking)."""
     body = json.dumps({"token": token, "addresses": addresses}).encode()
     req = urllib.request.Request(
@@ -248,7 +250,7 @@ def _request_verify(token: str, addresses: list[str]) -> dict:
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read())
+        return cast("dict[str, Any]", json.loads(resp.read()))
 
 
 async def publish_to_keyserver(
@@ -325,11 +327,16 @@ async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession) -> bytes
     original = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
 
     # Build the MIME body part that will be signed
+    content_part: Message
     if original.is_multipart():
         content_part = original
     else:
         decoded_payload = original.get_payload(decode=True)
-        payload_text = decoded_payload.decode("utf-8", errors="replace") if decoded_payload else ""
+        payload_text = (
+            decoded_payload.decode("utf-8", errors="replace")
+            if isinstance(decoded_payload, bytes)
+            else ""
+        )
         content_part = MIMEText(
             payload_text,
             _subtype=original.get_content_subtype(),
@@ -390,11 +397,16 @@ async def encrypt_message(raw_bytes: bytes, recipients: list[str], db: AsyncSess
     original = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
 
     # Build the MIME body to encrypt
+    body_part: Message
     if original.is_multipart():
         body_part = original
     else:
         decoded_payload = original.get_payload(decode=True)
-        payload_text = decoded_payload.decode("utf-8", errors="replace") if decoded_payload else ""
+        payload_text = (
+            decoded_payload.decode("utf-8", errors="replace")
+            if isinstance(decoded_payload, bytes)
+            else ""
+        )
         body_part = MIMEText(
             payload_text,
             _subtype=original.get_content_subtype(),
@@ -459,14 +471,21 @@ async def verify_signature(raw_bytes: bytes) -> GpgEmailInfo:
 
     content_part = parts[0]
     sig_part = parts[1]
+    assert isinstance(content_part, Message)
+    assert isinstance(sig_part, Message)
 
     content_bytes = content_part.as_bytes()
     sig_payload = sig_part.get_payload(decode=True)
+    sig_bytes: bytes
     if sig_payload is None:
         raw_payload = sig_part.get_payload()
-        sig_bytes = raw_payload.encode() if isinstance(raw_payload, str) else bytes(raw_payload)
+        sig_bytes = (
+            raw_payload.encode()
+            if isinstance(raw_payload, str)
+            else bytes(cast("bytes", raw_payload))
+        )
     else:
-        sig_bytes = sig_payload
+        sig_bytes = cast("bytes", sig_payload)
 
     gpg = _get_gpg()
 
@@ -515,14 +534,18 @@ async def decrypt_message(raw_bytes: bytes, recipient: str) -> tuple[bytes, GpgE
         return raw_bytes, info
 
     encrypted_part = parts[1]
+    assert isinstance(encrypted_part, Message)
     enc_payload = encrypted_part.get_payload(decode=True)
+    encrypted_data: bytes
     if enc_payload is None:
         raw_payload = encrypted_part.get_payload()
         encrypted_data = (
-            raw_payload.encode() if isinstance(raw_payload, str) else bytes(raw_payload)
+            raw_payload.encode()
+            if isinstance(raw_payload, str)
+            else bytes(cast("bytes", raw_payload))
         )
     else:
-        encrypted_data = enc_payload
+        encrypted_data = cast("bytes", enc_payload)
 
     gpg = _get_gpg()
     decrypted = await asyncio.to_thread(gpg.decrypt, encrypted_data, always_trust=True)

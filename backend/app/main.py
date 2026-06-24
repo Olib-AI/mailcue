@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.types import ExceptionHandler
 
 from app.aliases.models import Alias  # noqa: F401 — imported for table creation
 from app.aliases.router import router as aliases_router
@@ -156,9 +158,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         async with AsyncSessionLocal() as session:
             from app.domains.service import add_domain
 
-            stmt = select(Domain).where(Domain.name == settings.domain)
-            result = await session.execute(stmt)
-            existing_domain = result.scalar_one_or_none()
+            domain_stmt = select(Domain).where(Domain.name == settings.domain)
+            domain_result = await session.execute(domain_stmt)
+            existing_domain = domain_result.scalar_one_or_none()
             if existing_domain is None:
                 try:
                     await add_domain(settings.domain, "mail", session)
@@ -181,8 +183,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     async with AsyncSessionLocal() as session:
         from app.domains.service import _normalize_dkim_txt, _parse_zonefile_txt
 
-        result = await session.execute(select(Domain))
-        for d in result.scalars().all():
+        domain_result = await session.execute(select(Domain))
+        for d in domain_result.scalars().all():
             current = d.dkim_public_key_txt
             if not current:
                 continue
@@ -252,7 +254,12 @@ def create_app() -> FastAPI:
 
     # ── Rate limiting ─────────────────────────────────────────────
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    # slowapi's handler is typed for the RateLimitExceeded subtype; Starlette
+    # expects the broad Exception signature.  The cast bridges that variance.
+    app.add_exception_handler(
+        RateLimitExceeded,
+        cast("ExceptionHandler", _rate_limit_exceeded_handler),
+    )
 
     # ── Middleware ────────────────────────────────────────────────
     if settings.is_production and settings.cors_origins == ["*"]:

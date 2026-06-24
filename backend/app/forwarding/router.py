@@ -7,9 +7,10 @@ import logging
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_scope
 from app.forwarding.schemas import (
     ForwardingRuleCreateRequest,
     ForwardingRuleListResponse,
@@ -33,7 +34,11 @@ logger = logging.getLogger("mailcue.forwarding")
 router = APIRouter(prefix="/forwarding-rules", tags=["Forwarding Rules"])
 
 
-@router.get("", response_model=ForwardingRuleListResponse)
+@router.get(
+    "",
+    response_model=ForwardingRuleListResponse,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_READ))],
+)
 async def list_forwarding_rules(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -48,6 +53,7 @@ async def list_forwarding_rules(
     "",
     response_model=ForwardingRuleResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_MANAGE))],
 )
 async def create_forwarding_rule(
     body: ForwardingRuleCreateRequest,
@@ -63,7 +69,11 @@ async def create_forwarding_rule(
     return rule_to_response(rule)
 
 
-@router.get("/{rule_id}", response_model=ForwardingRuleResponse)
+@router.get(
+    "/{rule_id}",
+    response_model=ForwardingRuleResponse,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_READ))],
+)
 async def get_forwarding_rule(
     rule_id: str,
     current_user: User = Depends(get_current_user),
@@ -74,7 +84,11 @@ async def get_forwarding_rule(
     return rule_to_response(rule)
 
 
-@router.put("/{rule_id}", response_model=ForwardingRuleResponse)
+@router.put(
+    "/{rule_id}",
+    response_model=ForwardingRuleResponse,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_MANAGE))],
+)
 async def update_forwarding_rule(
     rule_id: str,
     body: ForwardingRuleUpdateRequest,
@@ -93,6 +107,7 @@ async def update_forwarding_rule(
     "/{rule_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_MANAGE))],
 )
 async def delete_forwarding_rule(
     rule_id: str,
@@ -103,7 +118,11 @@ async def delete_forwarding_rule(
     await delete_rule(rule_id, current_user.id, db)
 
 
-@router.post("/{rule_id}/test", response_model=TestRuleResponse)
+@router.post(
+    "/{rule_id}/test",
+    response_model=TestRuleResponse,
+    dependencies=[Depends(require_scope(scopes.FORWARDING_MANAGE))],
+)
 async def test_forwarding_rule(
     rule_id: str,
     body: TestRuleRequest,

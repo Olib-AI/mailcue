@@ -1,5 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Mailcue, MailcueError, type SendEmailParams } from 'mailcue';
+import {
+  AuthenticationError,
+  AuthorizationError,
+  Mailcue,
+  MailcueError,
+  type SendEmailParams,
+} from 'mailcue';
 import { z, type ZodRawShape } from 'zod';
 
 import { isLocked, type McpConfig } from './config.js';
@@ -29,8 +35,42 @@ function toolError(message: string): ToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
+// Matches the backend's "... missing the required 'email:send' permission".
+const MISSING_SCOPE_RE = /required '([^']+)' permission/;
+
 function describeError(err: unknown): string {
   if (err instanceof ToolError) return err.message;
+  // Permission failures (403): the key is authenticated but not allowed to do
+  // this. Tell the model exactly what is missing so it stops retrying.
+  // AuthorizationError is the SDK's 403 type (the newer PermissionError
+  // subclasses it, so this also covers SDKs that expose a parsed scope).
+  if (err instanceof AuthorizationError) {
+    const scope =
+      (err as { scope?: string }).scope ?? MISSING_SCOPE_RE.exec(err.message)?.[1];
+    if (scope) {
+      return (
+        `Permission denied: this MailCue API key does not have the "${scope}" ` +
+        `permission required for this action. Use a key that includes it, or ask ` +
+        `the key owner to grant it. This will not succeed on retry.`
+      );
+    }
+    if (/mailbox/i.test(err.message)) {
+      return (
+        'Permission denied: this MailCue API key is restricted to specific ' +
+        'mailboxes and is not allowed to access this one. Use an allowed mailbox, ' +
+        'or ask the key owner to widen the key. This will not succeed on retry.'
+      );
+    }
+    return `Permission denied: ${err.message}. This will not succeed on retry.`;
+  }
+  // Auth failures (401): missing/invalid credentials. AuthorizationError is
+  // checked first above since it also extends AuthenticationError.
+  if (err instanceof AuthenticationError) {
+    return (
+      'Authentication failed: the MailCue API key or bearer token is missing or ' +
+      'invalid. Check the MAILCUE_API_KEY / MAILCUE_BEARER_TOKEN configuration.'
+    );
+  }
   if (err instanceof MailcueError) {
     const status = err.status ? ` (HTTP ${err.status})` : '';
     return `MailCue request failed${status}: ${err.message}`;

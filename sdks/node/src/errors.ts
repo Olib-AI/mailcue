@@ -38,6 +38,28 @@ export class AuthorizationError extends AuthenticationError {
   }
 }
 
+export interface PermissionContext extends ErrorContext {
+  scope?: string;
+}
+
+/**
+ * HTTP 403 caused by an API key lacking a required permission — either a
+ * missing scope (`email:send`, `mailbox:read`, ...) or a mailbox the key is
+ * not allowed to access. `scope` holds the missing permission when the server
+ * names one. Subclasses `AuthorizationError`, so existing `instanceof
+ * AuthorizationError` checks keep working.
+ */
+export class PermissionError extends AuthorizationError {
+  readonly scope?: string;
+
+  constructor(message = 'Permission denied', ctx: PermissionContext = {}) {
+    super(message, ctx);
+    this.name = 'PermissionError';
+    if (ctx.scope !== undefined) this.scope = ctx.scope;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export class NotFoundError extends MailcueError {
   constructor(message = 'Not found', ctx: ErrorContext = {}) {
     super(message, ctx);

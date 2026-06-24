@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,6 +42,9 @@ from app.sandbox.service import (
     update_provider,
 )
 
+if TYPE_CHECKING:
+    from app.sandbox.models import SandboxMessage
+
 router = APIRouter(prefix="/sandbox", tags=["Sandbox"])
 
 
@@ -72,7 +77,7 @@ async def get_provider_endpoint(
     provider_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Get a single sandbox provider with its sandbox URL hint."""
     provider = await get_provider_by_id(db, provider_id, current_user.id)
     if provider is None:
@@ -198,7 +203,7 @@ async def list_messages(
     else:
         # Aggregate across all user providers
         providers = await get_providers(db, current_user.id)
-        all_messages: list = []
+        all_messages: list[SandboxMessage] = []
         total = 0
         for p in providers:
             msgs, cnt = await get_messages(db, p.id, limit=limit, offset=offset)

@@ -17,7 +17,8 @@ from app.config import settings
 
 def encode_jwt(payload: dict[str, Any]) -> str:
     """Encode *payload* into a signed JWT string."""
-    return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    token: str = jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
+    return token
 
 
 def decode_jwt(token: str) -> dict[str, Any]:

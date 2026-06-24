@@ -30,7 +30,7 @@ class TlsCertificate(Base):
     ca_certificate_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Extracted metadata (populated at upload time)
     common_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    san_dns_names: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    san_dns_names: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     not_before: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     not_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     fingerprint_sha256: Mapped[str | None] = mapped_column(String(255), nullable=True)

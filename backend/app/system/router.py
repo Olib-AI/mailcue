@@ -4,17 +4,20 @@ from __future__ import annotations
 
 from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, rsa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes
 from app.auth.models import User
 from app.database import get_db
-from app.dependencies import require_admin
+from app.dependencies import require_admin, require_scope
 from app.system.service import (
     get_production_status,
     get_server_hostname,
@@ -55,10 +58,13 @@ def _extract_dn_attr(
 ) -> str | None:
     """Extract a single attribute from a distinguished name."""
     attrs = name.get_attributes_for_oid(oid)
-    return attrs[0].value if attrs else None
+    if not attrs:
+        return None
+    value = attrs[0].value
+    return value.decode() if isinstance(value, bytes) else value
 
 
-def _cert_metadata(cert: x509.Certificate) -> dict:
+def _cert_metadata(cert: x509.Certificate) -> dict[str, Any]:
     """Build a metadata dict from a parsed certificate."""
     oid = x509.oid.NameOID
 
@@ -161,14 +167,27 @@ def _cert_metadata(cert: x509.Certificate) -> dict:
         "key_usage": key_usage,
         "extended_key_usage": ext_key_usage,
         "public_key_algorithm": cert.public_key().__class__.__name__,
-        "public_key_size": cert.public_key().key_size,
+        "public_key_size": _public_key_size(cert.public_key()),
     }
 
 
-@router.get("/certificate")
+def _public_key_size(pubkey: object) -> int | None:
+    """Return the key size in bits, or ``None`` for keys without one (Ed/X25519)."""
+    if isinstance(
+        pubkey,
+        (rsa.RSAPublicKey, dsa.DSAPublicKey, ec.EllipticCurvePublicKey),
+    ):
+        return pubkey.key_size
+    return None
+
+
+@router.get(
+    "/certificate",
+    dependencies=[Depends(require_scope(scopes.SYSTEM_READ))],
+)
 async def get_certificate_info(
     _admin: User = Depends(require_admin),
-) -> dict:
+) -> dict[str, Any]:
     """Return metadata for both the server and CA certificates. **Admin only.**"""
     # Prefer ACME/Let's Encrypt cert in production
     if ACME_CERT_PATH.exists():
@@ -197,7 +216,10 @@ async def get_certificate_info(
     }
 
 
-@router.get("/certificate/download")
+@router.get(
+    "/certificate/download",
+    dependencies=[Depends(require_scope(scopes.SYSTEM_READ))],
+)
 async def download_certificate(
     _admin: User = Depends(require_admin),
 ) -> Response:
@@ -227,7 +249,11 @@ class UpdateServerSettingsRequest(BaseModel):
     hostname: str
 
 
-@router.get("/settings", response_model=ServerSettingsResponse)
+@router.get(
+    "/settings",
+    response_model=ServerSettingsResponse,
+    dependencies=[Depends(require_scope(scopes.SYSTEM_READ))],
+)
 async def get_settings(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -237,7 +263,11 @@ async def get_settings(
     return ServerSettingsResponse(hostname=hostname)
 
 
-@router.put("/settings", response_model=ServerSettingsResponse)
+@router.put(
+    "/settings",
+    response_model=ServerSettingsResponse,
+    dependencies=[Depends(require_scope(scopes.SYSTEM_MANAGE))],
+)
 async def update_settings(
     body: UpdateServerSettingsRequest,
     _admin: User = Depends(require_admin),
@@ -267,7 +297,11 @@ class UploadTlsCertificateRequest(BaseModel):
     ca_certificate: str | None = None
 
 
-@router.get("/tls", response_model=TlsCertificateStatusResponse)
+@router.get(
+    "/tls",
+    response_model=TlsCertificateStatusResponse,
+    dependencies=[Depends(require_scope(scopes.SYSTEM_READ))],
+)
 async def get_tls_status(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -279,7 +313,11 @@ async def get_tls_status(
     return TlsCertificateStatusResponse(**status)
 
 
-@router.put("/tls", response_model=TlsCertificateStatusResponse)
+@router.put(
+    "/tls",
+    response_model=TlsCertificateStatusResponse,
+    dependencies=[Depends(require_scope(scopes.SYSTEM_MANAGE))],
+)
 async def upload_tls(
     body: UploadTlsCertificateRequest,
     _admin: User = Depends(require_admin),
@@ -319,7 +357,11 @@ class ProductionStatusResponse(BaseModel):
     features: FeatureFlags
 
 
-@router.get("/production-status", response_model=ProductionStatusResponse)
+@router.get(
+    "/production-status",
+    response_model=ProductionStatusResponse,
+    dependencies=[Depends(require_scope(scopes.SYSTEM_READ))],
+)
 async def production_status(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),

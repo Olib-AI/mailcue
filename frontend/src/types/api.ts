@@ -422,6 +422,8 @@ export interface APIKey {
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+  scopes: string[];
+  allowed_mailboxes: string[] | null;
 }
 
 export interface APIKeyCreated extends APIKey {
@@ -430,6 +432,20 @@ export interface APIKeyCreated extends APIKey {
 
 export interface CreateAPIKeyRequest {
   name: string;
+  scopes?: string[];
+  allowed_mailboxes?: string[];
+}
+
+export interface ApiKeyScope {
+  value: string;
+  group: string;
+  label: string;
+  description: string;
+  admin_only: boolean;
+}
+
+export interface ScopeCatalogResponse {
+  scopes: ApiKeyScope[];
 }
 
 // --- TLS Certificate Types ---

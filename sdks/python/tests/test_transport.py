@@ -11,6 +11,7 @@ from mailcue import (
     Mailcue,
     MailcueError,
     NetworkError,
+    PermissionDeniedError,
     RateLimitError,
     ServerError,
     ValidationError,
@@ -101,6 +102,38 @@ def test_403_maps_to_authorization_error() -> None:
     try:
         with pytest.raises(AuthorizationError):
             client.system.health()
+    finally:
+        client.close()
+
+
+def test_403_permission_error_parses_scope() -> None:
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403, json={"detail": "API key is missing the required 'email:send' permission"}
+        )
+
+    client = _make_client(handler)
+    try:
+        with pytest.raises(PermissionDeniedError) as exc_info:
+            client.system.health()
+        assert exc_info.value.scope == "email:send"
+        # Still an AuthorizationError for backward-compatible handlers.
+        assert isinstance(exc_info.value, AuthorizationError)
+    finally:
+        client.close()
+
+
+def test_403_mailbox_restriction_has_no_scope() -> None:
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403, json={"detail": "This API key is not permitted to access this mailbox"}
+        )
+
+    client = _make_client(handler)
+    try:
+        with pytest.raises(PermissionDeniedError) as exc_info:
+            client.system.health()
+        assert exc_info.value.scope is None
     finally:
         client.close()
 

@@ -44,7 +44,11 @@ async def _parse_body(request: Request) -> PortingOrderRequest:
         form = await request.form()
         raw: dict[str, Any] = {}
         for key in form:
-            vals = form.getlist(key) if hasattr(form, "getlist") else [form.get(key)]
+            vals = (
+                form.getlist(key)
+                if hasattr(form, "getlist")
+                else ([v] if (v := form.get(key)) is not None else [])
+            )
             if key in {"phone_numbers", "notification_emails"}:
                 raw[key] = [str(v) for v in vals if v]
             else:

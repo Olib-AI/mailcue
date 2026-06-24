@@ -7,6 +7,8 @@ Two routers:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,12 +36,15 @@ from app.httpbin.service import (
     update_bin,
 )
 
+if TYPE_CHECKING:
+    from app.httpbin.models import HttpBinBin
+
 # ── Management API (authenticated) ──────────────────────────────
 
 management_router = APIRouter(prefix="/httpbin", tags=["HTTP Bin"])
 
 
-async def _bin_response(db: AsyncSession, bin_obj) -> BinResponse:
+async def _bin_response(db: AsyncSession, bin_obj: HttpBinBin) -> BinResponse:
     count = await get_request_count(db, bin_obj.id)
     data = BinResponse.model_validate(bin_obj)
     data.request_count = count

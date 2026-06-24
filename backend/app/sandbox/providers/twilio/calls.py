@@ -49,7 +49,11 @@ async def _parse_call_body(request: Request) -> CreateCallRequest:
         data: dict[str, Any] = {}
         for key in form:
             if key == "StatusCallbackEvent":
-                values = form.getlist(key) if hasattr(form, "getlist") else [form.get(key)]
+                values = (
+                    form.getlist(key)
+                    if hasattr(form, "getlist")
+                    else ([v] if (v := form.get(key)) is not None else [])
+                )
                 data[key] = [str(v) for v in values if v]
             else:
                 data[key] = str(form.get(key, ""))

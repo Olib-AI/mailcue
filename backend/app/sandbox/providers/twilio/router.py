@@ -83,7 +83,11 @@ async def _parse_send_body(request: Request) -> SendSMSRequest:
         media: list[str] = []
         for key in form:
             if key == "MediaUrl":
-                values = form.getlist(key) if hasattr(form, "getlist") else [form.get(key)]
+                values = (
+                    form.getlist(key)
+                    if hasattr(form, "getlist")
+                    else ([v] if (v := form.get(key)) is not None else [])
+                )
                 media.extend([str(v) for v in values if v])
         payload = {k: str(v) for k, v in form.items() if k != "MediaUrl"}
         if media:

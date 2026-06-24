@@ -8,9 +8,9 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.models import User
+from app.auth import scopes
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import AuthContext, get_auth, require_scope
 from app.emails.schemas import (
     BulkDeleteRequest,
     BulkDeleteResponse,
@@ -53,30 +53,38 @@ logger = logging.getLogger("mailcue.mailboxes")
 router = APIRouter(prefix="/mailboxes", tags=["Mailboxes"])
 
 
-async def verify_mailbox_access(
-    mailbox_address: str, current_user: User, db: AsyncSession
-) -> None:
-    """Verify the user owns this mailbox.
+async def verify_mailbox_access(mailbox_address: str, auth: AuthContext, db: AsyncSession) -> None:
+    """Verify the principal may access this mailbox.
 
-    Every user -- including admins -- can only access their own
-    mailboxes.  Raises ``AuthorizationError`` on mismatch.
+    Two checks: the user must own the mailbox (every user -- including
+    admins -- can only reach their own), and an API key must have the
+    mailbox within its allow-list. Raises ``AuthorizationError`` on
+    either mismatch.
     """
     decoded = unquote(mailbox_address).lower()
     mailbox = await get_mailbox_by_address(decoded, db)
-    if mailbox.user_id != current_user.id:
+    if mailbox.user_id != auth.user.id:
         raise AuthorizationError("You do not have access to this mailbox")
+    if not auth.mailbox_allowed(decoded):
+        raise AuthorizationError("This API key is not permitted to access this mailbox")
 
 
-@router.get("", response_model=MailboxListResponse)
+@router.get(
+    "",
+    response_model=MailboxListResponse,
+    dependencies=[Depends(require_scope(scopes.MAILBOX_READ))],
+)
 async def list_all_mailboxes(
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> MailboxListResponse:
     """List active mailboxes with email/unread counts.
 
-    Non-admin users only see their own mailboxes.
+    Users only see their own mailboxes; an API key further sees only the
+    mailboxes within its allow-list.
     """
-    mailboxes = await list_mailboxes(db, user=_current_user)
+    mailboxes = await list_mailboxes(db, user=auth.user)
+    mailboxes = [m for m in mailboxes if auth.mailbox_allowed(m.address)]
     responses: list[MailboxResponse] = []
     for m in mailboxes:
         local_part = m.address.split("@", maxsplit=1)[0] if "@" in m.address else m.address
@@ -110,17 +118,18 @@ async def list_all_mailboxes(
     "",
     response_model=MailboxResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
 )
 async def create_new_mailbox(
     body: MailboxCreateRequest,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> MailboxResponse:
     """Create a new mailbox and provision it on the mail server.
 
     Any authenticated user can create mailboxes up to their quota.
     """
-    mailbox = await create_mailbox(body, db, user_id=current_user.id)
+    mailbox = await create_mailbox(body, db, user_id=auth.user.id)
     local_part = (
         mailbox.address.split("@", maxsplit=1)[0] if "@" in mailbox.address else mailbox.address
     )
@@ -142,10 +151,11 @@ async def create_new_mailbox(
     "/{address}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
 )
 async def delete_existing_mailbox(
     address: str,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete (deactivate) a mailbox by address and remove it from Dovecot.
@@ -153,16 +163,20 @@ async def delete_existing_mailbox(
     Admins can delete any mailbox; users can delete their own.
     The Maildir data is preserved by default.
     """
-    await verify_mailbox_access(address, current_user, db)
+    await verify_mailbox_access(address, auth, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     await delete_mailbox(mailbox.id, db)
 
 
-@router.get("/{mailbox_id}/stats", response_model=MailboxStats)
+@router.get(
+    "/{mailbox_id}/stats",
+    response_model=MailboxStats,
+    dependencies=[Depends(require_scope(scopes.MAILBOX_READ))],
+)
 async def mailbox_stats(
     mailbox_id: str,
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> MailboxStats:
     """Retrieve email counts and folder statistics via IMAP STATUS.
@@ -171,22 +185,27 @@ async def mailbox_stats(
     (common in local development without Docker).
     """
     mailbox = await get_mailbox(mailbox_id, db)
-    if mailbox.user_id != _current_user.id:
+    if mailbox.user_id != auth.user.id:
         raise AuthorizationError("You do not have access to this mailbox")
+    if not auth.mailbox_allowed(mailbox.address):
+        raise AuthorizationError("This API key is not permitted to access this mailbox")
     return await get_mailbox_stats(mailbox_id, db)
 
 
-@router.post("/{address}/purge")
+@router.post(
+    "/{address}/purge",
+    dependencies=[Depends(require_scope(scopes.EMAIL_DELETE))],
+)
 async def purge_mailbox_emails(
     address: str,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, int]:
     """Delete all emails from a mailbox across all folders.
 
     Admins can purge any mailbox; users can purge their own.
     """
-    await verify_mailbox_access(address, current_user, db)
+    await verify_mailbox_access(address, auth, db)
     decoded = unquote(address)
     deleted = await purge_mailbox(decoded)
     return {"deleted": deleted}
@@ -195,7 +214,11 @@ async def purge_mailbox_emails(
 # ── Nested email routes (under /mailboxes/{mailbox_address}/emails) ──────
 
 
-@router.get("/{mailbox_address}/emails", response_model=EmailListResponse)
+@router.get(
+    "/{mailbox_address}/emails",
+    response_model=EmailListResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def list_mailbox_emails(
     mailbox_address: str,
     folder: str = Query("INBOX"),
@@ -208,11 +231,11 @@ async def list_mailbox_emails(
         description="When true, sort the page by (thread_id, date asc) so "
         "conversations render as contiguous groups.",
     ),
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
     """List emails for a specific mailbox (path-based variant)."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     return await list_emails(
         mailbox=decoded,
@@ -225,16 +248,20 @@ async def list_mailbox_emails(
     )
 
 
-@router.get("/{mailbox_address}/emails/{uid}", response_model=EmailDetail)
+@router.get(
+    "/{mailbox_address}/emails/{uid}",
+    response_model=EmailDetail,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def get_mailbox_email(
     mailbox_address: str,
     uid: str,
     folder: str = Query("INBOX"),
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by UID from a specific mailbox."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
 
@@ -242,47 +269,54 @@ async def get_mailbox_email(
 @router.post(
     "/{mailbox_address}/emails/bulk-delete",
     response_model=BulkDeleteResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_DELETE))],
 )
 async def bulk_delete_mailbox_emails(
     mailbox_address: str,
     body: BulkDeleteRequest,
     folder: str = Query("INBOX"),
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> BulkDeleteResponse:
     """Delete multiple emails by UID from a specific mailbox."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
 
 
 @router.delete(
-    "/{mailbox_address}/emails/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_model=None
+    "/{mailbox_address}/emails/{uid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_scope(scopes.EMAIL_DELETE))],
 )
 async def delete_mailbox_email(
     mailbox_address: str,
     uid: str,
     folder: str = Query("INBOX"),
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete an email by UID from a specific mailbox."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     await delete_email(mailbox=decoded, uid=uid, folder=folder)
 
 
-@router.patch("/{mailbox_address}/emails/{uid}/flags")
+@router.patch(
+    "/{mailbox_address}/emails/{uid}/flags",
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
+)
 async def update_email_flags(
     mailbox_address: str,
     uid: str,
     body: UpdateFlagsRequest,
     folder: str = Query("INBOX"),
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Toggle read/unread status on an email by setting or clearing the \\Seen flag."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     await set_email_flags(mailbox=decoded, uid=uid, seen=body.seen, folder=folder)
     return {"message": "Flags updated"}
@@ -291,16 +325,19 @@ async def update_email_flags(
 # ── Spam management ───────────────────────────────────────────────
 
 
-@router.post("/{mailbox_address}/emails/{uid}/spam")
+@router.post(
+    "/{mailbox_address}/emails/{uid}/spam",
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
+)
 async def mark_email_as_spam(
     mailbox_address: str,
     uid: str,
     body: SpamActionRequest,
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Mark an email as spam by moving it from the source folder to Junk."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     await move_email_to_folder(
         mailbox=decoded,
@@ -312,15 +349,18 @@ async def mark_email_as_spam(
     return {"message": "Email marked as spam"}
 
 
-@router.post("/{mailbox_address}/emails/{uid}/not-spam")
+@router.post(
+    "/{mailbox_address}/emails/{uid}/not-spam",
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
+)
 async def mark_email_as_not_spam(
     mailbox_address: str,
     uid: str,
-    _user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Mark an email as not spam by moving it from Junk back to INBOX."""
-    await verify_mailbox_access(mailbox_address, _user, db)
+    await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
     await move_email_to_folder(
         mailbox=decoded,
@@ -335,18 +375,21 @@ async def mark_email_as_not_spam(
 # ── Display name management ──────────────────────────────────────
 
 
-@router.put("/{address}/display-name")
+@router.put(
+    "/{address}/display-name",
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
+)
 async def update_mailbox_display_name(
     address: str,
     body: DisplayNameUpdateRequest,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Set or update the display name for a mailbox.
 
     The user must own the mailbox (or be an admin).
     """
-    await verify_mailbox_access(address, current_user, db)
+    await verify_mailbox_access(address, auth, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     mailbox.display_name = body.display_name
@@ -358,18 +401,21 @@ async def update_mailbox_display_name(
 # ── Signature management ─────────────────────────────────────────
 
 
-@router.put("/{address}/signature")
+@router.put(
+    "/{address}/signature",
+    dependencies=[Depends(require_scope(scopes.MAILBOX_MANAGE))],
+)
 async def update_mailbox_signature(
     address: str,
     body: SignatureUpdateRequest,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Set or update the email signature for a mailbox.
 
     The user must own the mailbox (or be an admin).
     """
-    await verify_mailbox_access(address, current_user, db)
+    await verify_mailbox_access(address, auth, db)
     decoded_address = unquote(address)
     mailbox = await get_mailbox_by_address(decoded_address, db)
     mailbox.signature = body.signature

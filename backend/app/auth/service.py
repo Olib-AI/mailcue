@@ -63,9 +63,11 @@ def api_key_prefix(raw_key: str) -> str:
     return raw_key[:8]
 
 
-async def validate_api_key(raw_key: str, db: AsyncSession) -> User | None:
-    """Look up a raw API key, verify its hash, and return the owning user.
+async def validate_api_key(raw_key: str, db: AsyncSession) -> tuple[User, APIKey] | None:
+    """Look up a raw API key, verify its hash, and return ``(user, key)``.
 
+    The returned ``APIKey`` carries the granted ``scopes`` and
+    ``allowed_mailboxes`` that the caller uses to authorize the request.
     Returns ``None`` when the key is invalid or inactive.
     """
     prefix = api_key_prefix(raw_key)
@@ -80,7 +82,7 @@ async def validate_api_key(raw_key: str, db: AsyncSession) -> User | None:
 
             user = await db.get(User, api_key_row.user_id)
             if user is not None and user.is_active:
-                return user
+                return user, api_key_row
     return None
 
 

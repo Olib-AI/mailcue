@@ -253,7 +253,7 @@ def _generate_leaf(
             critical=False,
         )
         .add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()),
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()),
             critical=False,
         )
         .add_extension(_san_for_hostname(hostname), critical=False)

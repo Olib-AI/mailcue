@@ -14,7 +14,7 @@ import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from weakref import WeakSet
 
 import httpx
@@ -326,4 +326,4 @@ async def resolve_provider_by_id(
     async with db_factory() as db:
         stmt = select(SandboxProvider).where(SandboxProvider.id == provider_id)
         res = await db.execute(stmt)
-        return res.scalar_one_or_none()
+        return cast("SandboxProvider | None", res.scalar_one_or_none())

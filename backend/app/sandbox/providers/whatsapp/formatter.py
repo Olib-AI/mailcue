@@ -53,15 +53,13 @@ def format_webhook_payload(
     if message.content_type == "text":
         wa_message["text"] = {"body": message.content or ""}
     elif message.content_type in ("image", "document", "audio", "video"):
-        wa_message[message.content_type] = {
+        media: dict[str, str] = {
             "id": f"media_{message.id}",
             "mime_type": message.metadata_json.get("mime_type", "application/octet-stream"),
         }
         if message.content:
-            wa_message[message.content_type] = {  # type: ignore[assignment]
-                **wa_message[message.content_type],  # type: ignore[arg-type]
-                "caption": message.content,
-            }
+            media["caption"] = message.content
+        wa_message[message.content_type] = media
 
     display_phone = provider.credentials.get("display_phone_number", phone_number_id)
 

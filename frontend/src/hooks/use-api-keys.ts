@@ -1,9 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { APIKey, APIKeyCreated, CreateAPIKeyRequest } from "@/types/api";
+import type {
+  APIKey,
+  APIKeyCreated,
+  CreateAPIKeyRequest,
+  ScopeCatalogResponse,
+} from "@/types/api";
 
 const apiKeyKeys = {
   all: ["apiKeys"] as const,
+  scopes: ["apiKeyScopes"] as const,
 };
 
 export function useApiKeys() {
@@ -11,6 +17,14 @@ export function useApiKeys() {
     queryKey: apiKeyKeys.all,
     queryFn: () => api.get<APIKey[]>("/auth/api-keys"),
     staleTime: 30_000,
+  });
+}
+
+export function useApiKeyScopes() {
+  return useQuery({
+    queryKey: apiKeyKeys.scopes,
+    queryFn: () => api.get<ScopeCatalogResponse>("/auth/api-keys/scopes"),
+    staleTime: 5 * 60_000,
   });
 }
 

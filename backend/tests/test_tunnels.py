@@ -366,7 +366,7 @@ async def non_admin_client(_engine_and_session: Any) -> AsyncIterator[AsyncClien
     _engine, factory = _engine_and_session
 
     from app.auth.models import User
-    from app.dependencies import get_current_user
+    from app.dependencies import AuthContext, get_auth, get_current_user
     from app.main import app
 
     plain_user = User(
@@ -388,10 +388,14 @@ async def non_admin_client(_engine_and_session: Any) -> AsyncIterator[AsyncClien
     async def _override_get_current_user() -> User:
         return plain_user
 
+    async def _override_get_auth() -> AuthContext:
+        return AuthContext(user=plain_user, api_key=None)
+
     from app.database import get_db
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _override_get_current_user
+    app.dependency_overrides[get_auth] = _override_get_auth
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as ac:

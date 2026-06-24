@@ -283,7 +283,7 @@ def _extract_body_and_attachments(
             continue
 
         payload = part.get_payload(decode=True)
-        if payload is None:
+        if not isinstance(payload, bytes):
             continue
 
         charset = part.get_content_charset() or "utf-8"

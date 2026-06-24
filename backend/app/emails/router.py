@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import scopes
 from app.auth.models import User
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user, require_admin
+from app.dependencies import AuthContext, get_auth, require_admin, require_scope
 from app.emails.schemas import (
     BulkInjectRequest,
     BulkInjectResponse,
@@ -46,7 +47,11 @@ def _require_non_production() -> None:
 router = APIRouter(prefix="/emails", tags=["Emails"])
 
 
-@router.get("", response_model=EmailListResponse)
+@router.get(
+    "",
+    response_model=EmailListResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def list_all_emails(
     mailbox: str = Query(..., description="Target mailbox address (user@domain)"),
     folder: str = Query("INBOX", description="IMAP folder name"),
@@ -58,7 +63,7 @@ async def list_all_emails(
         False,
         description="Group conversations: sort the page by (thread_id, date asc).",
     ),
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> EmailListResponse:
     """List emails in a mailbox with pagination, search, and sorting.
@@ -66,7 +71,7 @@ async def list_all_emails(
     Emails are fetched directly from IMAP. The ``search`` parameter
     maps to IMAP ``TEXT`` search which covers subject and body.
     """
-    await verify_mailbox_access(mailbox, _current_user, db)
+    await verify_mailbox_access(mailbox, auth, db)
     return await list_emails(
         mailbox=mailbox,
         folder=folder,
@@ -78,29 +83,36 @@ async def list_all_emails(
     )
 
 
-@router.get("/{uid}", response_model=EmailDetail)
+@router.get(
+    "/{uid}",
+    response_model=EmailDetail,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def get_single_email(
     uid: str,
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> EmailDetail:
     """Fetch a single email by its IMAP UID with full body and headers."""
-    await verify_mailbox_access(mailbox, _current_user, db)
+    await verify_mailbox_access(mailbox, auth, db)
     return await get_email(mailbox=mailbox, uid=uid, folder=folder, db=db)
 
 
-@router.get("/{uid}/raw")
+@router.get(
+    "/{uid}/raw",
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def get_raw_email(
     uid: str,
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download the raw RFC 5322 source of an email as a ``.eml`` file."""
-    await verify_mailbox_access(mailbox, _current_user, db)
+    await verify_mailbox_access(mailbox, auth, db)
     raw = await get_email_raw(mailbox=mailbox, uid=uid, folder=folder)
     return Response(
         content=raw,
@@ -109,17 +121,20 @@ async def get_raw_email(
     )
 
 
-@router.get("/{uid}/attachments/{part_id}")
+@router.get(
+    "/{uid}/attachments/{part_id}",
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
 async def download_attachment(
     uid: str,
     part_id: str,
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Download a specific MIME attachment identified by its part ID."""
-    await verify_mailbox_access(mailbox, _current_user, db)
+    await verify_mailbox_access(mailbox, auth, db)
     data, content_type, filename = await get_attachment(
         mailbox=mailbox, uid=uid, part_id=part_id, folder=folder
     )
@@ -130,10 +145,14 @@ async def download_attachment(
     )
 
 
-@router.post("/send", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/send",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_scope(scopes.EMAIL_SEND))],
+)
 async def send_new_email(
     body: SendEmailRequest,
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     """Send an email via the local SMTP server (Postfix).
@@ -141,7 +160,7 @@ async def send_new_email(
     The sender address (``from_address``) must belong to the
     authenticated user's mailbox (admins may send from any).
     """
-    await verify_mailbox_access(body.from_address, _current_user, db)
+    await verify_mailbox_access(body.from_address, auth, db)
     message_id = await send_email(body, db=db, sign=body.sign, encrypt=body.encrypt)
     return {"message": "Email accepted for delivery", "message_id": message_id}
 
@@ -184,14 +203,19 @@ async def bulk_inject_emails(
     return await bulk_inject(body)
 
 
-@router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+@router.delete(
+    "/{uid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    dependencies=[Depends(require_scope(scopes.EMAIL_DELETE))],
+)
 async def delete_single_email(
     uid: str,
     mailbox: str = Query(..., description="Target mailbox address"),
     folder: str = Query("INBOX"),
-    _current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete an email by UID (sets \\Deleted flag and expunges)."""
-    await verify_mailbox_access(mailbox, _current_user, db)
+    await verify_mailbox_access(mailbox, auth, db)
     await delete_email(mailbox=mailbox, uid=uid, folder=folder)

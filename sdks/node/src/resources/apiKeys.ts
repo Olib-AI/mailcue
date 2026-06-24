@@ -26,10 +26,13 @@ export class ApiKeysResource {
   }
 
   async create(params: ApiKeyCreateParams, options: Opts = {}): Promise<ApiKeyCreated> {
+    const body: Record<string, unknown> = { name: params.name };
+    if (params.scopes) body.scopes = params.scopes;
+    if (params.allowedMailboxes) body.allowed_mailboxes = params.allowedMailboxes;
     const reqOpts: Parameters<Transport['request']>[0] = {
       method: 'POST',
       path: '/api/v1/auth/api-keys',
-      body: { name: params.name },
+      body,
     };
     if (options.signal) reqOpts.signal = options.signal;
     const raw = await this.transport.request<unknown>(reqOpts);

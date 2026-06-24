@@ -44,6 +44,35 @@ class AuthorizationError(AuthenticationError):
     """HTTP 403: caller authenticated but lacks required privileges."""
 
 
+class PermissionDeniedError(AuthorizationError):
+    """HTTP 403 caused by an API key lacking a required permission.
+
+    Raised when the key is missing a scope (``email:send``, ``mailbox:read``,
+    ...) or is not allowed to access the target mailbox. ``scope`` holds the
+    missing permission when the server names one, otherwise ``None``.
+
+    Subclasses :class:`AuthorizationError`, so existing ``except
+    AuthorizationError`` handlers keep working.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        scope: Optional[str] = None,
+        status_code: Optional[int] = 403,
+        detail: Any = None,
+        response_body: Any = None,
+    ) -> None:
+        super().__init__(
+            message,
+            status_code=status_code,
+            detail=detail,
+            response_body=response_body,
+        )
+        self.scope = scope
+
+
 class NotFoundError(MailcueError):
     """HTTP 404: requested resource does not exist."""
 

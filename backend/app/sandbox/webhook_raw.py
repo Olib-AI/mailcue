@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 from weakref import WeakSet
 
@@ -116,7 +116,7 @@ async def post_xml(
             return None
 
 
-def fire_and_forget(coro: Awaitable[Any]) -> None:
-    """Schedule an awaitable as a background task, retaining a reference."""
-    task = asyncio.create_task(coro)  # type: ignore[arg-type]
+def fire_and_forget(coro: Coroutine[Any, Any, Any]) -> None:
+    """Schedule a coroutine as a background task, retaining a reference."""
+    task: asyncio.Task[Any] = asyncio.create_task(coro)
     _background_tasks.add(task)

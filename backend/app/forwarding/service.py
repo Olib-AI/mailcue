@@ -276,11 +276,11 @@ async def execute_rule_action(
     config_dict: dict[str, Any] = json.loads(rule.action_config)
 
     if rule.action_type == "smtp_forward":
-        config = SmtpForwardConfig(**config_dict)
-        await _execute_smtp_forward(config, email_data)
+        smtp_config = SmtpForwardConfig(**config_dict)
+        await _execute_smtp_forward(smtp_config, email_data)
     elif rule.action_type == "webhook":
-        config = WebhookConfig(**config_dict)
-        await _execute_webhook(config, email_data)
+        webhook_config = WebhookConfig(**config_dict)
+        await _execute_webhook(webhook_config, email_data)
     else:
         raise ValidationError(f"Unknown action type: {rule.action_type}")
 

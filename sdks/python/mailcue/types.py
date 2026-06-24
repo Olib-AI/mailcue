@@ -236,6 +236,8 @@ class ApiKey(_Base):
     created_at: datetime
     last_used_at: Optional[datetime] = None
     is_active: bool
+    scopes: List[str] = Field(default_factory=lambda: ["*"])
+    allowed_mailboxes: Optional[List[str]] = None
 
 
 class CreatedApiKey(ApiKey):

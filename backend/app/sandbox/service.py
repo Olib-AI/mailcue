@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakSet
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select
 
 from app.sandbox.models import (
     SandboxConversation,
@@ -133,9 +133,9 @@ async def store_message(
     conversation_id: str | None = None,
     content_type: str = "text",
     external_id: str | None = None,
-    raw_request: dict | None = None,
-    raw_response: dict | None = None,
-    metadata: dict | None = None,
+    raw_request: dict[str, Any] | None = None,
+    raw_response: dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> SandboxMessage:
     """Persist a sandbox message and return the ORM instance."""
     msg = SandboxMessage(
@@ -159,7 +159,7 @@ async def store_message(
 async def update_raw_response(
     db: AsyncSession,
     msg: SandboxMessage,
-    raw_response: dict,
+    raw_response: dict[str, Any],
 ) -> None:
     """Update the raw_response field on a stored message."""
     msg.raw_response = raw_response
@@ -265,7 +265,7 @@ async def get_messages(
 async def create_webhook_endpoint(
     db: AsyncSession,
     provider_id: str,
-    data: dict | WebhookEndpointCreateRequest,
+    data: dict[str, Any] | WebhookEndpointCreateRequest,
 ) -> SandboxWebhookEndpoint:
     """Create and return a new webhook endpoint."""
     if not isinstance(data, dict):
@@ -300,7 +300,7 @@ async def delete_webhook_endpoint(
     stmt = delete(SandboxWebhookEndpoint).where(SandboxWebhookEndpoint.id == endpoint_id)
     result = await db.execute(stmt)
     await db.commit()
-    return result.rowcount > 0  # type: ignore[union-attr]
+    return cast("CursorResult[Any]", result).rowcount > 0
 
 
 async def get_webhook_deliveries(
@@ -403,7 +403,7 @@ async def send_outbound(
     return msg
 
 
-_background_tasks: WeakSet[asyncio.Task] = WeakSet()  # prevent GC of fire-and-forget tasks
+_background_tasks: WeakSet[asyncio.Task[None]] = WeakSet()  # prevent GC of fire-and-forget tasks
 
 
 def _fire_webhooks(msg: SandboxMessage) -> None:
