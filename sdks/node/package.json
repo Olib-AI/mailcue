@@ -1,6 +1,6 @@
 {
   "name": "mailcue",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Official MailCue SDK for Node.js",
   "author": "Olib AI <hello@olib.ai>",
   "license": "MIT",
