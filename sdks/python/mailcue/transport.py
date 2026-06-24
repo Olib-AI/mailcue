@@ -43,6 +43,7 @@ def _missing_scope(message: str) -> Optional[str]:
     match = _MISSING_SCOPE_RE.search(message)
     return match.group(1) if match else None
 
+
 JsonBody = Union[Dict[str, Any], List[Any]]
 
 
