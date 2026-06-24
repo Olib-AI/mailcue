@@ -4,10 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MailCue — Realistic Email Testing Server</title>
-<meta name="description" content="A fully-featured email testing server in a single Docker container. SMTP, IMAP, DKIM, DMARC, SpamAssassin, REST API, and a modern web UI.">
+<meta name="description" content="A fully-featured email testing server in a single Docker container. SMTP, IMAP, DKIM, DMARC, SpamAssassin, a REST API with Python & Node SDKs, an MCP server for AI agents, and a modern web UI. Run it for tests or as a real production mail server.">
 <meta name="theme-color" content="#0a0f0d">
 <meta property="og:title" content="MailCue — Realistic Email Testing Server">
-<meta property="og:description" content="Postfix, Dovecot, DKIM, DMARC, SpamAssassin, FastAPI, and React UI in one Docker container.">
+<meta property="og:description" content="Postfix, Dovecot, DKIM, DMARC, SpamAssassin, FastAPI, SDKs, and an MCP server for AI agents — in one Docker container. Test email, or deploy it as a real mail server.">
 <meta property="og:type" content="website">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -545,7 +545,7 @@ footer {
     </div>
     <h1>Email testing that<br>feels <em>real</em></h1>
     <p class="hero-sub">
-      A full mail stack in a single Docker container. SMTP, IMAP, DKIM, DMARC, spam filtering, REST API, and a modern web UI. Test email exactly as it behaves in production.
+      A full mail stack in one Docker container: SMTP, IMAP, DKIM/DMARC, spam filtering, a REST API with Python &amp; Node SDKs, and an MCP server for AI agents. Test email exactly as it behaves in production &mdash; or deploy it as a real mail server.
     </p>
     <div class="hero-actions">
       <a href="https://github.com/Olib-AI/mailcue" class="btn-primary">
@@ -568,7 +568,7 @@ footer {
           <div><span class="prompt">$</span> <span class="cmd">docker run -d -p 8088:80 -p 25:25 ghcr.io/olib-ai/mailcue</span></div>
           <div><span class="output">a3f8c2e1...  mailcue started</span></div>
           <div style="margin-top:.5rem"><span class="prompt">$</span> <span class="cmd">curl http://localhost:8088/api/v1/health</span></div>
-          <div><span class="output">{"status": "healthy", "services": {"postfix": "running", "dovecot": "running"}}</span></div>
+          <div><span class="output">{"status": "ok", "service": "mailcue-api"}</span></div>
           <div style="margin-top:.5rem"><span class="comment"># That's it. Full mail server running.</span></div>
         </div>
       </div>
@@ -602,19 +602,34 @@ footer {
         <p>Accepts mail for any address on any domain. Nothing ever leaves the container. Safe by default.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">&#128274;</div>
-        <h3>DKIM &amp; DMARC</h3>
-        <p>Automatic DKIM signing via OpenDKIM and DMARC verification via OpenDMARC. Test authentication flows end-to-end.</p>
+        <div class="feature-icon">&#128225;</div>
+        <h3>IMAP &amp; POP3</h3>
+        <p>Full Dovecot server with STARTTLS and implicit TLS. Use Thunderbird, mutt, or any standard client.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#128737;</div>
+        <h3>DKIM, DMARC &amp; SPF</h3>
+        <p>OpenDKIM signing, OpenDMARC verification, and SPF policy checks. Validate email authentication end-to-end.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128229;</div>
         <h3>Spam Filtering</h3>
         <p>SpamAssassin scores every inbound message. Configurable thresholds with Bayesian filtering and RBL checks.</p>
       </div>
       <div class="feature-card">
+        <div class="feature-icon">&#128272;</div>
+        <h3>GPG / PGP-MIME</h3>
+        <p>Generate, import, and manage GPG keys per mailbox. Sign, encrypt, verify, and decrypt emails per RFC 3156.</p>
+      </div>
+      <div class="feature-card">
         <div class="feature-icon">&#128268;</div>
-        <h3>REST API</h3>
-        <p>Complete JSON API for sending, receiving, injecting, and searching emails. Built for CI/CD pipelines.</p>
+        <h3>REST API &amp; SDKs</h3>
+        <p>A complete JSON API with an OpenAPI 3.1 spec, plus official Python (PyPI) and Node (npm) SDKs. Built for CI/CD.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#129302;</div>
+        <h3>MCP Server</h3>
+        <p>An official Model Context Protocol server gives an AI agent its own mailbox to read, search, send, and triage email.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#128241;</div>
@@ -622,19 +637,34 @@ footer {
         <p>React-based interface with mailbox sidebar, folder navigation, rich email viewer, and HTML compose editor.</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">&#128274;</div>
-        <h3>GPG / PGP-MIME</h3>
-        <p>Generate, import, and manage GPG keys. Sign, encrypt, verify, and decrypt emails per RFC 3156.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#128225;</div>
-        <h3>IMAP &amp; POP3</h3>
-        <p>Full Dovecot server with STARTTLS and implicit TLS. Use Thunderbird, mutt, or any standard client.</p>
-      </div>
-      <div class="feature-card">
         <div class="feature-icon">&#9889;</div>
         <h3>Real-time Events</h3>
         <p>Server-Sent Events stream pushes email.received, email.deleted, mailbox.created, and more live.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128101;</div>
+        <h3>Multi-User &amp; Scoped Keys</h3>
+        <p>Per-user isolated mailboxes with quotas. Scoped X-API-Key permissions restrict each key to specific actions and mailboxes.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#127760;</div>
+        <h3>Domain Management</h3>
+        <p>Add custom domains with automatic DKIM. A DNS dashboard verifies MX, SPF, DKIM, DMARC, MTA-STS, and TLS-RPT records.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128640;</div>
+        <h3>Production Mode</h3>
+        <p>Flip MAILCUE_MODE=production for a hardened mail server: strict domains, enforced TLS, DMARC reject, and Let's Encrypt certs.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128242;</div>
+        <h3>Provider Sandbox</h3>
+        <p>Capture outbound SMS, voice, and chat API traffic with wire-identical endpoints and signed webhooks for full end-to-end tests.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128269;</div>
+        <h3>HTTP Bin</h3>
+        <p>A built-in request inspector. Point any webhook at a bin URL and inspect method, headers, query, and body in real time.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#128230;</div>
@@ -666,7 +696,7 @@ footer {
       <div class="stack-col">
         <h3>Frontend</h3>
         <div class="stack-item"><strong>React 19</strong>&nbsp; TypeScript</div>
-        <div class="stack-item"><strong>Vite 6</strong>&nbsp; with SWC</div>
+        <div class="stack-item"><strong>Vite 8</strong>&nbsp; with SWC</div>
         <div class="stack-item"><strong>Tailwind CSS 4</strong>&nbsp; styling</div>
         <div class="stack-item"><strong>TanStack Query</strong>&nbsp; server state</div>
         <div class="stack-item"><strong>React Router 7</strong>&nbsp; routing</div>
@@ -691,7 +721,7 @@ footer {
     <div class="reveal">
       <div class="section-label">API</div>
       <h2 class="section-title">Designed for<br>automation</h2>
-      <p class="section-desc">A comprehensive REST API with OpenAPI 3.1 spec and Postman collection included. Authenticate with JWT or API keys.</p>
+      <p class="section-desc">A comprehensive REST API with OpenAPI 3.1 spec and Postman collection included. Authenticate with JWT or scoped API keys, or reach for the official SDKs.</p>
     </div>
     <div class="api-grid reveal">
       <div class="api-card">
@@ -714,6 +744,15 @@ footer {
         </div>
       </div>
       <div class="api-card">
+        <h3>Auth &amp; API Keys</h3>
+        <p>JWT login with optional TOTP 2FA, plus API keys scoped to specific actions and mailboxes.</p>
+        <div class="api-endpoints">
+          <div><span class="method">POST</span> /api/v1/auth/login</div>
+          <div><span class="method">POST</span> /api/v1/auth/api-keys</div>
+          <div><span class="method">GET</span> /api/v1/auth/api-keys/scopes</div>
+        </div>
+      </div>
+      <div class="api-card">
         <h3>GPG Keys</h3>
         <p>Generate, import, export, and publish PGP keys. Full RFC 3156 PGP/MIME support.</p>
         <div class="api-endpoints">
@@ -729,6 +768,15 @@ footer {
           <div><span class="method">POST</span> /api/v1/domains</div>
           <div><span class="method">POST</span> /api/v1/domains/:name/verify-dns</div>
           <div><span class="method">GET</span> /api/v1/events/stream</div>
+        </div>
+      </div>
+      <div class="api-card">
+        <h3>SDKs &amp; MCP</h3>
+        <p>Official Python and Node SDKs wrap the API, and an MCP server gives an AI agent its own mailbox.</p>
+        <div class="api-endpoints">
+          <div><span class="method">pip</span> install mailcue</div>
+          <div><span class="method">npm</span> install mailcue</div>
+          <div><span class="method">npx</span> mailcue-mcp</div>
         </div>
       </div>
     </div>

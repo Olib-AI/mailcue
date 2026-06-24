@@ -79,7 +79,7 @@ MailCue is an all-in-one email testing server that packages **Postfix**, **Dovec
 ### Frontend
 
 - **React 19** with **TypeScript**
-- **Vite 6** build tool with SWC
+- **Vite 8** build tool with SWC
 - **Tailwind CSS 4** for styling
 - **TanStack React Query** for server-state management
 - **React Router 7** for client-side routing
@@ -832,14 +832,7 @@ Contributions are welcome! Please:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
 3. Make your changes
-4. Run linters and tests:
-   ```bash
-   # Backend
-   cd backend && ruff check . && ruff format --check . && mypy .
-
-   # Frontend
-   cd frontend && npm run lint && npm run typecheck
-   ```
+4. Run the linters, type checks, and tests from [Development Setup](#development-setup) -- backend (`ruff`, `mypy`, `pytest`) and frontend (`npm run lint`, `npm run typecheck`) must all pass
 5. Commit your changes (`git commit -m "Add my feature"`)
 6. Push to your fork (`git push origin feature/my-feature`)
 7. Open a Pull Request
