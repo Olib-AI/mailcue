@@ -1,6 +1,6 @@
 {
   "name": "mailcue-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol server for MailCue — gives an AI agent its own mailbox",
   "author": "Olib AI <hello@olib.ai>",
   "license": "MIT",
