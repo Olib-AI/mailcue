@@ -76,9 +76,7 @@ class ApiKeys(SyncResource):
             body["scopes"] = scopes
         if allowed_mailboxes is not None:
             body["allowed_mailboxes"] = allowed_mailboxes
-        response = self._transport.request(
-            "PATCH", f"/auth/api-keys/{key_id}", json=body
-        )
+        response = self._transport.request("PATCH", f"/auth/api-keys/{key_id}", json=body)
         return ApiKey.model_validate(response.json())
 
     def delete(self, key_id: str) -> None:
@@ -128,9 +126,7 @@ class AsyncApiKeys(AsyncResource):
             body["scopes"] = scopes
         if allowed_mailboxes is not None:
             body["allowed_mailboxes"] = allowed_mailboxes
-        response = await self._transport.request(
-            "PATCH", f"/auth/api-keys/{key_id}", json=body
-        )
+        response = await self._transport.request("PATCH", f"/auth/api-keys/{key_id}", json=body)
         return ApiKey.model_validate(response.json())
 
     async def delete(self, key_id: str) -> None:
