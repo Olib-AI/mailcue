@@ -186,6 +186,16 @@ async def test_mailbox_allow_list_filters_listing(perm_client) -> None:
     assert addrs == {MB_A}
 
 
+async def test_mailbox_stats_by_address(perm_client) -> None:
+    """The SDK/MCP address the stats endpoint by email, not UUID (#stats 404)."""
+    client, factory = perm_client
+    async with factory() as s:
+        key = await _make_key(s, scopes=["*"])
+    resp = await client.get(f"/api/v1/mailboxes/{MB_A}/stats", headers={"X-API-Key": key})
+    assert resp.status_code == 200
+    assert resp.json()["address"] == MB_A
+
+
 # ── API-key self-management + privilege escalation ───────────────
 
 

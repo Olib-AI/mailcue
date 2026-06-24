@@ -141,8 +141,16 @@ async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mai
 
 
 async def get_mailbox(mailbox_id: str, db: AsyncSession) -> Mailbox:
-    """Fetch a single mailbox by ID or raise ``NotFoundError``."""
+    """Fetch a single mailbox by ID -- or email address -- or raise ``NotFoundError``.
+
+    The frontend addresses mailboxes by their UUID, while the SDKs and MCP
+    server only know the email address. UUIDs and addresses are disjoint
+    (an address always contains ``@``), so accepting either is unambiguous.
+    """
     mailbox = await db.get(Mailbox, mailbox_id)
+    if mailbox is None and "@" in mailbox_id:
+        stmt = select(Mailbox).where(Mailbox.address == mailbox_id.lower())
+        mailbox = (await db.execute(stmt)).scalar_one_or_none()
     if mailbox is None or not mailbox.is_active:
         raise NotFoundError("Mailbox", mailbox_id)
     return mailbox
