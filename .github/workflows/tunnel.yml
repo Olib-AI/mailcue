@@ -31,7 +31,7 @@ jobs:
       run:
         working-directory: tunnel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache cargo registry & target
         uses: actions/cache@v5
@@ -79,7 +79,7 @@ jobs:
       run:
         working-directory: tunnel
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install cross
         run: |
@@ -128,7 +128,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # Pattern-filter so we only pull the binary artifacts we uploaded
       # in the build-binaries job. Without this, `download-artifact`
@@ -181,7 +181,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-qemu-action@v4
 
