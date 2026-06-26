@@ -42,6 +42,8 @@ ${scope}
     locked ? '' : '\n- list_mailboxes Discover the mailboxes you can act on.'
   }
 - mailbox_stats  Per-folder counts (total / unread) for a mailbox.
+- validate_email Validate email address structure, DNS status, mailbox SMTP
+                 availability, and disposable status.
 
 # How to work
 1. To answer "what's in my inbox" or "any new mail", call list_emails (or
@@ -55,5 +57,8 @@ ${scope}
 5. delete_email is irreversible. Only delete when explicitly asked, or when the
    task clearly calls for it.
 6. Bodies may be truncated in tool output; re-fetch with get_email for the full
-   text when you need it.`;
+   text when you need it.
+7. Always validate email addresses using validate_email before sending to
+   ensure they are valid and deliverable, preventing bounces or IP flag risks.`;
+
 }

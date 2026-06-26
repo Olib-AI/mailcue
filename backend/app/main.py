@@ -8,6 +8,7 @@ disposal).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ from app.config import settings
 from app.database import AsyncSessionLocal, Base, engine, get_db
 from app.domains.models import Domain
 from app.domains.router import router as domains_router
+from app.emails.disposable import load_cached_domains, update_disposable_domains
 from app.emails.router import router as emails_router
 from app.events.bus import event_bus
 from app.events.router import router as events_router
@@ -93,6 +95,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     # ── Startup ──────────────────────────────────────────────────
     logger.info("MailCue API starting up (domain=%s)", settings.domain)
+
+    # Initialize and update disposable domains in background
+    load_cached_domains()
+    _app.state.disposable_update_task = asyncio.create_task(update_disposable_domains())
 
     # Alembic migrations are run by the s6 init script before uvicorn
     # starts.  ``create_all`` is a safety net that creates any tables

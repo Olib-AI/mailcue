@@ -16,6 +16,8 @@ from app.emails.schemas import (
     BulkInjectResponse,
     EmailDetail,
     EmailListResponse,
+    EmailValidationRequest,
+    EmailValidationResponse,
     InjectEmailRequest,
     SendEmailRequest,
 )
@@ -29,6 +31,7 @@ from app.emails.service import (
     list_emails,
     send_email,
 )
+from app.emails.validation import validate_email
 from app.mailboxes.router import verify_mailbox_access
 
 
@@ -219,3 +222,16 @@ async def delete_single_email(
     """Delete an email by UID (sets \\Deleted flag and expunges)."""
     await verify_mailbox_access(mailbox, auth, db)
     await delete_email(mailbox=mailbox, uid=uid, folder=folder)
+
+
+@router.post(
+    "/validate",
+    response_model=EmailValidationResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_VALIDATE))],
+)
+async def validate_email_endpoint(
+    body: EmailValidationRequest,
+) -> EmailValidationResponse:
+    """Validate email address format, DNS domain MX/NS, SMTP availability, and disposable status."""
+    return await validate_email(body.email)
+

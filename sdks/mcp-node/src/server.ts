@@ -371,6 +371,24 @@ export function buildServer(config: McpConfig): McpServer {
     }),
   );
 
+  server.registerTool(
+    'validate_email',
+    {
+      title: 'Validate email address',
+      description:
+        'Validate an email address structure, DNS status, mailbox SMTP availability, and disposable status.',
+      inputSchema: {
+        email: z.string().describe('The email address to validate.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { email: string };
+      const res = await client.emails.validate(a.email);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
   // Discovery only makes sense — and is only safe — when not locked to one box.
   if (!locked) {
     server.registerTool(

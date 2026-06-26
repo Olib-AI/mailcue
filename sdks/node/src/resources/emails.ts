@@ -13,6 +13,7 @@ import type {
   SendEmailParams,
   SendResult,
   WaitForEmailParams,
+  EmailValidationResponse,
 } from '../types.js';
 
 function summaryMatches(email: EmailSummary, p: WaitForEmailParams): boolean {
@@ -305,5 +306,22 @@ export class EmailsResource {
       }
       await delay(Math.min(intervalMs, remaining), options.signal);
     }
+  }
+
+  /**
+   * Validate an email address structure, DNS status, mailbox availability, and disposable status.
+   */
+  async validate(
+    email: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailValidationResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: '/api/v1/emails/validate',
+      body: { email },
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as EmailValidationResponse;
   }
 }

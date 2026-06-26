@@ -54,6 +54,7 @@ POST   /api/v1/emails/send         # Send via SMTP (with optional GPG sign/encry
 POST   /api/v1/emails/inject       # Inject directly via IMAP APPEND
 POST   /api/v1/emails/bulk-inject  # Batch inject multiple emails
 DELETE /api/v1/emails/:uid         # Delete email
+POST   /api/v1/emails/validate     # Validate email address (syntax, DNS, SMTP, disposable)
 ```
 
 ## Mailboxes

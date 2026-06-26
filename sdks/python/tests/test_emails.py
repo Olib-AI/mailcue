@@ -259,3 +259,56 @@ async def test_async_wait_for_returns_match(make_async_client) -> None:  # type:
             mailbox="user@test.com", subject="Welcome", timeout=2.0, interval=0.05
         )
     assert len(found) == 1
+
+
+def test_validate_email(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
+    response_body = {
+        "email": "test@example.com",
+        "is_valid": True,
+        "status": "valid",
+        "syntax": {"is_valid": True, "local_part": "test", "domain": "example.com"},
+        "dns": {"is_valid": True, "has_mx": True, "has_ns": True, "has_a": True, "mx_records": ["10 mail.example.com."]},
+        "mailbox": {"is_valid": True, "smtp_code": 250, "smtp_response": "2.1.5 Recipient OK"},
+        "disposable": {"is_disposable": False}
+    }
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=response_body)
+
+    client = make_client(handler)
+    res = client.emails.validate("test@example.com")
+    assert res.is_valid is True
+    assert res.email == "test@example.com"
+    assert res.status == "valid"
+    assert res.syntax.is_valid is True
+    assert res.dns.is_valid is True
+    assert res.mailbox.is_valid is True
+    assert res.disposable.is_disposable is False
+
+    request = captured_requests[0]
+    assert request.method == "POST"
+    assert request.url.path == "/api/v1/emails/validate"
+    payload = json.loads(request.content)
+    assert payload["email"] == "test@example.com"
+
+
+async def test_async_validate_email(make_async_client) -> None:  # type: ignore[no-untyped-def]
+    response_body = {
+        "email": "test@example.com",
+        "is_valid": True,
+        "status": "valid",
+        "syntax": {"is_valid": True, "local_part": "test", "domain": "example.com"},
+        "dns": {"is_valid": True, "has_mx": True, "has_ns": True, "has_a": True, "mx_records": ["10 mail.example.com."]},
+        "mailbox": {"is_valid": True, "smtp_code": 250, "smtp_response": "2.1.5 Recipient OK"},
+        "disposable": {"is_disposable": False}
+    }
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=response_body)
+
+    client, _ = make_async_client(handler)
+    async with client:
+        res = await client.emails.validate("test@example.com")
+    assert res.is_valid is True
+    assert res.email == "test@example.com"
+

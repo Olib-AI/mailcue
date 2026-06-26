@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -155,3 +156,61 @@ class SpamActionRequest(BaseModel):
     """Request body for spam / not-spam actions (source folder)."""
 
     folder: str = "INBOX"
+
+
+class EmailValidationRequest(BaseModel):
+    """Request body for email address validation."""
+
+    email: str
+
+
+class EmailValidationSyntax(BaseModel):
+    """Result of syntax format check."""
+
+    is_valid: bool
+    local_part: str | None = None
+    domain: str | None = None
+    error: str | None = None
+
+
+class EmailValidationDns(BaseModel):
+    """Result of DNS domain MX/NS records checks."""
+
+    is_valid: bool
+    has_mx: bool
+    has_ns: bool
+    has_a: bool
+    mx_records: list[str] = []
+    ns_records: list[str] = []
+    a_records: list[str] = []
+    error: str | None = None
+
+
+class EmailValidationMailbox(BaseModel):
+    """Result of SMTP probe check."""
+
+    is_valid: bool | None = None
+    smtp_code: int | None = None
+    smtp_response: str | None = None
+    catch_all: bool | None = None
+    error: str | None = None
+
+
+class EmailValidationDisposable(BaseModel):
+    """Result of temporary/disposable domain check."""
+
+    is_disposable: bool
+    error: str | None = None
+
+
+class EmailValidationResponse(BaseModel):
+    """Full detailed response of the email validation."""
+
+    email: str
+    is_valid: bool
+    status: Literal["valid", "invalid", "undetermined", "disposable", "catch_all"]
+    syntax: EmailValidationSyntax
+    dns: EmailValidationDns
+    mailbox: EmailValidationMailbox
+    disposable: EmailValidationDisposable
+

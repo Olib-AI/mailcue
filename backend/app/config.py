@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     sandbox_webhook_timeout_seconds: int = 10
     sandbox_webhook_max_retries: int = 3
 
+    # ── Email Validation ──────────────────────────────────────────
+    validation_smtp_probe_enabled: bool = True
+
     # ── Tunnels (optional outbound relay through remote VPS edges) ─
     tunnels_config_path: str = "/etc/mailcue-sidecar/tunnels.json"
 

@@ -370,3 +370,45 @@ export interface MailcueEvent<T = unknown> {
 export interface BulkInjectParams {
   emails: InjectEmailParams[];
 }
+
+export interface EmailValidationSyntax {
+  isValid: boolean;
+  localPart?: string | null;
+  domain?: string | null;
+  error?: string | null;
+}
+
+export interface EmailValidationDns {
+  isValid: boolean;
+  hasMx: boolean;
+  hasNs: boolean;
+  hasA: boolean;
+  mxRecords: string[];
+  nsRecords: string[];
+  aRecords: string[];
+  error?: string | null;
+}
+
+export interface EmailValidationMailbox {
+  isValid: boolean | null;
+  smtpCode?: number | null;
+  smtpResponse?: string | null;
+  catchAll?: boolean | null;
+  error?: string | null;
+}
+
+export interface EmailValidationDisposable {
+  isDisposable: boolean;
+  error?: string | null;
+}
+
+export interface EmailValidationResponse {
+  email: string;
+  isValid: boolean;
+  status: 'valid' | 'invalid' | 'undetermined' | 'disposable' | 'catch_all';
+  syntax: EmailValidationSyntax;
+  dns: EmailValidationDns;
+  mailbox: EmailValidationMailbox;
+  disposable: EmailValidationDisposable;
+}
+

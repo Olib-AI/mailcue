@@ -16,6 +16,7 @@ from mailcue.types import (
     EmailDetail,
     EmailListResponse,
     EmailSummary,
+    EmailValidationResponse,
     SendResult,
 )
 
@@ -441,6 +442,16 @@ class Emails(SyncResource):
                 )
             time.sleep(min(interval, remaining))
 
+    def validate(self, email: str) -> EmailValidationResponse:
+        """Validate an email address syntax, DNS, SMTP availability, and disposable status.
+
+        Example:
+            >>> client.emails.validate("user@example.com")
+        """
+        response = self._transport.request("POST", "/emails/validate", json={"email": email})
+        return EmailValidationResponse.model_validate(response.json())
+
+
 
 class AsyncEmails(AsyncResource):
     """Asynchronous ``emails`` resource."""
@@ -628,3 +639,9 @@ class AsyncEmails(AsyncResource):
                     f"No matching email arrived in mailbox '{mailbox}' within {timeout}s"
                 )
             await asyncio.sleep(min(interval, remaining))
+
+    async def validate(self, email: str) -> EmailValidationResponse:
+        """Async variant of :meth:`Emails.validate`."""
+        response = await self._transport.request("POST", "/emails/validate", json={"email": email})
+        return EmailValidationResponse.model_validate(response.json())
+

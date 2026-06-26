@@ -23,6 +23,7 @@ WILDCARD = "*"
 EMAIL_READ = "email:read"
 EMAIL_SEND = "email:send"
 EMAIL_DELETE = "email:delete"
+EMAIL_VALIDATE = "email:validate"
 
 # ── Mailbox (containers + organisation, per-mailbox) ─────────────
 MAILBOX_READ = "mailbox:read"
@@ -76,6 +77,12 @@ SCOPES: tuple[ScopeDef, ...] = (
     ScopeDef(EMAIL_SEND, "Email", "Send email", "Send new messages and replies."),
     ScopeDef(
         EMAIL_DELETE, "Email", "Delete email", "Delete messages, bulk-delete, and purge mailboxes."
+    ),
+    ScopeDef(
+        EMAIL_VALIDATE,
+        "Email",
+        "Validate email",
+        "Validate email addresses (DNS, MX, mailbox probe, disposable check).",
     ),
     ScopeDef(MAILBOX_READ, "Mailbox", "Read mailboxes", "List mailboxes and read their stats."),
     ScopeDef(

@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "4d496934-e67f-4b52-81ee-d00a8be93dd5",
+    "_postman_id": "64fc05b3-938c-4930-a142-e47e92a717e9",
     "name": "MailCue API",
     "description": "Realistic email testing server REST API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -13,7 +13,12 @@
           "name": "Login",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
               "host": [
@@ -26,7 +31,16 @@
                 "login"
               ]
             },
-            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``."
+            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -34,7 +48,12 @@
           "name": "Login 2Fa",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login/2fa",
               "host": [
@@ -48,7 +67,16 @@
                 "2fa"
               ]
             },
-            "description": "Complete login by verifying a TOTP code after step 1."
+            "description": "Complete login by verifying a TOTP code after step 1.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"string\",\n  \"temp_token\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -56,7 +84,12 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/register",
               "host": [
@@ -69,7 +102,16 @@
                 "register"
               ]
             },
-            "description": "Create a new user account. **Admin only.**"
+            "description": "Create a new user account. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"email\": \"string\",\n  \"password\": \"string\",\n  \"is_admin\": false,\n  \"max_mailboxes\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -77,7 +119,12 @@
           "name": "Change Password",
           "request": {
             "method": "PUT",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/password",
               "host": [
@@ -90,7 +137,52 @@
                 "password"
               ]
             },
-            "description": "Change the current user's password."
+            "description": "Change the current user's password.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"string\",\n  \"new_password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin Reset Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/admin/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "admin",
+                "reset-password"
+              ]
+            },
+            "description": "Reset a user's password without knowing the old one. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"new_password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -120,7 +212,12 @@
           "name": "Totp Confirm",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/confirm",
               "host": [
@@ -134,7 +231,16 @@
                 "confirm"
               ]
             },
-            "description": "Verify a TOTP code from the authenticator app and enable 2FA."
+            "description": "Verify a TOTP code from the authenticator app and enable 2FA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -142,7 +248,12 @@
           "name": "Totp Disable",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/disable",
               "host": [
@@ -156,7 +267,16 @@
                 "disable"
               ]
             },
-            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code."
+            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"string\",\n  \"code\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -238,6 +358,28 @@
           "response": []
         },
         {
+          "name": "List Api Key Scopes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/api-keys/scopes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "api-keys",
+                "scopes"
+              ]
+            },
+            "description": "List every permission scope an API key can be granted."
+          },
+          "response": []
+        },
+        {
           "name": "List Api Keys",
           "request": {
             "method": "GET",
@@ -280,10 +422,53 @@
                 "api-keys"
               ]
             },
-            "description": "Generate a new API key for the current user.\n\nThe raw key value is returned **only once** in this response.",
+            "description": "Generate a new API key for the current user.\n\nThe raw key value is returned **only once** in this response. A key\ncreated via another API key cannot grant scopes or mailboxes broader\nthan the key that created it (no privilege escalation).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"string\"\n}",
+              "raw": "{\n  \"name\": \"string\",\n  \"scopes\": {},\n  \"allowed_mailboxes\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Api Key",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/api-keys/:key_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "api-keys",
+                ":key_id"
+              ],
+              "variable": [
+                {
+                  "key": "key_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update an existing API key's name and/or permissions in place.\n\nThe key's secret value is **not** regenerated, so integrations already\nusing it keep working under the new permissions -- the intended path for\ntightening legacy full-access keys. Only fields present in the request\nbody are changed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": {},\n  \"scopes\": {},\n  \"allowed_mailboxes\": {}\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -318,7 +503,100 @@
                 }
               ]
             },
-            "description": "Revoke (deactivate) an API key."
+            "description": "Revoke an API key by removing it permanently."
+          },
+          "response": []
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "users"
+              ]
+            },
+            "description": "List all users. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/users/:user_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "users",
+                ":user_id"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update a user's admin-editable fields. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_mailboxes\": {},\n  \"is_active\": {},\n  \"is_admin\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/users/:user_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "users",
+                ":user_id"
+              ],
+              "variable": [
+                {
+                  "key": "user_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Deactivate a user account. **Admin only.**\n\nThe user's mailboxes are preserved but become orphaned."
           },
           "response": []
         }
@@ -372,6 +650,11 @@
                   "key": "sort",
                   "value": "",
                   "description": "Sort order (date_asc, date_desc)"
+                },
+                {
+                  "key": "thread_view",
+                  "value": "",
+                  "description": "Group conversations: sort the page by (thread_id, date asc)."
                 }
               ]
             },
@@ -569,10 +852,10 @@
                 "send"
               ]
             },
-            "description": "Send an email via the local SMTP server (Postfix).\n\nReturns HTTP 202 (Accepted) because SMTP delivery is asynchronous --\nthe message has been accepted for delivery but not yet delivered.",
+            "description": "Send an email via the local SMTP server (Postfix).\n\nThe sender address (``from_address``) must belong to the\nauthenticated user's mailbox (admins may send from any).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"from_address\": \"string\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"body_type\": \"plain\",\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ]\n}",
+              "raw": "{\n  \"from_address\": \"string\",\n  \"from_name\": \"\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"body_type\": \"plain\",\n  \"attachments\": [\n    {\n      \"filename\": \"string\",\n      \"content_type\": \"string\",\n      \"data\": \"string\"\n    }\n  ],\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ],\n  \"bulk\": false,\n  \"list_unsubscribe\": {},\n  \"list_unsubscribe_post\": {}\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -604,7 +887,7 @@
                 "inject"
               ]
             },
-            "description": "Inject an email directly into a mailbox via IMAP APPEND.\n\nBypasses SMTP delivery entirely -- the email appears in the target\nmailbox immediately. Ideal for test data setup.",
+            "description": "Inject an email directly into a mailbox via IMAP APPEND.\n\n**Admin only.** Bypasses SMTP delivery entirely -- the email\nappears in the target mailbox immediately. Ideal for test data setup.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"mailbox\": \"string\",\n  \"from_address\": \"string\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"html_body\": {},\n  \"text_body\": {},\n  \"date\": {},\n  \"headers\": {},\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"return_path\": {},\n  \"realistic_headers\": true\n}",
@@ -639,10 +922,45 @@
                 "bulk-inject"
               ]
             },
-            "description": "Inject multiple emails into mailboxes in a single request.\n\nEach email in the ``emails`` array is injected independently.\nPartial failures are reported in the response without aborting\nthe entire batch.",
+            "description": "Inject multiple emails into mailboxes in a single request.\n\n**Admin only.** Each email in the ``emails`` array is injected\nindependently. Partial failures are reported in the response\nwithout aborting the entire batch.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"emails\": [\n    {\n      \"mailbox\": \"string\",\n      \"from_address\": \"string\",\n      \"to_addresses\": [\n        \"string\"\n      ],\n      \"subject\": \"string\",\n      \"html_body\": {},\n      \"text_body\": {},\n      \"date\": {},\n      \"headers\": {},\n      \"sign\": false,\n      \"encrypt\": false,\n      \"reply_to\": {},\n      \"in_reply_to\": {},\n      \"references\": [\n        \"string\"\n      ],\n      \"cc_addresses\": [\n        \"string\"\n      ],\n      \"return_path\": {},\n      \"realistic_headers\": true\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Email Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/validate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "validate"
+              ]
+            },
+            "description": "Validate email address format, DNS domain MX/NS, SMTP availability, and disposable status.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"string\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -673,7 +991,7 @@
                 "mailboxes"
               ]
             },
-            "description": "List all active mailboxes with email/unread counts."
+            "description": "List active mailboxes with email/unread counts.\n\nUsers only see their own mailboxes; an API key further sees only the\nmailboxes within its allow-list."
           },
           "response": []
         },
@@ -698,7 +1016,7 @@
                 "mailboxes"
               ]
             },
-            "description": "Create a new mailbox and provision it on the mail server.\n\n**Admin only.** This creates a Dovecot virtual user entry and\nthe corresponding Maildir directory structure.",
+            "description": "Create a new mailbox and provision it on the mail server.\n\nAny authenticated user can create mailboxes up to their quota.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"domain\": {},\n  \"display_name\": \"\"\n}",
@@ -735,7 +1053,7 @@
                 }
               ]
             },
-            "description": "Delete (deactivate) a mailbox by address and remove it from Dovecot.\n\n**Admin only.** The Maildir data is preserved by default.\nThe ``address`` path parameter is URL-decoded automatically."
+            "description": "Delete (deactivate) a mailbox by address and remove it from Dovecot.\n\nAdmins can delete any mailbox; users can delete their own.\nThe Maildir data is preserved by default."
           },
           "response": []
         },
@@ -793,7 +1111,7 @@
                 }
               ]
             },
-            "description": "Delete all emails from a mailbox across all folders.\n\n**Admin only.** The mailbox itself is preserved."
+            "description": "Delete all emails from a mailbox across all folders.\n\nAdmins can purge any mailbox; users can purge their own."
           },
           "response": []
         },
@@ -839,6 +1157,11 @@
                   "key": "sort",
                   "value": "",
                   "description": ""
+                },
+                {
+                  "key": "thread_view",
+                  "value": "",
+                  "description": "When true, sort the page by (thread_id, date asc) so conversations render as contiguous groups."
                 }
               ],
               "variable": [
@@ -987,6 +1310,235 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Update Email Flags",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid/flags",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid",
+                "flags"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Toggle read/unread status on an email by setting or clearing the \\Seen flag.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"seen\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Email As Spam",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid/spam",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid",
+                "spam"
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Mark an email as spam by moving it from the source folder to Junk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"folder\": \"INBOX\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Email As Not Spam",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid/not-spam",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid",
+                "not-spam"
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Mark an email as not spam by moving it from Junk back to INBOX."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Mailbox Display Name",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:address/display-name",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":address",
+                "display-name"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Set or update the display name for a mailbox.\n\nThe user must own the mailbox (or be an admin).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"display_name\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Mailbox Signature",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:address/signature",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":address",
+                "signature"
+              ],
+              "variable": [
+                {
+                  "key": "address",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Set or update the email signature for a mailbox.\n\nThe user must own the mailbox (or be an admin).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"signature\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -1042,7 +1594,7 @@
                 "generate"
               ]
             },
-            "description": "Generate a new GPG keypair for a mailbox address.",
+            "description": "Generate a new GPG keypair for a mailbox address.\n\nThe user must own the target mailbox (admins may target any).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"mailbox_address\": \"string\",\n  \"name\": \"MailCue User\",\n  \"algorithm\": \"RSA\",\n  \"key_length\": 2048,\n  \"expire\": {}\n}",
@@ -1072,7 +1624,7 @@
                 "keys"
               ]
             },
-            "description": "List all active GPG keys."
+            "description": "List GPG keys for the current user's mailboxes only."
           },
           "response": []
         },
@@ -1248,7 +1800,7 @@
                 "import"
               ]
             },
-            "description": "Import an armored PGP public key.",
+            "description": "Import an armored PGP public key.\n\nIf ``mailbox_address`` is specified, the user must own that mailbox.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"armored_key\": \"string\",\n  \"mailbox_address\": {}\n}",
@@ -1428,6 +1980,35 @@
           "response": []
         },
         {
+          "name": "Get Dns State",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/domains/:name/dns-state",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "domains",
+                ":name",
+                "dns-state"
+              ],
+              "variable": [
+                {
+                  "key": "name",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Refresh DNS lookups + return per-record expected/published/drift state.\n\nRead-only: never flips the canonical ``*_verified`` booleans (use\n``POST /verify-dns`` for that).  Designed to be cheap and pollable from\nthe admin UI every 60s.  **Admin only.**"
+          },
+          "response": []
+        },
+        {
           "name": "Mta Sts Policy Wellknown",
           "request": {
             "method": "GET",
@@ -1468,7 +2049,7 @@
                 "certificate"
               ]
             },
-            "description": "Return metadata for both the server and CA certificates."
+            "description": "Return metadata for both the server and CA certificates. **Admin only.**"
           },
           "response": []
         },
@@ -1490,7 +2071,7 @@
                 "download"
               ]
             },
-            "description": "Download the CA certificate as a PEM file."
+            "description": "Download the CA certificate as a PEM file. **Admin only.**"
           },
           "response": []
         },
@@ -1603,6 +2184,647 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Production Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/production-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "production-status"
+              ]
+            },
+            "description": "Return the current production readiness status. **Admin only.**"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Forwarding Rules",
+      "item": [
+        {
+          "name": "List Forwarding Rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules"
+              ]
+            },
+            "description": "List all forwarding rules for the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Forwarding Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules"
+              ]
+            },
+            "description": "Create a new forwarding rule.\n\nThe rule begins matching immediately when ``enabled`` is ``True``\n(the default).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"enabled\": true,\n  \"match_from\": {},\n  \"match_to\": {},\n  \"match_subject\": {},\n  \"match_mailbox\": {},\n  \"action_type\": \"string\",\n  \"action_config\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Forwarding Rule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules/:rule_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules",
+                ":rule_id"
+              ],
+              "variable": [
+                {
+                  "key": "rule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fetch a single forwarding rule by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Forwarding Rule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules/:rule_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules",
+                ":rule_id"
+              ],
+              "variable": [
+                {
+                  "key": "rule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update an existing forwarding rule (partial update).\n\nOnly fields present in the request body are modified.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": {},\n  \"enabled\": {},\n  \"match_from\": {},\n  \"match_to\": {},\n  \"match_subject\": {},\n  \"match_mailbox\": {},\n  \"action_type\": {},\n  \"action_config\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Forwarding Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules/:rule_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules",
+                ":rule_id"
+              ],
+              "variable": [
+                {
+                  "key": "rule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Permanently delete a forwarding rule."
+          },
+          "response": []
+        },
+        {
+          "name": "Test Forwarding Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/forwarding-rules/:rule_id/test",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "forwarding-rules",
+                ":rule_id",
+                "test"
+              ],
+              "variable": [
+                {
+                  "key": "rule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Dry-run test a forwarding rule against sample email data.\n\nNo action is actually executed -- the response indicates whether\nthe rule would have matched and which patterns contributed.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"from_address\": \"sender@example.com\",\n  \"to_address\": \"recipient@example.com\",\n  \"subject\": \"Test subject\",\n  \"mailbox\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Aliases",
+      "item": [
+        {
+          "name": "List All Aliases",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aliases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aliases"
+              ]
+            },
+            "description": "List all email aliases. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Alias",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aliases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aliases"
+              ]
+            },
+            "description": "Create a new email alias. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_address\": \"string\",\n  \"destination_address\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get One Alias",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aliases/:alias_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aliases",
+                ":alias_id"
+              ],
+              "variable": [
+                {
+                  "key": "alias_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Get a single alias by ID. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Existing Alias",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aliases/:alias_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aliases",
+                ":alias_id"
+              ],
+              "variable": [
+                {
+                  "key": "alias_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Update an existing alias. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_address\": {},\n  \"enabled\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Existing Alias",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/aliases/:alias_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "aliases",
+                ":alias_id"
+              ],
+              "variable": [
+                {
+                  "key": "alias_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Delete an alias. **Admin only.**"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tunnels",
+      "item": [
+        {
+          "name": "Get Client Identity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/client-identity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                "client-identity"
+              ]
+            },
+            "description": "Return the stored Mailcue tunnel-client public key. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Upsert Client Identity",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/client-identity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                "client-identity"
+              ]
+            },
+            "description": "Upsert the Mailcue tunnel-client public key. **Admin only.**\n\nThe admin pastes the value emitted by ``mailcue-relay-sidecar pubkey``;\nwe recompute the SHA-256 fingerprint and store both for display.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"public_key\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reload Tunnels Config",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/reload-config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                "reload-config"
+              ]
+            },
+            "description": "Force ``tunnels.json`` to be rewritten right now. **Admin only.**\n\nUseful when the sidecar's config volume becomes available after the\nAPI has already started -- e.g. running this immediately after the\nsidecar is deployed avoids waiting for the next CRUD operation."
+          },
+          "response": []
+        },
+        {
+          "name": "List All Tunnels",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels"
+              ]
+            },
+            "description": "List all configured tunnels. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Tunnel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels"
+              ]
+            },
+            "description": "Create a new tunnel. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"endpoint_host\": \"string\",\n  \"endpoint_port\": 7843,\n  \"server_pubkey\": \"string\",\n  \"enabled\": true,\n  \"weight\": 1,\n  \"notes\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get One Tunnel",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/:tunnel_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                ":tunnel_id"
+              ],
+              "variable": [
+                {
+                  "key": "tunnel_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Fetch a single tunnel by ID. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Patch Tunnel",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/:tunnel_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                ":tunnel_id"
+              ],
+              "variable": [
+                {
+                  "key": "tunnel_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Apply a partial update to a tunnel. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": {},\n  \"endpoint_host\": {},\n  \"endpoint_port\": {},\n  \"server_pubkey\": {},\n  \"enabled\": {},\n  \"weight\": {},\n  \"notes\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete One Tunnel",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/:tunnel_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                ":tunnel_id"
+              ],
+              "variable": [
+                {
+                  "key": "tunnel_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Permanently delete a tunnel. **Admin only.**"
+          },
+          "response": []
+        },
+        {
+          "name": "Check Tunnel",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/:tunnel_id/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                ":tunnel_id",
+                "check"
+              ],
+              "variable": [
+                {
+                  "key": "tunnel_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Probe a tunnel edge with a 5-second TCP connect. **Admin only.**\n\nThe actual Noise IK handshake is the sidecar's responsibility -- this\nonly confirms the edge port is reachable from the API host."
           },
           "response": []
         }
@@ -2302,6 +3524,33 @@
               ]
             },
             "description": "Lightweight health probe for Docker HEALTHCHECK and load balancers."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Integrations",
+      "item": [
+        {
+          "name": "Openclaw Skill",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/integrations/openclaw/skill",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "integrations",
+                "openclaw",
+                "skill"
+              ]
+            },
+            "description": "Dynamically generated OpenClaw SKILL.md for this MailCue instance."
           },
           "response": []
         }

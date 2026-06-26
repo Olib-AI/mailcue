@@ -224,4 +224,40 @@ describe('emails.waitFor', () => {
       }),
     ).rejects.toBeInstanceOf(TimeoutError);
   });
+
+  it('validates an email address and camelizes fields', async () => {
+    const responseBody = {
+      email: 'test@example.com',
+      is_valid: true,
+      status: 'valid',
+      syntax: { is_valid: true, local_part: 'test', domain: 'example.com' },
+      dns: { is_valid: true, has_mx: true, has_ns: true, has_a: true, mx_records: ['10 mail.example.com.'] },
+      mailbox: { is_valid: true, smtp_code: 250, smtp_response: '2.1.5 Recipient OK' },
+      disposable: { is_disposable: false }
+    };
+    const { fetch: f, calls } = makeRecorder(
+      () =>
+        new Response(JSON.stringify(responseBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f });
+    const res = await mc.emails.validate('test@example.com');
+    expect(res.email).toBe('test@example.com');
+    expect(res.isValid).toBe(true);
+    expect(res.status).toBe('valid');
+    expect(res.syntax.isValid).toBe(true);
+    expect(res.dns.isValid).toBe(true);
+    expect(res.mailbox.isValid).toBe(true);
+    expect(res.disposable.isDisposable).toBe(false);
+
+    expect(calls).toHaveLength(1);
+    const call = calls[0]!;
+    expect(call.url).toBe('http://localhost:8088/api/v1/emails/validate');
+    expect(call.method).toBe('POST');
+    expect(call.body).toEqual({ email: 'test@example.com' });
+  });
 });
+

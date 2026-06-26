@@ -275,3 +275,55 @@ class Event(_Base):
     data: Dict[str, Any] = Field(default_factory=dict)
     id: Optional[str] = None
     retry: Optional[int] = None
+
+
+class EmailValidationSyntax(_Base):
+    """Syntax check results."""
+
+    is_valid: bool
+    local_part: Optional[str] = None
+    domain: Optional[str] = None
+    error: Optional[str] = None
+
+
+class EmailValidationDns(_Base):
+    """DNS MX/NS/A check results."""
+
+    is_valid: bool
+    has_mx: bool
+    has_ns: bool
+    has_a: bool
+    mx_records: List[str] = Field(default_factory=list)
+    ns_records: List[str] = Field(default_factory=list)
+    a_records: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class EmailValidationMailbox(_Base):
+    """SMTP RCPT TO probe check results."""
+
+    is_valid: Optional[bool] = None
+    smtp_code: Optional[int] = None
+    smtp_response: Optional[str] = None
+    catch_all: Optional[bool] = None
+    error: Optional[str] = None
+
+
+class EmailValidationDisposable(_Base):
+    """Disposable domain check results."""
+
+    is_disposable: bool
+    error: Optional[str] = None
+
+
+class EmailValidationResponse(_Base):
+    """Complete email validation details."""
+
+    email: str
+    is_valid: bool
+    status: Literal["valid", "invalid", "undetermined", "disposable", "catch_all"]
+    syntax: EmailValidationSyntax
+    dns: EmailValidationDns
+    mailbox: EmailValidationMailbox
+    disposable: EmailValidationDisposable
+
