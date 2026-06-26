@@ -267,9 +267,15 @@ def test_validate_email(make_client, captured_requests) -> None:  # type: ignore
         "is_valid": True,
         "status": "valid",
         "syntax": {"is_valid": True, "local_part": "test", "domain": "example.com"},
-        "dns": {"is_valid": True, "has_mx": True, "has_ns": True, "has_a": True, "mx_records": ["10 mail.example.com."]},
+        "dns": {
+            "is_valid": True,
+            "has_mx": True,
+            "has_ns": True,
+            "has_a": True,
+            "mx_records": ["10 mail.example.com."],
+        },
         "mailbox": {"is_valid": True, "smtp_code": 250, "smtp_response": "2.1.5 Recipient OK"},
-        "disposable": {"is_disposable": False}
+        "disposable": {"is_disposable": False},
     }
 
     def handler(_req: httpx.Request) -> httpx.Response:
@@ -298,9 +304,15 @@ async def test_async_validate_email(make_async_client) -> None:  # type: ignore[
         "is_valid": True,
         "status": "valid",
         "syntax": {"is_valid": True, "local_part": "test", "domain": "example.com"},
-        "dns": {"is_valid": True, "has_mx": True, "has_ns": True, "has_a": True, "mx_records": ["10 mail.example.com."]},
+        "dns": {
+            "is_valid": True,
+            "has_mx": True,
+            "has_ns": True,
+            "has_a": True,
+            "mx_records": ["10 mail.example.com."],
+        },
         "mailbox": {"is_valid": True, "smtp_code": 250, "smtp_response": "2.1.5 Recipient OK"},
-        "disposable": {"is_disposable": False}
+        "disposable": {"is_disposable": False},
     }
 
     def handler(_req: httpx.Request) -> httpx.Response:
@@ -311,4 +323,3 @@ async def test_async_validate_email(make_async_client) -> None:  # type: ignore[
         res = await client.emails.validate("test@example.com")
     assert res.is_valid is True
     assert res.email == "test@example.com"
-

@@ -326,4 +326,3 @@ class EmailValidationResponse(_Base):
     dns: EmailValidationDns
     mailbox: EmailValidationMailbox
     disposable: EmailValidationDisposable
-

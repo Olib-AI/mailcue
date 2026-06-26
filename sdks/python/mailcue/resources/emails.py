@@ -452,7 +452,6 @@ class Emails(SyncResource):
         return EmailValidationResponse.model_validate(response.json())
 
 
-
 class AsyncEmails(AsyncResource):
     """Asynchronous ``emails`` resource."""
 
@@ -644,4 +643,3 @@ class AsyncEmails(AsyncResource):
         """Async variant of :meth:`Emails.validate`."""
         response = await self._transport.request("POST", "/emails/validate", json={"email": email})
         return EmailValidationResponse.model_validate(response.json())
-
