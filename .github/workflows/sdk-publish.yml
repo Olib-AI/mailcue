@@ -134,6 +134,11 @@ jobs:
       - name: Upgrade npm for OIDC trusted publishing
         run: npm install --prefix=/tmp/npm-latest -g npm@11 && echo "/tmp/npm-latest/bin" >> "$GITHUB_PATH"
 
+      - name: Build Node SDK dependency
+        run: |
+          npm ci --prefix ../node
+          npm run build --prefix ../node
+
       - name: Install
         run: npm ci
 
