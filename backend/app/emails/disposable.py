@@ -118,7 +118,9 @@ def load_cached_domains() -> None:
                         domains.add(line.lower())
             if domains:
                 _loaded_domains = domains
-                logger.info("Loaded %d disposable domains from cache %s", len(_loaded_domains), cache_path)
+                logger.info(
+                    "Loaded %d disposable domains from cache %s", len(_loaded_domains), cache_path
+                )
                 return
         except Exception as exc:
             logger.warning("Failed to load cached disposable domains: %s", exc)
@@ -152,13 +154,19 @@ async def update_disposable_domains() -> None:
                                 f.write(domain + "\n")
                         global _loaded_domains
                         _loaded_domains = fetched_domains
-                        logger.info("Successfully updated and cached %d disposable domains", len(_loaded_domains))
+                        logger.info(
+                            "Successfully updated and cached %d disposable domains",
+                            len(_loaded_domains),
+                        )
                     except Exception as write_exc:
                         logger.error("Failed to write disposable domains cache: %s", write_exc)
             else:
-                logger.warning("Failed to fetch disposable domains from GitHub: HTTP %d", response.status_code)
+                logger.warning(
+                    "Failed to fetch disposable domains from GitHub: HTTP %d", response.status_code
+                )
     except Exception as exc:
         logger.warning("Failed to update disposable domains list: %s", exc)
+
 
 _update_task: asyncio.Task[None] | None = None
 
@@ -173,7 +181,9 @@ def _check_cache_age_and_trigger_update() -> None:
             age_seconds = time.time() - mtime
             # 24 hours = 86400 seconds
             if age_seconds > 86400:
-                logger.info("Disposable domains cache is older than 24 hours. Triggering background update...")
+                logger.info(
+                    "Disposable domains cache is older than 24 hours. Triggering background update..."
+                )
                 _update_task = asyncio.create_task(update_disposable_domains())
         except Exception as exc:
             logger.warning("Failed to check cache age: %s", exc)
@@ -183,4 +193,3 @@ def is_disposable_domain(domain: str) -> bool:
     """Check if the given domain is in the set of disposable domains."""
     _check_cache_age_and_trigger_update()
     return domain.strip().lower() in _loaded_domains
-

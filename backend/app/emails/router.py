@@ -234,4 +234,3 @@ async def validate_email_endpoint(
 ) -> EmailValidationResponse:
     """Validate email address format, DNS domain MX/NS, SMTP availability, and disposable status."""
     return await validate_email(body.email)
-

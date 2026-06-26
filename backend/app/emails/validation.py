@@ -395,7 +395,13 @@ async def validate_email(email: str) -> EmailValidationResponse:
             is_valid=False,
             status="invalid",
             syntax=syntax,
-            dns=EmailValidationDns(is_valid=False, has_mx=False, has_ns=False, has_a=False, error="Syntax validation failed"),
+            dns=EmailValidationDns(
+                is_valid=False,
+                has_mx=False,
+                has_ns=False,
+                has_a=False,
+                error="Syntax validation failed",
+            ),
             mailbox=EmailValidationMailbox(is_valid=None, error="Syntax validation failed"),
             disposable=EmailValidationDisposable(is_disposable=False),
         )

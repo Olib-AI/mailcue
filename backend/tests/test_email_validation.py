@@ -72,6 +72,7 @@ async def perm_client(_engine_and_session: Any) -> AsyncIterator[tuple[AsyncClie
 
 # ── 1. Syntax Validation Tests ───────────────────────────────────
 
+
 def test_syntax_validation() -> None:
     # Valid syntax
     assert validate_syntax("user@mailcue.io").is_valid is True
@@ -95,11 +96,17 @@ def test_syntax_validation() -> None:
 
     # Length restrictions
     assert validate_syntax("a" * 65 + "@mailcue.io").is_valid is False  # Local part > 64
-    assert validate_syntax("user@" + "a" * 63 + "." + "b" * 63 + "." + "c" * 63 + "." + "d" * 63).is_valid is False  # Domain > 255
+    assert (
+        validate_syntax(
+            "user@" + "a" * 63 + "." + "b" * 63 + "." + "c" * 63 + "." + "d" * 63
+        ).is_valid
+        is False
+    )  # Domain > 255
     assert validate_syntax("user@" + "a" * 64 + ".com").is_valid is False  # Label > 63
 
 
 # ── 2. DNS Verification Tests ────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_dns_validation_success() -> None:
@@ -164,6 +171,7 @@ async def test_dns_validation_nxdomain() -> None:
 
 # ── 3. SMTP Mailbox Probe Tests ─────────────────────────────────
 
+
 @pytest.mark.asyncio
 @patch("aiosmtplib.SMTP")
 async def test_validate_mailbox_success(mock_smtp_class: MagicMock) -> None:
@@ -225,9 +233,7 @@ async def test_validate_mailbox_rejected(mock_smtp_class: MagicMock) -> None:
     mock_smtp.close = MagicMock()
     mock_smtp_class.return_value = mock_smtp
 
-    mock_smtp.connect.side_effect = aiosmtplib.SMTPResponseException(
-        550, "No such mailbox here"
-    )
+    mock_smtp.connect.side_effect = aiosmtplib.SMTPResponseException(550, "No such mailbox here")
 
     res = await validate_mailbox(
         domain="example.com",
@@ -262,6 +268,7 @@ async def test_validate_mailbox_connection_timeout(mock_smtp_class: MagicMock) -
 
 
 # ── 4. Disposable Domain Check Tests ─────────────────────────────
+
 
 def test_disposable_domain_check() -> None:
     assert is_disposable_domain("mailinator.com") is True
@@ -302,10 +309,12 @@ async def test_update_disposable_domains(tmp_path: pytest.TempPathFactory) -> No
         # Restore fallback domains
         import app.emails.disposable
         from app.emails.disposable import FALLBACK_DOMAINS
+
         app.emails.disposable._loaded_domains = set(FALLBACK_DOMAINS)
 
 
 # ── 5. API Endpoint Integration Tests ─────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_validate_api_endpoint_invalid_syntax(client: AsyncClient) -> None:
@@ -342,12 +351,11 @@ async def test_validate_api_endpoint_success(client: AsyncClient) -> None:
         (550, "No such user"),  # Not catch-all
     ]
 
-    with patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve), patch(
-        "aiosmtplib.SMTP", return_value=mock_smtp
+    with (
+        patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
+        patch("aiosmtplib.SMTP", return_value=mock_smtp),
     ):
-        resp = await client.post(
-            "/api/v1/emails/validate", json={"email": "good@mailcue.io"}
-        )
+        resp = await client.post("/api/v1/emails/validate", json={"email": "good@mailcue.io"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["email"] == "good@mailcue.io"
@@ -362,9 +370,7 @@ async def test_validate_api_endpoint_success(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_validate_api_endpoint_disposable(client: AsyncClient) -> None:
-    resp = await client.post(
-        "/api/v1/emails/validate", json={"email": "test@mailinator.com"}
-    )
+    resp = await client.post("/api/v1/emails/validate", json={"email": "test@mailinator.com"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["email"] == "test@mailinator.com"
@@ -375,6 +381,7 @@ async def test_validate_api_endpoint_disposable(client: AsyncClient) -> None:
 
 # ── 6. Scope Gating Tests ────────────────────────────────────────
 
+
 async def _make_key_local(
     session: AsyncSession,
     *,
@@ -383,6 +390,7 @@ async def _make_key_local(
 ) -> str:
     from app.auth.models import APIKey
     from app.auth.service import api_key_prefix, generate_api_key, hash_password
+
     raw = generate_api_key()
     session.add(
         APIKey(
@@ -420,7 +428,6 @@ async def test_api_key_permissions_gating(perm_client: tuple[AsyncClient, Any]) 
     async with factory() as session:
         key_with_scope = await _make_key_local(session, scopes=["email:validate"])
 
-
     # Mock DNS/SMTP to avoid real network calls
     mock_mx = [MagicMock(preference=10, exchange=dns.name.from_text("mail.example.com."))]
     mock_ns = [MagicMock(target=dns.name.from_text("ns1.example.com."))]
@@ -444,8 +451,9 @@ async def test_api_key_permissions_gating(perm_client: tuple[AsyncClient, Any]) 
         (550, "No such user"),
     ]
 
-    with patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve), patch(
-        "aiosmtplib.SMTP", return_value=mock_smtp
+    with (
+        patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
+        patch("aiosmtplib.SMTP", return_value=mock_smtp),
     ):
         headers = {"X-API-Key": key_with_scope}
         resp = await client.post(
@@ -458,6 +466,7 @@ async def test_api_key_permissions_gating(perm_client: tuple[AsyncClient, Any]) 
 
 
 # ── 7. New Backend Validation Improvements Tests ──────────────────
+
 
 def test_syntax_validation_reserved_domains() -> None:
     # Reject RFC 2606 and internal TLDs/domains
@@ -479,7 +488,10 @@ async def test_validate_mailbox_greylisting(mock_smtp_class: MagicMock) -> None:
 
     # Setup connection, ehlo, mail response, and rcpt response (450 Greylisted)
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.return_value = (450, "Requested mail action not taken: mailbox unavailable (greylisted)")
+    mock_smtp.rcpt.return_value = (
+        450,
+        "Requested mail action not taken: mailbox unavailable (greylisted)",
+    )
 
     res = await validate_mailbox(
         domain="mailcue.io",
@@ -562,8 +574,9 @@ async def test_validate_email_catch_all_mapping() -> None:
 
     from app.emails.validation import validate_email
 
-    with patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve), patch(
-        "aiosmtplib.SMTP", return_value=mock_smtp
+    with (
+        patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
+        patch("aiosmtplib.SMTP", return_value=mock_smtp),
     ):
         res = await validate_email("good@mailcue.io")
         assert res.is_valid is True
@@ -580,7 +593,7 @@ def test_disposable_cache_age_checker(
     mock_time: MagicMock,
     mock_getmtime: MagicMock,
     mock_get_cache_file_path: MagicMock,
-    tmp_path: pytest.TempPathFactory
+    tmp_path: pytest.TempPathFactory,
 ) -> None:
     test_cache = tmp_path / "test_age.txt"
     test_cache.write_text("dummy")
@@ -591,6 +604,7 @@ def test_disposable_cache_age_checker(
     mock_getmtime.return_value = 100000 - 43200
 
     from app.emails.disposable import _check_cache_age_and_trigger_update
+
     _check_cache_age_and_trigger_update()
     mock_create_task.assert_not_called()
 
@@ -598,4 +612,3 @@ def test_disposable_cache_age_checker(
     mock_getmtime.return_value = 100000 - 90000
     _check_cache_age_and_trigger_update()
     mock_create_task.assert_called_once()
-

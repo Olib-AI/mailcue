@@ -213,4 +213,3 @@ class EmailValidationResponse(BaseModel):
     dns: EmailValidationDns
     mailbox: EmailValidationMailbox
     disposable: EmailValidationDisposable
-
