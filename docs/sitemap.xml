@@ -26,6 +26,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://olib-ai.github.io/mailcue/guides/tunnel.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://olib-ai.github.io/mailcue/guides/clients.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

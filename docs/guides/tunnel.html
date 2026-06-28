@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SMTP Tunnel — MailCue Documentation</title>
+<meta name="description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
+<link rel="canonical" href="https://olib-ai.github.io/mailcue/guides/tunnel.html" />
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://olib-ai.github.io/mailcue/guides/tunnel.html">
+<meta property="og:title" content="SMTP Tunnel — MailCue Documentation">
+<meta property="og:description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
+<meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="https://olib-ai.github.io/mailcue/guides/tunnel.html">
+<meta property="twitter:title" content="SMTP Tunnel — MailCue Documentation">
+<meta property="twitter:description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
+<meta property="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
+
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --green-50: #f0fdf4;
+  --green-100: #dcfce7;
+  --green-200: #bbf7d0;
+  --green-300: #7FBD8A;
+  --green-400: #52A97C;
+  --green-500: #3A7D5C;
+  --green-600: #2B5F43;
+  --green-700: #1a3d2a;
+  --green-900: #0a1a10;
+  --bg: #07090a;
+  --bg-elevated: #0d1210;
+  --bg-card: #111916;
+  --border: #1a2820;
+  --border-bright: #253d30;
+  --text: #e8efe9;
+  --text-dim: #7a9484;
+  --text-muted: #4a6454;
+  --sans: 'Outfit', system-ui, sans-serif;
+  --mono: 'DM Mono', 'Fira Code', monospace;
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-weight: 400;
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--green-300); text-decoration: none; transition: color .2s; }
+a:hover { color: var(--green-200); }
+::selection { background: var(--green-600); color: var(--green-50); }
+
+/* Noise overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  background-size: 256px 256px;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Sticky Nav */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1rem 0;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  background: rgba(7,9,10,.7);
+  border-bottom: 1px solid var(--border);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+.nav-logo { display: flex; align-items: center; gap: .75rem; font-weight: 600; font-size: 1.2rem; }
+.nav-logo svg { width: 32px; height: 32px; }
+.nav-links { display: flex; align-items: center; gap: 2rem; }
+.nav-links .gh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1.1rem;
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  font-size: .85rem;
+  color: var(--text);
+  transition: all .2s;
+}
+.nav-links .gh-btn:hover { background: var(--bg-card); border-color: var(--green-500); }
+.nav-links .gh-btn svg { width: 18px; height: 18px; }
+
+/* Documentation Layout */
+.doc-wrapper {
+  max-width: 1400px;
+  margin: 6rem auto 0;
+  padding: 2rem;
+  display: flex;
+  gap: 3rem;
+  min-height: calc(100vh - 6rem);
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 6rem;
+  height: calc(100vh - 10rem);
+  overflow-y: auto;
+  padding-right: 1rem;
+  border-right: 1px solid var(--border);
+}
+.sidebar-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--green-400);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.sidebar-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sidebar-link {
+  display: block;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  color: var(--text-dim);
+  transition: all 0.2s;
+}
+.sidebar-link:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.02);
+}
+.sidebar-link.active {
+  color: var(--green-200);
+  background: var(--bg-card);
+  border-left: 3px solid var(--green-500);
+  font-weight: 500;
+  padding-left: calc(1rem - 3px);
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  min-width: 0;
+  max-width: 860px;
+}
+.content-body {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text);
+}
+.content-body h1 {
+  font-size: 2.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.content-body h2 {
+  font-size: 1.6rem;
+  font-weight: 500;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.content-body h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.8rem;
+  margin-bottom: 0.8rem;
+  color: var(--text);
+}
+.content-body p {
+  margin-bottom: 1.2rem;
+  color: var(--text-dim);
+}
+.content-body ul, .content-body ol {
+  margin-bottom: 1.2rem;
+  padding-left: 1.5rem;
+  color: var(--text-dim);
+}
+.content-body li {
+  margin-bottom: 0.4rem;
+}
+.content-body code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-elevated);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--green-300);
+}
+.content-body pre {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.2rem;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+.content-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.content-body blockquote {
+  border-left: 4px solid var(--green-500);
+  background: var(--bg-card);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 0 8px 8px 0;
+}
+.content-body blockquote p {
+  margin-bottom: 0;
+  color: var(--text-dim);
+}
+
+/* Table Styles */
+.content-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+.content-body th, .content-body td {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.content-body th {
+  background: var(--bg-card);
+  color: var(--text);
+  font-weight: 500;
+}
+.content-body tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+/* Mermaid styles */
+.mermaid {
+  background: var(--bg-elevated) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+/* Syntax highlighting CSS integration */
+pre { line-height: 125%; }
+td.linenos .normal { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+span.linenos { color: inherit; background-color: transparent; padding-left: 5px; padding-right: 5px; }
+td.linenos .special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 5px; padding-right: 5px; }
+.codehilite .hll { background-color: #49483e }
+.codehilite { background: #272822; color: #F8F8F2 }
+.codehilite .c { color: #959077 } /* Comment */
+.codehilite .err { color: #ED007E; background-color: #1E0010 } /* Error */
+.codehilite .esc { color: #F8F8F2 } /* Escape */
+.codehilite .g { color: #F8F8F2 } /* Generic */
+.codehilite .k { color: #66D9EF } /* Keyword */
+.codehilite .l { color: #AE81FF } /* Literal */
+.codehilite .n { color: #F8F8F2 } /* Name */
+.codehilite .o { color: #FF4689 } /* Operator */
+.codehilite .x { color: #F8F8F2 } /* Other */
+.codehilite .p { color: #F8F8F2 } /* Punctuation */
+.codehilite .ch { color: #959077 } /* Comment.Hashbang */
+.codehilite .cm { color: #959077 } /* Comment.Multiline */
+.codehilite .cp { color: #959077 } /* Comment.Preproc */
+.codehilite .cpf { color: #959077 } /* Comment.PreprocFile */
+.codehilite .c1 { color: #959077 } /* Comment.Single */
+.codehilite .cs { color: #959077 } /* Comment.Special */
+.codehilite .gd { color: #FF4689 } /* Generic.Deleted */
+.codehilite .ge { color: #F8F8F2; font-style: italic } /* Generic.Emph */
+.codehilite .ges { color: #F8F8F2; font-weight: bold; font-style: italic } /* Generic.EmphStrong */
+.codehilite .gr { color: #F8F8F2 } /* Generic.Error */
+.codehilite .gh { color: #F8F8F2 } /* Generic.Heading */
+.codehilite .gi { color: #A6E22E } /* Generic.Inserted */
+.codehilite .go { color: #66D9EF } /* Generic.Output */
+.codehilite .gp { color: #FF4689; font-weight: bold } /* Generic.Prompt */
+.codehilite .gs { color: #F8F8F2; font-weight: bold } /* Generic.Strong */
+.codehilite .gu { color: #959077 } /* Generic.Subheading */
+.codehilite .gt { color: #F8F8F2 } /* Generic.Traceback */
+.codehilite .kc { color: #66D9EF } /* Keyword.Constant */
+.codehilite .kd { color: #66D9EF } /* Keyword.Declaration */
+.codehilite .kn { color: #FF4689 } /* Keyword.Namespace */
+.codehilite .kp { color: #66D9EF } /* Keyword.Pseudo */
+.codehilite .kr { color: #66D9EF } /* Keyword.Reserved */
+.codehilite .kt { color: #66D9EF } /* Keyword.Type */
+.codehilite .ld { color: #E6DB74 } /* Literal.Date */
+.codehilite .m { color: #AE81FF } /* Literal.Number */
+.codehilite .s { color: #E6DB74 } /* Literal.String */
+.codehilite .na { color: #A6E22E } /* Name.Attribute */
+.codehilite .nb { color: #F8F8F2 } /* Name.Builtin */
+.codehilite .nc { color: #A6E22E } /* Name.Class */
+.codehilite .no { color: #66D9EF } /* Name.Constant */
+.codehilite .nd { color: #A6E22E } /* Name.Decorator */
+.codehilite .ni { color: #F8F8F2 } /* Name.Entity */
+.codehilite .ne { color: #A6E22E } /* Name.Exception */
+.codehilite .nf { color: #A6E22E } /* Name.Function */
+.codehilite .nl { color: #F8F8F2 } /* Name.Label */
+.codehilite .nn { color: #F8F8F2 } /* Name.Namespace */
+.codehilite .nx { color: #A6E22E } /* Name.Other */
+.codehilite .py { color: #F8F8F2 } /* Name.Property */
+.codehilite .nt { color: #FF4689 } /* Name.Tag */
+.codehilite .nv { color: #F8F8F2 } /* Name.Variable */
+.codehilite .ow { color: #FF4689 } /* Operator.Word */
+.codehilite .pm { color: #F8F8F2 } /* Punctuation.Marker */
+.codehilite .w { color: #F8F8F2 } /* Text.Whitespace */
+.codehilite .mb { color: #AE81FF } /* Literal.Number.Bin */
+.codehilite .mf { color: #AE81FF } /* Literal.Number.Float */
+.codehilite .mh { color: #AE81FF } /* Literal.Number.Hex */
+.codehilite .mi { color: #AE81FF } /* Literal.Number.Integer */
+.codehilite .mo { color: #AE81FF } /* Literal.Number.Oct */
+.codehilite .sa { color: #E6DB74 } /* Literal.String.Affix */
+.codehilite .sb { color: #E6DB74 } /* Literal.String.Backtick */
+.codehilite .sc { color: #E6DB74 } /* Literal.String.Char */
+.codehilite .dl { color: #E6DB74 } /* Literal.String.Delimiter */
+.codehilite .sd { color: #E6DB74 } /* Literal.String.Doc */
+.codehilite .s2 { color: #E6DB74 } /* Literal.String.Double */
+.codehilite .se { color: #AE81FF } /* Literal.String.Escape */
+.codehilite .sh { color: #E6DB74 } /* Literal.String.Heredoc */
+.codehilite .si { color: #E6DB74 } /* Literal.String.Interpol */
+.codehilite .sx { color: #E6DB74 } /* Literal.String.Other */
+.codehilite .sr { color: #E6DB74 } /* Literal.String.Regex */
+.codehilite .s1 { color: #E6DB74 } /* Literal.String.Single */
+.codehilite .ss { color: #E6DB74 } /* Literal.String.Symbol */
+.codehilite .bp { color: #F8F8F2 } /* Name.Builtin.Pseudo */
+.codehilite .fm { color: #A6E22E } /* Name.Function.Magic */
+.codehilite .vc { color: #F8F8F2 } /* Name.Variable.Class */
+.codehilite .vg { color: #F8F8F2 } /* Name.Variable.Global */
+.codehilite .vi { color: #F8F8F2 } /* Name.Variable.Instance */
+.codehilite .vm { color: #F8F8F2 } /* Name.Variable.Magic */
+.codehilite .il { color: #AE81FF } /* Literal.Number.Integer.Long */
+
+/* Footer */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 3rem 0;
+  margin-top: 4rem;
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+.footer-left { display: flex; align-items: center; gap: .6rem; font-size: .85rem; color: var(--text-muted); }
+.footer-left svg { width: 22px; height: 22px; }
+.footer-links { display: flex; gap: 2rem; }
+.footer-links a { font-size: .85rem; color: var(--text-muted); transition: color .2s; }
+.footer-links a:hover { color: var(--text); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .doc-wrapper {
+    flex-direction: column;
+    gap: 2rem;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    padding-right: 0;
+  }
+  .sidebar-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sidebar-link {
+    padding: 0.4rem 0.8rem;
+  }
+  .sidebar-link.active {
+    border-left: none;
+    border-bottom: 3px solid var(--green-500);
+    padding-left: 0.8rem;
+    padding-bottom: calc(0.4rem - 3px);
+  }
+}
+</style>
+<!-- Mermaid Support -->
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' });
+</script>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-inner">
+    <a href="../index.html" class="nav-logo">
+      <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs><clipPath id="nav-env-clip"><rect x="10" y="10" width="100" height="76" rx="10"/></clipPath></defs>
+        <rect x="10" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
+        <g clip-path="url(#nav-env-clip)">
+          <path d="M10 86 L10 52 L56 73 Q60 75 64 73 L110 52 L110 86 Z" fill="#52A97C"/>
+          <path d="M10 10 L110 10 L110 48 L64 67 Q60 69 56 67 L10 48 Z" fill="#2B5F43"/>
+        </g>
+        <circle cx="102" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
+        <path d="M94.5 16.5 L99 21 L109.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      MailCue
+    </a>
+    <div class="nav-links">
+      <a href="../index.html" style="font-size:0.9rem; color:var(--text-dim); margin-right:1rem;">Home</a>
+      <a href="https://github.com/Olib-AI/mailcue" class="gh-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<div class="doc-wrapper">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-title">Guides</div>
+    <ul class="sidebar-list">
+      <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
+      <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
+      <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
+      <li><a href="tunnel.html" class="sidebar-link active">SMTP Tunnel</a></li>
+      <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
+      <li><a href="ci.html" class="sidebar-link ">Using in CI/CD</a></li>
+      <li><a href="mcp.html" class="sidebar-link ">MCP Server</a></li>
+      <li><a href="sandbox.html" class="sidebar-link ">Provider Sandbox & HTTP Bin</a></li>
+      <li><a href="networking.html" class="sidebar-link ">Sharing MailCue</a></li>
+      <li><a href="development.html" class="sidebar-link ">Development & Contributing</a></li>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <article class="content-body">
+      <h1>MailCue out-of-band SMTP tunnel</h1>
+<p>Most cloud and PaaS providers (Hetzner, AWS, Google Cloud, fly.io, Render,
+Railway, Vercel, ...) block outbound TCP/25, which is the only port public
+MX servers accept mail on. The MailCue tunnel works around that by relaying
+SMTP egress through a small VPS that <strong>does</strong> have port-25 access — an OVH
+Eco / Kimsufi / Public Cloud instance is the canonical choice — and by
+making it trivial to add more such VPSes for IP rotation and per-tenant
+egress isolation.</p>
+<p>This crate ships <strong>two</strong> binaries:</p>
+<table>
+<thead>
+<tr>
+<th>Binary</th>
+<th>Where it runs</th>
+<th>Job</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mailcue-relay-edge</code></td>
+<td>The OVH (or equivalent) VPS</td>
+<td>Listens on a single TCP port (default <code>7843</code>), accepts authenticated tunnels from sidecars, and delivers their messages to public MX servers on port 25.</td>
+</tr>
+<tr>
+<td><code>mailcue-relay-sidecar</code></td>
+<td>Next to the MailCue mail container</td>
+<td>Exposes a loopback SMTP submission endpoint (default <code>127.0.0.1:2525</code>) that Postfix relays through. Multiplexes outbound mail across one or more configured edges.</td>
+</tr>
+</tbody>
+</table>
+<p>Wire format and threat model are specified in <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md"><code>docs/PROTOCOL.md</code></a>
+and <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md"><code>docs/SECURITY.md</code></a>.</p>
+<hr />
+<h2>Edge install (on the VPS)</h2>
+<p>The edge is a single static binary with no runtime dependencies beyond a
+working DNS resolver. It's designed to drop into a fresh OVH Eco instance
+running Debian 12 / Ubuntu 22.04+.</p>
+<h3>1. Run the installer</h3>
+<p>As <code>root</code> on the VPS:</p>
+<div class="codehilite"><pre><span></span><code>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/Olib-AI/mailcue/main/tunnel/deploy/install-edge.sh<span class="w"> </span>-o<span class="w"> </span>install-edge.sh
+chmod<span class="w"> </span>+x<span class="w"> </span>install-edge.sh
+./install-edge.sh
+</code></pre></div>
+
+<p>The installer is <strong>idempotent</strong> — re-running it will detect an existing
+install and only refresh the binary + unit file. It:</p>
+<ul>
+<li>Detects the host architecture (<code>x86_64</code> or <code>aarch64</code>).</li>
+<li>Downloads the matching <code>mailcue-relay-edge</code> binary from the
+  <code>tunnel-latest</code> GitHub release (override the source with
+  <code>EDGE_RELEASE_URL=https://...</code>).</li>
+<li>Installs to <code>/usr/local/bin/mailcue-relay-edge</code> mode <code>0755</code>.</li>
+<li>Creates a dedicated system user <code>mailcue-edge</code> with no shell, no home.</li>
+<li>Creates <code>/var/lib/mailcue-edge</code> (mode <code>0700</code>, key + state) and
+  <code>/etc/mailcue-edge</code> (mode <code>0750</code>, config + allow-list).</li>
+<li>Drops the hardened systemd unit at
+  <code>/etc/systemd/system/mailcue-relay-edge.service</code>.</li>
+<li>Generates a fresh long-term keypair via <code>mailcue-relay-edge keygen</code>.</li>
+<li>Enables and starts the service.</li>
+<li>Prints the <strong>server public key</strong> — copy this. The Mailcue API needs it
+  to bootstrap a sidecar.</li>
+</ul>
+<p>Useful flags:</p>
+<ul>
+<li><code>--listen-port &lt;port&gt;</code> — change the default <code>7843</code> listen port (the unit
+  file is rewritten with the new port).</li>
+<li><code>--uninstall</code> — stop the service, remove the binary and the unit file.
+  <strong>Leaves keys and config in place</strong> so accidental re-runs cannot lose
+  the long-term identity.</li>
+</ul>
+<h3>2. Open the firewall</h3>
+<p>The edge listens on TCP <code>7843</code> by default. Open it on UFW (or your
+provider's firewall):</p>
+<div class="codehilite"><pre><span></span><code>ufw<span class="w"> </span>allow<span class="w"> </span><span class="m">7843</span>/tcp
+</code></pre></div>
+
+<p>OVH Public Cloud users: also add an inbound rule in the OVH dashboard if
+you've enabled the platform-level network firewall.</p>
+<h3>3. Authorize a Mailcue sidecar</h3>
+<p>When a Mailcue admin asks to add this VPS as an egress, they generate a
+<strong>client key</strong> on the Mailcue side (the <code>POST /api/v1/tunnels</code> endpoint
+does this; see the API docs). Hand the resulting base64 public key to the
+VPS operator. They then run:</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span>mailcue-relay-edge<span class="w"> </span>authorize<span class="w"> </span>--pubkey<span class="w"> </span>&lt;base64-pubkey&gt;<span class="w"> </span>--name<span class="w"> </span>mailcue-prod-de
+</code></pre></div>
+
+<p>This appends a line to <code>/etc/mailcue-edge/authorized_clients</code>. The edge
+re-reads the file on every handshake — no restart required.</p>
+<blockquote>
+<p><strong>Heads-up (pre-<code>tunnel-v0.1.1</code> only):</strong> older edge binaries wrote the
+allow-list as <code>root:root 0640</code>, which the unprivileged daemon
+(<code>mailcue-edge</code>) couldn't read, leading to <code>Unauthorized: pubkey not in
+allow-list</code> on every connection. From <code>tunnel-v0.1.1</code> onward the writer
+chowns the file to match its parent directory's owner automatically.
+If you're stuck on an older build, fix it manually:</p>
+<p><code>sh
+sudo chown root:mailcue-edge /etc/mailcue-edge/authorized_clients
+sudo chmod 0640 /etc/mailcue-edge/authorized_clients
+sudo systemctl restart mailcue-relay-edge</code></p>
+</blockquote>
+<h3>4. Verify it's running</h3>
+<div class="codehilite"><pre><span></span><code>systemctl<span class="w"> </span>status<span class="w"> </span>mailcue-relay-edge
+journalctl<span class="w"> </span>-u<span class="w"> </span>mailcue-relay-edge<span class="w"> </span>-f
+</code></pre></div>
+
+<p>You should see one log line per accepted handshake and one per relay,
+including the envelope sender, recipient count, and delivery outcome
+(MX hostname + final SMTP code). <strong>Message bodies are never logged</strong> —
+see <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md"><code>docs/SECURITY.md</code></a> for why.</p>
+<h3>5. Set the EHLO hostname (required for outbound)</h3>
+<p>The edge presents a HELO/EHLO name on every outbound SMTP connection it
+opens to a destination MX. If that name doesn't match the source IP's
+forward-confirmed reverse DNS (FCrDNS), Gmail / Microsoft 365 / Yahoo
+will reject with <code>550 5.7.26 unauthenticated</code>. By default the edge
+uses <code>gethostname()</code>, which on a fresh OVH VPS is something like
+<code>vps-ad9f0b95</code> — almost never what you want.</p>
+<p>Set it via env var on the systemd unit:</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>edit<span class="w"> </span>mailcue-relay-edge
+</code></pre></div>
+
+<p>Append (replace with the FQDN you set as rDNS for <strong>this</strong> VPS — see
+"DNS prerequisites" below):</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[Service]</span>
+<span class="na">Environment</span><span class="o">=</span><span class="s">MAILCUE_EDGE_HELO_HOSTNAME=relay-us.example.com</span>
+</code></pre></div>
+
+<p>Then <code>sudo systemctl restart mailcue-relay-edge</code>.</p>
+<p>You can also set it in <code>/etc/mailcue-edge/config.toml</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">helo_hostname</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;relay-us.example.com&quot;</span>
+</code></pre></div>
+
+<hr />
+<h2>DNS prerequisites for outbound delivery</h2>
+<p>Outbound SMTP delivery — the whole point of this tunnel — is a DNS
+problem first. To get past Gmail / M365 / Yahoo, every VPS that you
+relay through needs <strong>all five</strong> of the following set up before it can
+deliver mail. Skipping any one of them produces a 5xx rejection that
+looks like a tunnel bug but isn't.</p>
+<p>For each VPS hostname (e.g. <code>relay-us.example.com</code>):</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Direction</th>
+<th>What</th>
+<th>Where set</th>
+<th>Verify</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Forward (A)</strong>: hostname → IPv4</td>
+<td>Your DNS provider</td>
+<td><code>dig +short A relay-us.example.com</code></td>
+<td></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Forward (AAAA)</strong>: hostname → IPv6 (if the VPS has IPv6 — most do)</td>
+<td>Your DNS provider</td>
+<td><code>dig +short AAAA relay-us.example.com</code></td>
+<td></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Reverse (PTR) v4</strong>: IPv4 → hostname</td>
+<td>OVH (or other VPS provider) manager</td>
+<td><code>dig +short -x 192.0.2.4</code></td>
+<td></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Reverse (PTR) v6</strong>: IPv6 → hostname</td>
+<td>OVH manager (separate row from v4!)</td>
+<td><code>dig +short -x 2001:db8::24de</code></td>
+<td></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>SPF</strong> for the apex domain (<code>example.com</code>) covering both IP families of every relay</td>
+<td>Your DNS provider</td>
+<td><code>dig +short TXT example.com</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Two recurring traps:</p>
+<ul>
+<li><strong>IPv4 PTR is set, IPv6 PTR is not.</strong> OVH's manager has separate rows
+  for the two address families. Most cloud images come with the IPv6
+  rDNS unset or pointing at a generic <code>vps-…</code> domain. Gmail will use
+  whichever family the VPS picks for the outbound connection (often v6
+  if available) and reject if PTR doesn't match.</li>
+<li><strong>SPF is set on the relay hostname (<code>relay-us.example.com</code>) but not
+  on the apex (<code>example.com</code>).</strong> Gmail's SPF check runs against the
+  envelope <code>MAIL FROM</code> domain. Real Mailcue traffic will use
+  <code>From: user@example.com</code>, so the apex must authorize <em>every</em> relay
+  IP. Use the <code>a:</code> mechanism — it covers both A and AAAA records:</li>
+</ul>
+<p><code>text
+  example.com.   IN  TXT  "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"</code></p>
+<p>This automatically authorizes all IPs of all named relay hosts; you
+  don't need to enumerate <code>ip4:</code>/<code>ip6:</code> per address.</p>
+<p>Once published, validate end-to-end against
+<a href="http://www.port25.com/authentication-checker/">port25 verifier</a> by
+sending a message via the tunnel to <code>check-auth@verifier.port25.com</code> —
+its auto-reply grades SPF, DKIM, DMARC, and FCrDNS as seen from your
+relay's IP.</p>
+<hr />
+<h2>Sidecar install (next to the Mailcue container)</h2>
+<p>The sidecar runs on the same Docker host as the MailCue container and
+exposes a plain SMTP submission endpoint on the internal network. Postfix
+inside the MailCue container is configured to relay through it via the
+existing <code>MAILCUE_RELAY_HOST</code> / <code>MAILCUE_RELAY_PORT</code> env vars.</p>
+<h3>1. Bring it up</h3>
+<p>The repository ships a Compose overlay at
+<a href="deploy/docker/docker-compose.tunnel.yml"><code>tunnel/deploy/docker/docker-compose.tunnel.yml</code></a>.
+Run:</p>
+<div class="codehilite"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>docker-compose.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>tunnel/deploy/docker/docker-compose.tunnel.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>up<span class="w"> </span>-d
+</code></pre></div>
+
+<p>This adds a <code>mailcue-sidecar</code> service to the same <code>mailcue-net</code> network as
+the main MailCue container, and rewires Postfix's <code>relayhost</code> to
+<code>mailcue-sidecar:2525</code>.</p>
+<h3>2. Provision tunnels</h3>
+<p>The sidecar reads its tunnel list from <code>/etc/mailcue-sidecar/tunnels.json</code>
+inside the container (mounted as the <code>mailcue-sidecar-config</code> volume).
+<strong>You do not edit this file by hand</strong> — the Mailcue API
+(<code>/api/v1/tunnels</code>) writes it whenever an admin adds, removes, or rotates
+an egress. Each entry contains:</p>
+<ul>
+<li>the edge host + port,</li>
+<li>the edge's expected static public key (provided by the VPS operator),</li>
+<li>the path to the local sidecar's private key (auto-generated on first
+  boot if missing).</li>
+</ul>
+<h3>3. One-time bootstrap</h3>
+<p>On a fresh install, the sidecar will start with an empty <code>tunnels.json</code>
+and refuse to relay (Postfix will queue locally — that's the safe default).
+The bootstrap flow is:</p>
+<ol>
+<li><code>docker compose ... up -d</code> — sidecar generates <code>client.key</code> /
+   <code>client.pub</code> in <code>/var/lib/mailcue-sidecar/</code>.</li>
+<li>Mailcue admin reads <code>client.pub</code> (the API exposes it at
+   <code>GET /api/v1/tunnels/client-pubkey</code>) and sends it to a VPS operator.</li>
+<li>VPS operator runs <code>mailcue-relay-edge authorize --pubkey &lt;base64&gt;</code>.</li>
+<li>Mailcue admin POSTs the edge's host + pubkey to <code>/api/v1/tunnels</code>. The
+   API rewrites <code>tunnels.json</code>; the sidecar reloads it via inotify and
+   the next outbound mail goes through.</li>
+</ol>
+<p>Postfix's queue will drain automatically once a tunnel is up — there is
+no need to restart the MailCue container.</p>
+<hr />
+<h2>Key rotation</h2>
+<h3>Edge static key</h3>
+<p>Roll once a year, or immediately on suspected compromise:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># On the VPS, as root:</span>
+systemctl<span class="w"> </span>stop<span class="w"> </span>mailcue-relay-edge
+mv<span class="w"> </span>/var/lib/mailcue-edge/server.key<span class="w"> </span>/var/lib/mailcue-edge/server.key.old
+mv<span class="w"> </span>/var/lib/mailcue-edge/server.pub<span class="w"> </span>/var/lib/mailcue-edge/server.pub.old
+mailcue-relay-edge<span class="w"> </span>keygen<span class="w"> </span>--state-dir<span class="w"> </span>/var/lib/mailcue-edge
+systemctl<span class="w"> </span>start<span class="w"> </span>mailcue-relay-edge
+cat<span class="w"> </span>/var/lib/mailcue-edge/server.pub
+</code></pre></div>
+
+<p>Hand the new pubkey to every Mailcue admin who relays through this VPS.
+They update their tunnel record (<code>PATCH /api/v1/tunnels/{id}</code> with the new
+<code>edge_pubkey</code>) — the sidecar will switch over on the next reconnect. Once
+every consumer has switched, delete <code>server.key.old</code>.</p>
+<h3>Sidecar client key</h3>
+<div class="codehilite"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue-sidecar<span class="w"> </span>mailcue-relay-sidecar<span class="w"> </span>keygen<span class="w"> </span>--rotate
+docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue-sidecar<span class="w"> </span>cat<span class="w"> </span>/var/lib/mailcue-sidecar/client.pub
+</code></pre></div>
+
+<p>Send the new pubkey to the VPS operator. They run
+<code>mailcue-relay-edge authorize --pubkey &lt;new-base64&gt;</code> to add it, and
+optionally <code>mailcue-relay-edge revoke --pubkey &lt;old-base64&gt;</code> once the
+sidecar has finished switching over.</p>
+<hr />
+<h2>Log locations</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Edge</td>
+<td>journald (<code>journalctl -u mailcue-relay-edge</code>)</td>
+</tr>
+<tr>
+<td>Sidecar</td>
+<td>container stdout (<code>docker logs mailcue-sidecar</code>)</td>
+</tr>
+<tr>
+<td>Postfix</td>
+<td>inside the MailCue container at <code>/var/log/mail.log</code></td>
+</tr>
+</tbody>
+</table>
+<p>What's logged: handshake outcomes, per-relay envelope sender, recipient
+count, message size, MX delivered to, final SMTP reply code, and
+per-tunnel rate-limit / concurrency events.</p>
+<p>What's <strong>never</strong> logged: message bodies, headers other than envelope
+addresses, recipient addresses in error logs (only the count is logged
+on rejection).</p>
+<hr />
+<h2>Troubleshooting</h2>
+<h3>Handshake fails with <code>Unauthorized</code></h3>
+<p>The sidecar's pubkey isn't in the edge's allow-list. On the VPS:</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span>cat<span class="w"> </span>/etc/mailcue-edge/authorized_clients
+</code></pre></div>
+
+<p>If the line is missing, run <code>mailcue-relay-edge authorize --pubkey ...</code>
+with the pubkey from <code>GET /api/v1/tunnels/client-pubkey</code>.</p>
+<h3>Sidecar reports <code>connection refused</code> to the edge</h3>
+<ul>
+<li>Verify UFW: <code>sudo ufw status | grep 7843</code>.</li>
+<li>Verify the edge is listening: on the VPS, <code>ss -tnlp | grep 7843</code>.</li>
+<li>Verify your provider's network firewall (OVH dashboard, security groups,
+  etc.) allows inbound TCP/7843.</li>
+<li>DNS for the edge host resolves to the right IP from the Mailcue host.</li>
+</ul>
+<h3>MX delivery failed (<code>SMTP_DELIVERY_FAILED</code>)</h3>
+<p>The edge couldn't deliver to the recipient's MX. From <code>tunnel-v0.1.1</code>
+onward each per-recipient outcome is logged at info level — you'll see
+a line like:</p>
+<div class="codehilite"><pre><span></span><code>{&quot;level&quot;:&quot;INFO&quot;,&quot;fields&quot;:{&quot;recipient&quot;:&quot;user@gmail.com&quot;,&quot;smtp_code&quot;:&quot;Some(550)&quot;,&quot;reason&quot;:&quot;5.7.26 unauthenticated email...&quot;,&quot;message&quot;:&quot;delivery perm-fail&quot;}}
+</code></pre></div>
+
+<p>If you're on <code>tunnel-v0.1.0</code> you'll need to flip on debug logging:</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>edit<span class="w"> </span>mailcue-relay-edge
+<span class="c1"># add:</span>
+<span class="c1"># [Service]</span>
+<span class="c1"># Environment=RUST_LOG=mailcue_relay_edge=debug</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>mailcue-relay-edge
+</code></pre></div>
+
+<p>Common causes (read these in order):</p>
+<ul>
+<li><strong><code>550 5.7.26 unauthenticated email ... SPF [...] = did not pass</code></strong>
+  Your apex SPF doesn't authorize the IP that actually carried the
+  outbound connection. Re-check that the SPF record covers <em>both</em>
+  IPv4 and IPv6 of the relay (use the <code>a:</code> mechanism, see "DNS
+  prerequisites" above). Then verify with <code>dig +short TXT example.com</code>.</li>
+<li><strong><code>550 5.7.1 ... does not meet IPv6 sending guidelines regarding
+  PTR records</code></strong> — the IPv6 PTR for the source IP is missing or wrong.
+  Set it in OVH manager (separate row from the IPv4 PTR), then re-test.</li>
+<li><strong><code>550 5.7.26 ... DKIM = did not pass</code></strong> with SPF passing — the
+  message has no DKIM signature. MailCue signs with OpenDKIM by default;
+  if the message is going through the tunnel without being signed first,
+  check that the upstream <code>mailcue</code> container has <code>mail._domainkey.&lt;domain&gt;</code>
+  published in DNS.</li>
+<li><strong>HELO mismatch</strong> (<code>550 5.7.0 EHLO host doesn't match ...</code>)
+  The edge's EHLO hostname must match the source IP's FCrDNS. Set
+  <code>MAILCUE_EDGE_HELO_HOSTNAME</code> per "Set the EHLO hostname" above.</li>
+<li><strong>Timeout</strong>: the destination MX is dropping connections from your VPS
+  IP (port-25 reputation / greylist). Try a different relay, or rotate
+  the VPS IP if your provider allows it, or fall back to an established
+  submission service for that recipient.</li>
+<li><strong>TLS handshake failed</strong>: the destination MX has a broken cert chain.
+  Set <code>require_tls = false</code> on that tunnel (default) — the edge will
+  fall back to plaintext, matching standard MX policy.</li>
+</ul>
+<p>To validate the path independently of the tunnel, run <code>swaks</code> <em>directly
+from the VPS</em> to the destination MX. If swaks succeeds and the tunnel
+fails, it's an EHLO / MAIL-FROM mismatch in the daemon config; if both
+fail with the same error, it's a DNS / SPF / DKIM / blocklist issue.</p>
+<div class="codehilite"><pre><span></span><code>swaks<span class="w"> </span>--to<span class="w"> </span>test@gmail.com<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>--from<span class="w"> </span>postmaster@&lt;your-apex-domain&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>--server<span class="w"> </span>gmail-smtp-in.l.google.com:25<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>--helo<span class="w"> </span>&lt;your-relay-hostname&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>-tls-optional
+</code></pre></div>
+
+<h3>Postfix queue stuck</h3>
+<div class="codehilite"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue<span class="w"> </span>postqueue<span class="w"> </span>-p
+</code></pre></div>
+
+<p>If everything is <code>(deferred: connect to mailcue-sidecar[...]:2525: ...)</code>,
+the sidecar isn't reachable — <code>docker compose ps</code> to confirm it's up.</p>
+<p>If everything is <code>(deferred: relay temporarily unavailable)</code>, the sidecar
+is up but has no working tunnel — check <code>docker logs mailcue-sidecar</code> for
+handshake errors and confirm <code>tunnels.json</code> has at least one valid entry.</p>
+<p>To force a flush after fixing the underlying issue:</p>
+<div class="codehilite"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue<span class="w"> </span>postqueue<span class="w"> </span>-f
+</code></pre></div>
+
+<h3>Sidecar logs <code>no tunnels configured</code></h3>
+<p>The Mailcue API hasn't written <code>tunnels.json</code> yet. Bootstrap a tunnel via
+<code>POST /api/v1/tunnels</code> (see step 3 of the sidecar install above).</p>
+<h3><code>systemctl restart</code> hangs / SIGKILLs the daemon</h3>
+<div class="codehilite"><pre><span></span><code>mailcue-relay-edge.service: State &#39;stop-sigterm&#39; timed out. Killing.
+</code></pre></div>
+
+<p>Older builds (pre-<code>tunnel-v0.1.2</code>) used <code>idle_timeout_secs</code> (default
+120s) as the SIGTERM drain budget. Sidecars hold long-lived tunnel
+connections that don't close themselves on SIGTERM, so the drain always
+ran the clock out and systemd escalated to SIGKILL. From <code>tunnel-v0.1.2</code>
+the drain uses a separate, shorter <code>shutdown_drain_secs</code> (default 10s)
+and <code>TimeoutStopSec</code> is back to 30s. Upgrade the VPS to pick up the new
+unit file:</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span><span class="nv">EDGE_RELEASE_URL</span><span class="o">=</span>https://github.com/Olib-AI/mailcue/releases/download/tunnel-latest<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;curl -fsSL https://raw.githubusercontent.com/Olib-AI/mailcue/main/tunnel/deploy/install-edge.sh | bash&#39;</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>daemon-reload
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>mailcue-relay-edge
+</code></pre></div>
+
+<p>Override the drain via env if you need a longer/shorter window:</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[Service]</span>
+<span class="na">Environment</span><span class="o">=</span><span class="s">MAILCUE_EDGE_SHUTDOWN_DRAIN_SECS=30</span>
+</code></pre></div>
+
+<hr />
+<h2>Upgrading</h2>
+<p>The install script is idempotent — re-running it replaces the binary
+and the systemd unit, preserving state (<code>/var/lib/mailcue-edge/server.key</code>,
+<code>/etc/mailcue-edge/authorized_clients</code>, env-var drop-ins).</p>
+<div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span><span class="nv">EDGE_RELEASE_URL</span><span class="o">=</span>https://github.com/Olib-AI/mailcue/releases/download/tunnel-v0.1.2<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>bash<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;curl -fsSL https://raw.githubusercontent.com/Olib-AI/mailcue/main/tunnel/deploy/install-edge.sh | bash&#39;</span>
+sudo<span class="w"> </span>systemctl<span class="w"> </span>daemon-reload
+sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class="w"> </span>mailcue-relay-edge
+sudo<span class="w"> </span>systemctl<span class="w"> </span>is-active<span class="w"> </span>mailcue-relay-edge
+</code></pre></div>
+
+<p>Pin to a tag (<code>tunnel-v0.1.2</code>, <code>tunnel-v0.1.1</code>, …) for reproducible
+upgrades, or omit <code>EDGE_RELEASE_URL</code> to track <code>tunnel-latest</code>. Releases
+attach a <code>SHA256SUMS</code> file you can verify before installing.</p>
+<p>For the Docker sidecar, just bump the image tag in
+<code>docker-compose.tunnel.yml</code> (<code>ghcr.io/olib-ai/mailcue-relay-sidecar:0.1.2</code>,
+multi-arch) and <code>docker compose up -d</code>.</p>
+    </article>
+  </main>
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-left">
+        <svg viewBox="0 0 120 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs><clipPath id="footer-env-clip"><rect x="10" y="10" width="100" height="76" rx="10"/></clipPath></defs>
+          <rect x="10" y="10" width="100" height="76" rx="10" fill="#3A7D5C"/>
+          <g clip-path="url(#footer-env-clip)">
+            <path d="M10 86 L10 52 L56 73 Q60 75 64 73 L110 52 L110 86 Z" fill="#52A97C"/>
+            <path d="M10 10 L110 10 L110 48 L64 67 Q60 69 56 67 L10 48 Z" fill="#2B5F43"/>
+          </g>
+          <circle cx="102" cy="16" r="15" fill="#7FBD8A" stroke="white" stroke-width="2.5"/>
+          <path d="M94.5 16.5 L99 21 L109.5 11" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Built by <a href="https://www.olib.ai" style="margin-left:.3rem">Olib AI</a>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/Olib-AI/mailcue">GitHub</a>
+        <a href="https://github.com/Olib-AI/mailcue/issues">Issues</a>
+        <a href="https://github.com/Olib-AI/mailcue/discussions">Discussions</a>
+        <a href="https://github.com/Olib-AI/mailcue/blob/main/LICENSE">MIT License</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://olib-ai.github.io/mailcue/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "SMTP Tunnel",
+      "item": "https://olib-ai.github.io/mailcue/guides/tunnel.html"
+    }
+  ]
+}
+</script>
+</body>
+</html>

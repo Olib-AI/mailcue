@@ -14,6 +14,7 @@ GUIDES = [
     {"file": "configuration.md", "title": "Configuration", "desc": "Environment variables and exposed ports."},
     {"file": "api.md", "title": "API Reference", "desc": "REST endpoints, authentication, and API key scopes."},
     {"file": "production.md", "title": "Production Deployment", "desc": "Hardened mode, DNS records, and TLS certificates."},
+    {"file": "tunnel.md", "title": "SMTP Tunnel", "desc": "Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel."},
     {"file": "clients.md", "title": "Email Clients & TLS Trust", "desc": "IMAP/POP3/SMTP setup and trusting the CA."},
     {"file": "ci.md", "title": "Using in CI/CD", "desc": "Pipeline setup and platform examples."},
     {"file": "mcp.md", "title": "MCP Server", "desc": "Give an AI agent its own mailbox over MCP."},
@@ -468,6 +469,19 @@ mermaid.initialize({{ startOnLoad: true, theme: 'dark', securityLevel: 'loose' }
 def generate_docs():
     print("Generating HTML documentation...")
     
+    # Auto-copy and adapt tunnel README to docs/guides/tunnel.md
+    tunnel_readme = os.path.join(WORKSPACE_ROOT, "tunnel", "README.md")
+    tunnel_guide = os.path.join(GUIDES_DIR, "tunnel.md")
+    if os.path.exists(tunnel_readme):
+        with open(tunnel_readme, "r", encoding="utf-8") as f:
+            content = f.read()
+        # Fix relative links to tunnel/docs/PROTOCOL.md and SECURITY.md
+        content = content.replace("](docs/PROTOCOL.md)", "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md)")
+        content = content.replace("](docs/SECURITY.md)", "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md)")
+        with open(tunnel_guide, "w", encoding="utf-8") as f:
+            f.write(content)
+        print("Copied and adapted tunnel/README.md to docs/guides/tunnel.md")
+        
     # Render all markdown guides
     for guide in GUIDES:
         md_file_path = os.path.join(GUIDES_DIR, guide["file"])
