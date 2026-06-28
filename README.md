@@ -90,6 +90,8 @@ curl http://localhost:8088/api/v1/health
 
 ## Documentation
 
+> 📖 Read the full, interactive guides on the **[Official MailCue Documentation Website](https://olib-ai.github.io/mailcue/)**.
+
 | Guide | Covers |
 |---|---|
 | [Architecture](docs/guides/architecture.md) | Container layout, request flow, and tech stack. |
