@@ -57,9 +57,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Olib-AI/mailcue"
+Homepage = "https://olib-ai.github.io/mailcue/"
 Repository = "https://github.com/Olib-AI/mailcue"
-Documentation = "https://github.com/Olib-AI/mailcue#readme"
+Documentation = "https://olib-ai.github.io/mailcue/#docs"
 Issues = "https://github.com/Olib-AI/mailcue/issues"
 
 [tool.hatch.version]

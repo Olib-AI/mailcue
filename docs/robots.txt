@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://olib-ai.github.io/mailcue/sitemap.xml

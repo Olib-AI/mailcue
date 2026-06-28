@@ -37,7 +37,7 @@
     "url": "git+https://github.com/Olib-AI/mailcue.git",
     "directory": "sdks/node"
   },
-  "homepage": "https://github.com/Olib-AI/mailcue",
+  "homepage": "https://olib-ai.github.io/mailcue/",
   "bugs": {
     "url": "https://github.com/Olib-AI/mailcue/issues"
   },

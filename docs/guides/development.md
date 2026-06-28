@@ -45,6 +45,17 @@ npm run lint         # ESLint
 npm run typecheck    # TypeScript
 ```
 
+### Documentation
+
+If you edit or add any `.md` guides in the `docs/guides/` directory, you should regenerate the static HTML pages by running the build script in the root directory:
+
+```bash
+python3 scripts/build_docs.py
+```
+
+This compiles the Markdown guides into search-engine-crawlable HTML files with syntax highlighting, responsive styling, and auto-generated `sitemap.xml`/`robots.txt` files.
+
+
 ### Running Tests
 
 ```bash
