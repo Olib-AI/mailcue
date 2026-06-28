@@ -481,12 +481,21 @@ def generate_docs():
         with open(md_file_path, "r", encoding="utf-8") as f:
             md_content = f.read()
             
+        # Pre-process markdown to extract mermaid blocks before markdown parses them (and codehilite ruins them)
+        mermaid_blocks = []
+        def extract_mermaid(match):
+            block_content = match.group(1).strip()
+            mermaid_blocks.append(block_content)
+            return f"\n\n<!-- MERMAID_PLACEHOLDER_{len(mermaid_blocks)-1} -->\n\n"
+            
+        md_content_no_mermaid = re.sub(r'```mermaid([\s\S]*?)```', extract_mermaid, md_content)
+            
         # Parse markdown to HTML
         # Using extensions:
         # extra: includes tables, footnotes, attribute lists, etc.
         # codehilite: syntax highlighting
         # fenced_code: code blocks
-        html_body = markdown.markdown(md_content, extensions=['extra', 'codehilite', 'fenced_code'])
+        html_body = markdown.markdown(md_content_no_mermaid, extensions=['extra', 'codehilite', 'fenced_code'])
         
         # Post-process HTML
         # 1. Map relative markdown links to HTML links
@@ -505,17 +514,15 @@ def generate_docs():
             
         html_body = re.sub(r'href="([^"]+)"', replace_link, html_body)
         
-        # 2. Support mermaid diagrams: markdown outputs <pre><code class="language-mermaid">...</code></pre>
-        # Mermaid JS expects <pre class="mermaid">...</pre> containing the raw diagram text.
-        # Let's find any mermaid code blocks and replace them.
-        mermaid_pattern = re.compile(r'<pre><code class="language-mermaid">([\s\S]*?)</code></pre>')
-        def replace_mermaid(match):
-            code_content = match.group(1).strip()
-            # Unescape standard HTML entities that markdown converter might have added
-            code_content = code_content.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-            return f'<pre class="mermaid">{code_content}</pre>'
-            
-        html_body = mermaid_pattern.sub(replace_mermaid, html_body)
+        # 2. Put mermaid blocks back as clean <pre class="mermaid"> tags
+        for i, block in enumerate(mermaid_blocks):
+            placeholder = f"<!-- MERMAID_PLACEHOLDER_{i} -->"
+            p_placeholder = f"<p>{placeholder}</p>"
+            mermaid_html = f'<pre class="mermaid">{block}</pre>'
+            if p_placeholder in html_body:
+                html_body = html_body.replace(p_placeholder, mermaid_html)
+            else:
+                html_body = html_body.replace(placeholder, mermaid_html)
         
         # 3. Generate Sidebar Links dynamically
         sidebar_links = []

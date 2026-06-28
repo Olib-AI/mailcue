@@ -476,64 +476,63 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <h1>Architecture</h1>
 <p>How MailCue runs as a single Docker container, plus the libraries and services it is built from.</p>
 <h2>Architecture</h2>
-<div class="codehilite"><pre><span></span><code>graph<span class="w"> </span>TB
-<span class="w">    </span>subgraph<span class="w"> </span>external[&quot;External<span class="w"> </span>Clients&quot;]
-<span class="w">        </span>browser[&quot;Browser<span class="w"> </span>/<span class="w"> </span>HTTP<span class="w"> </span>Client&quot;]
-<span class="w">        </span>smtp_client[&quot;SMTP<span class="w"> </span>Client<span class="w"> </span>/<span class="w"> </span>MTA&quot;]
-<span class="w">        </span>imap_client[&quot;IMAP<span class="w"> </span>/<span class="w"> </span>POP3<span class="w"> </span>Client&quot;]
-<span class="w">    </span>end
+<pre class="mermaid">graph TB
+    subgraph external["External Clients"]
+        browser["Browser / HTTP Client"]
+        smtp_client["SMTP Client / MTA"]
+        imap_client["IMAP / POP3 Client"]
+    end
 
-<span class="w">    </span>subgraph<span class="w"> </span>container[&quot;Single<span class="w"> </span>Docker<span class="w"> </span>Container<span class="w"> </span>-<span class="w"> </span>managed<span class="w"> </span>by<span class="w"> </span>s6-overlay&quot;]
-<span class="w">        </span>direction<span class="w"> </span>TB
+    subgraph container["Single Docker Container - managed by s6-overlay"]
+        direction TB
 
-<span class="w">        </span>subgraph<span class="w"> </span>web[&quot;Web<span class="w"> </span>Layer&quot;]
-<span class="w">            </span>nginx[&quot;Nginx<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>:80<span class="w"> </span>-<span class="w"> </span>Reverse<span class="w"> </span>Proxy<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>spa[&quot;React<span class="w"> </span>SPA<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>/var/www/mailcue<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>uvicorn[&quot;Uvicorn<span class="w"> </span>+<span class="w"> </span>FastAPI<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>:8000<span class="w"> </span>-<span class="w"> </span>REST<span class="w"> </span>API<span class="w"> </span>+<span class="w"> </span>SSE<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">        </span>end
+        subgraph web["Web Layer"]
+            nginx["Nginx<br/><sub>:80 - Reverse Proxy</sub>"]
+            spa["React SPA<br/><sub>/var/www/mailcue</sub>"]
+            uvicorn["Uvicorn + FastAPI<br/><sub>:8000 - REST API + SSE</sub>"]
+        end
 
-<span class="w">        </span>subgraph<span class="w"> </span>mail[&quot;Mail<span class="w"> </span>Stack&quot;]
-<span class="w">            </span>postfix[&quot;Postfix<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>:25<span class="w"> </span>SMTP<span class="w"> </span>·<span class="w"> </span>:587<span class="w"> </span>Submission<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>dovecot[&quot;Dovecot<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>:143/:993<span class="w"> </span>IMAP<span class="w"> </span>·<span class="w"> </span>:110/:995<span class="w"> </span>POP3<span class="w"> </span>·<span class="w"> </span>LMTP<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>opendkim[&quot;OpenDKIM<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>milter<span class="w"> </span>-<span class="w"> </span>DKIM<span class="w"> </span>sign/verify<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>opendmarc[&quot;OpenDMARC<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>milter<span class="w"> </span>-<span class="w"> </span>DMARC<span class="w"> </span>verify<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>spamassassin[&quot;SpamAssassin<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>spamd<span class="w"> </span>-<span class="w"> </span>spam<span class="w"> </span>scoring<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">            </span>spf[&quot;policyd-spf<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>SPF<span class="w"> </span>checking<span class="nt">&lt;/sub&gt;</span>&quot;]
-<span class="w">        </span>end
+        subgraph mail["Mail Stack"]
+            postfix["Postfix<br/><sub>:25 SMTP · :587 Submission</sub>"]
+            dovecot["Dovecot<br/><sub>:143/:993 IMAP · :110/:995 POP3 · LMTP</sub>"]
+            opendkim["OpenDKIM<br/><sub>milter - DKIM sign/verify</sub>"]
+            opendmarc["OpenDMARC<br/><sub>milter - DMARC verify</sub>"]
+            spamassassin["SpamAssassin<br/><sub>spamd - spam scoring</sub>"]
+            spf["policyd-spf<br/><sub>SPF checking</sub>"]
+        end
 
-<span class="w">        </span>subgraph<span class="w"> </span>storage[&quot;Persistent<span class="w"> </span>Storage&quot;]
-<span class="w">            </span>sqlite[(&quot;SQLite<span class="w"> </span>/<span class="w"> </span>SQLCipher<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>/var/lib/mailcue/mailcue.db<span class="nt">&lt;/sub&gt;</span>&quot;)]
-<span class="w">            </span>maildir[(&quot;Maildir<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>/var/mail/vhosts/<span class="nt">&lt;/sub&gt;</span>&quot;)]
-<span class="w">            </span>gpg[(&quot;GPG<span class="w"> </span>Keyring<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>/var/lib/mailcue/gpg/<span class="nt">&lt;/sub&gt;</span>&quot;)]
-<span class="w">        </span>end
-<span class="w">    </span>end
+        subgraph storage["Persistent Storage"]
+            sqlite[("SQLite / SQLCipher<br/><sub>/var/lib/mailcue/mailcue.db</sub>")]
+            maildir[("Maildir<br/><sub>/var/mail/vhosts/</sub>")]
+            gpg[("GPG Keyring<br/><sub>/var/lib/mailcue/gpg/</sub>")]
+        end
+    end
 
-<span class="w">    </span>browser<span class="w"> </span>--<span class="w"> </span>&quot;:80<span class="w"> </span>/*&quot;<span class="w"> </span>--&gt;<span class="w"> </span>nginx
-<span class="w">    </span>smtp_client<span class="w"> </span>--<span class="w"> </span>&quot;:25<span class="w"> </span>/<span class="w"> </span>:587&quot;<span class="w"> </span>--&gt;<span class="w"> </span>postfix
-<span class="w">    </span>imap_client<span class="w"> </span>--<span class="w"> </span>&quot;:143/:993<span class="w"> </span>/<span class="w"> </span>:110/:995&quot;<span class="w"> </span>--&gt;<span class="w"> </span>dovecot
+    browser -- ":80 /*" --> nginx
+    smtp_client -- ":25 / :587" --> postfix
+    imap_client -- ":143/:993 / :110/:995" --> dovecot
 
-<span class="w">    </span>nginx<span class="w"> </span>--<span class="w"> </span>&quot;static<span class="w"> </span>files&quot;<span class="w"> </span>--&gt;<span class="w"> </span>spa
-<span class="w">    </span>nginx<span class="w"> </span>--<span class="w"> </span>&quot;/api/*&quot;<span class="w"> </span>--&gt;<span class="w"> </span>uvicorn
+    nginx -- "static files" --> spa
+    nginx -- "/api/*" --> uvicorn
 
-<span class="w">    </span>uvicorn<span class="w"> </span>--<span class="w"> </span>&quot;IMAP<span class="nt">&lt;br/&gt;&lt;sub&gt;</span>master-user<span class="nt">&lt;/sub&gt;</span>&quot;<span class="w"> </span>--&gt;<span class="w"> </span>dovecot
-<span class="w">    </span>uvicorn<span class="w"> </span>--<span class="w"> </span>&quot;local<span class="w"> </span>SMTP&quot;<span class="w"> </span>--&gt;<span class="w"> </span>postfix
-<span class="w">    </span>uvicorn<span class="w"> </span>--&gt;<span class="w"> </span>sqlite
-<span class="w">    </span>uvicorn<span class="w"> </span>--&gt;<span class="w"> </span>gpg
+    uvicorn -- "IMAP<br/><sub>master-user</sub>" --> dovecot
+    uvicorn -- "local SMTP" --> postfix
+    uvicorn --> sqlite
+    uvicorn --> gpg
 
-<span class="w">    </span>postfix<span class="w"> </span>--<span class="w"> </span>&quot;LMTP&quot;<span class="w"> </span>--&gt;<span class="w"> </span>dovecot
-<span class="w">    </span>postfix<span class="w"> </span>--<span class="w"> </span>&quot;milter&quot;<span class="w"> </span>--&gt;<span class="w"> </span>opendkim
-<span class="w">    </span>postfix<span class="w"> </span>--<span class="w"> </span>&quot;milter&quot;<span class="w"> </span>--&gt;<span class="w"> </span>opendmarc
-<span class="w">    </span>postfix<span class="w"> </span>--<span class="w"> </span>&quot;policy&quot;<span class="w"> </span>--&gt;<span class="w"> </span>spf
-<span class="w">    </span>postfix<span class="w"> </span>--<span class="w"> </span>&quot;spamc&quot;<span class="w"> </span>--&gt;<span class="w"> </span>spamassassin
+    postfix -- "LMTP" --> dovecot
+    postfix -- "milter" --> opendkim
+    postfix -- "milter" --> opendmarc
+    postfix -- "policy" --> spf
+    postfix -- "spamc" --> spamassassin
 
-<span class="w">    </span>dovecot<span class="w"> </span>--&gt;<span class="w"> </span>maildir
+    dovecot --> maildir
 
-<span class="w">    </span>style<span class="w"> </span>container<span class="w"> </span>fill:none,stroke:#6c47ff,stroke-width:2px,color:#6c47ff
-<span class="w">    </span>style<span class="w"> </span>web<span class="w"> </span>fill:none,stroke:#3b82f6,stroke-width:1px
-<span class="w">    </span>style<span class="w"> </span>mail<span class="w"> </span>fill:none,stroke:#f59e0b,stroke-width:1px
-<span class="w">    </span>style<span class="w"> </span>storage<span class="w"> </span>fill:none,stroke:#10b981,stroke-width:1px
-<span class="w">    </span>style<span class="w"> </span>external<span class="w"> </span>fill:none,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:5<span class="w"> </span>5
-</code></pre></div>
+    style container fill:none,stroke:#6c47ff,stroke-width:2px,color:#6c47ff
+    style web fill:none,stroke:#3b82f6,stroke-width:1px
+    style mail fill:none,stroke:#f59e0b,stroke-width:1px
+    style storage fill:none,stroke:#10b981,stroke-width:1px
+    style external fill:none,stroke:#94a3b8,stroke-width:1px,stroke-dasharray:5 5</pre>
 
 <p><strong>Request flow:</strong> Nginx serves the React SPA for all non-API routes and proxies <code>/api/*</code> to Uvicorn. The FastAPI backend talks to Dovecot via IMAP (using a master-user credential for mailbox impersonation) and to Postfix via local SMTP. All services are supervised by s6-overlay, which handles startup ordering and automatic restarts.</p>
 <h2>Tech Stack</h2>
