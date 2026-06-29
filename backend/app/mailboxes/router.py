@@ -68,6 +68,20 @@ async def verify_mailbox_access(mailbox_address: str, auth: AuthContext, db: Asy
     if not auth.mailbox_allowed(decoded):
         raise AuthorizationError("This API key is not permitted to access this mailbox")
 
+    from app.config import settings
+
+    if settings.is_production and mailbox.is_catchall:
+        from sqlalchemy import select
+
+        from app.exceptions import NotFoundError
+        from app.system.models import ServerSettings
+
+        settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
+        settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
+        catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
+        if not catch_all_enabled:
+            raise NotFoundError("Mailbox", decoded)
+
 
 @router.get(
     "",
@@ -95,6 +109,7 @@ async def list_all_mailboxes(
             display_name=m.display_name,
             domain=m.domain,
             is_active=m.is_active,
+            is_catchall=m.is_catchall,
             created_at=m.created_at,
             quota_mb=m.quota_mb,
             signature=m.signature,
@@ -140,6 +155,7 @@ async def create_new_mailbox(
         display_name=mailbox.display_name,
         domain=mailbox.domain,
         is_active=mailbox.is_active,
+        is_catchall=mailbox.is_catchall,
         created_at=mailbox.created_at,
         quota_mb=mailbox.quota_mb,
         signature=mailbox.signature,

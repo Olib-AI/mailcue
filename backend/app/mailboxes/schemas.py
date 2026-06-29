@@ -36,6 +36,7 @@ class MailboxResponse(BaseModel):
     display_name: str
     domain: str
     is_active: bool
+    is_catchall: bool = False
     created_at: datetime
     quota_mb: int = 500
     email_count: int = 0

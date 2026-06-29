@@ -357,7 +357,9 @@ async def _rebuild_opendkim_tables(domains: list[Domain]) -> None:
     await asyncio.to_thread(_write)
 
 
-async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
+async def _rebuild_postfix_virtual_domains(
+    domains: list[Domain], db: AsyncSession | None = None
+) -> None:
     """Update Postfix virtual domain configuration.
 
     When domains are managed, switch from catch-all regexp to explicit hash.
@@ -367,6 +369,15 @@ async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
     and enables ``smtpd_reject_unlisted_recipient`` for strict delivery.
     """
     active_domains = [d for d in domains if d.is_active]
+
+    catch_all_enabled = False
+    if db is not None:
+        from app.system.models import ServerSettings
+
+        stmt = select(ServerSettings).where(ServerSettings.id == 1)
+        row = (await db.execute(stmt)).scalar_one_or_none()
+        if row:
+            catch_all_enabled = row.catch_all_enabled
 
     def _write() -> None:
         main_cf = Path("/etc/postfix/main.cf")
@@ -403,11 +414,26 @@ async def _rebuild_postfix_virtual_domains(domains: list[Domain]) -> None:
                     check=False,
                     capture_output=True,
                 )
-                subprocess.run(
-                    ["postconf", "-e", "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes"],
-                    check=False,
-                    capture_output=True,
-                )
+                if catch_all_enabled:
+                    subprocess.run(
+                        [
+                            "postconf",
+                            "-e",
+                            "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes, regexp:/etc/postfix/virtual_mailboxes_catchall",
+                        ],
+                        check=False,
+                        capture_output=True,
+                    )
+                else:
+                    subprocess.run(
+                        [
+                            "postconf",
+                            "-e",
+                            "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes",
+                        ],
+                        check=False,
+                        capture_output=True,
+                    )
         else:
             # Restore catch-all regexp mode
             if "hash:/etc/postfix/virtual_domains" in content:
@@ -427,24 +453,78 @@ async def rebuild_postfix_virtual_mailboxes(db: AsyncSession) -> None:
     recipients are valid.  After writing, ``postmap`` is invoked to build
     the hash DB.
     """
+    from app.domains.models import Domain
     from app.mailboxes.models import Mailbox
+    from app.system.models import ServerSettings
+
+    stmt_settings = select(ServerSettings).where(ServerSettings.id == 1)
+    settings_row = (await db.execute(stmt_settings)).scalar_one_or_none()
+    catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
 
     stmt = select(Mailbox).where(Mailbox.is_active.is_(True))
     result = await db.execute(stmt)
     mailboxes = list(result.scalars().all())
 
+    # Get active domains for the catch-all mapping
+    domain_stmt = select(Domain).where(Domain.is_active.is_(True))
+    domain_result = await db.execute(domain_stmt)
+    active_domains = list(domain_result.scalars().all())
+
     def _write() -> None:
-        vmap_path = Path("/etc/postfix/virtual_mailboxes")
-        lines: list[str] = []
-        for mb in mailboxes:
-            local_part, domain = mb.address.split("@", maxsplit=1)
-            lines.append(f"{mb.address}    {domain}/{local_part}/")
-        vmap_path.write_text("\n".join(lines) + "\n")
-        subprocess.run(
-            ["postmap", str(vmap_path)],
-            check=False,
-            capture_output=True,
-        )
+        try:
+            vmap_path = Path("/etc/postfix/virtual_mailboxes")
+            lines: list[str] = []
+            for mb in mailboxes:
+                local_part, domain = mb.address.split("@", maxsplit=1)
+                lines.append(f"{mb.address}    {domain}/{local_part}/")
+            vmap_path.write_text("\n".join(lines) + "\n")
+            subprocess.run(
+                ["postmap", str(vmap_path)],
+                check=False,
+                capture_output=True,
+            )
+
+            if settings.is_production:
+                catchall_path = Path("/etc/postfix/virtual_mailboxes_catchall")
+                if catch_all_enabled and active_domains:
+                    catchall_lines = []
+                    for d in active_domains:
+                        escaped_domain = d.name.replace(".", r"\.")
+                        catchall_lines.append(f"/@{escaped_domain}$/    OK")
+                    catchall_path.write_text("\n".join(catchall_lines) + "\n")
+                else:
+                    if catchall_path.exists():
+                        import contextlib
+
+                        with contextlib.suppress(Exception):
+                            catchall_path.unlink()
+
+                # Update virtual_mailbox_maps configuration based on settings
+                if catch_all_enabled:
+                    subprocess.run(
+                        [
+                            "postconf",
+                            "-e",
+                            "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes, regexp:/etc/postfix/virtual_mailboxes_catchall",
+                        ],
+                        check=False,
+                        capture_output=True,
+                    )
+                else:
+                    subprocess.run(
+                        [
+                            "postconf",
+                            "-e",
+                            "virtual_mailbox_maps=hash:/etc/postfix/virtual_mailboxes",
+                        ],
+                        check=False,
+                        capture_output=True,
+                    )
+        except Exception as exc:
+            logger.warning(
+                "Failed to rebuild Postfix virtual mailboxes: %s. This is expected if running outside the container.",
+                exc,
+            )
 
     await asyncio.to_thread(_write)
     logger.info("Rebuilt /etc/postfix/virtual_mailboxes with %d entries.", len(mailboxes))
@@ -680,7 +760,7 @@ async def add_domain(name: str, selector: str, db: AsyncSession) -> Domain:
     async with _config_lock:
         all_domains = await _list_domains_internal(db)
         await _rebuild_opendkim_tables(all_domains)
-        await _rebuild_postfix_virtual_domains(all_domains)
+        await _rebuild_postfix_virtual_domains(all_domains, db=db)
         if settings.is_production:
             await rebuild_postfix_virtual_mailboxes(db)
         await _reload_mail_services()
@@ -705,7 +785,7 @@ async def remove_domain(name: str, db: AsyncSession) -> None:
     async with _config_lock:
         all_domains = await _list_domains_internal(db)
         await _rebuild_opendkim_tables(all_domains)
-        await _rebuild_postfix_virtual_domains(all_domains)
+        await _rebuild_postfix_virtual_domains(all_domains, db=db)
         if settings.is_production:
             await rebuild_postfix_virtual_mailboxes(db)
         await _reload_mail_services()

@@ -20,9 +20,9 @@ from app.database import get_db
 from app.dependencies import require_admin, require_scope
 from app.system.service import (
     get_production_status,
-    get_server_hostname,
+    get_server_settings,
     get_tls_certificate_status,
-    set_server_hostname,
+    update_server_settings,
     upload_tls_certificate,
 )
 
@@ -243,10 +243,12 @@ async def download_certificate(
 
 class ServerSettingsResponse(BaseModel):
     hostname: str
+    catch_all_enabled: bool
 
 
 class UpdateServerSettingsRequest(BaseModel):
     hostname: str
+    catch_all_enabled: bool
 
 
 @router.get(
@@ -259,8 +261,8 @@ async def get_settings(
     db: AsyncSession = Depends(get_db),
 ) -> ServerSettingsResponse:
     """Return server-wide settings. **Admin only.**"""
-    hostname = await get_server_hostname(db)
-    return ServerSettingsResponse(hostname=hostname)
+    res = await get_server_settings(db)
+    return ServerSettingsResponse(**res)
 
 
 @router.put(
@@ -274,8 +276,12 @@ async def update_settings(
     db: AsyncSession = Depends(get_db),
 ) -> ServerSettingsResponse:
     """Update server-wide settings. **Admin only.**"""
-    hostname = await set_server_hostname(body.hostname, db)
-    return ServerSettingsResponse(hostname=hostname)
+    res = await update_server_settings(
+        hostname=body.hostname,
+        catch_all_enabled=body.catch_all_enabled,
+        db=db,
+    )
+    return ServerSettingsResponse(**res)
 
 
 # ── TLS Certificate ─────────────────────────────────────────────

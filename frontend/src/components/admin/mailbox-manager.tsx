@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -228,7 +229,14 @@ function MailboxManager() {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate">{mailbox.address}</div>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate">{mailbox.address}</span>
+                      {mailbox.is_catchall && (
+                        <Badge variant="outline" className="text-[10px] uppercase font-semibold text-sky-600 bg-sky-50 dark:bg-sky-950/20 border-sky-200 shrink-0">
+                          Catch-All
+                        </Badge>
+                      )}
+                    </div>
                     {mailbox.display_name ? (
                       <div className="text-xs font-normal text-muted-foreground truncate">
                         Sender name: {mailbox.display_name}

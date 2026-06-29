@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   Upload,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,10 @@ function ServerHostnameCard() {
 
   const handleSave = () => {
     updateSettings.mutate(
-      { hostname },
+      {
+        hostname,
+        catch_all_enabled: !!settings?.catch_all_enabled,
+      },
       {
         onSuccess: () => {
           toast.success("Server hostname updated");
@@ -294,10 +298,91 @@ function TlsCertificateCard() {
   );
 }
 
+function CatchAllCard() {
+  const { data: settings, isLoading } = useServerSettings();
+  const updateSettings = useUpdateServerSettings();
+  const [catchAllEnabled, setCatchAllEnabled] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setCatchAllEnabled(!!settings.catch_all_enabled);
+    }
+  }, [settings]);
+
+  const handleSave = () => {
+    updateSettings.mutate(
+      {
+        hostname: settings?.hostname ?? "",
+        catch_all_enabled: catchAllEnabled,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Catch-all settings updated");
+          setDirty(false);
+        },
+        onError: (err) => {
+          toast.error(
+            err instanceof Error ? err.message : "Failed to update catch-all settings"
+          );
+        },
+      }
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+          <CardTitle className="text-base">Catch-All Settings</CardTitle>
+        </div>
+        <CardDescription>
+          When enabled, the admin can receive and view all emails sent to any address on custom domains.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="catch-all-enabled"
+                checked={catchAllEnabled}
+                onCheckedChange={(checked) => {
+                  setCatchAllEnabled(checked === true);
+                  setDirty((checked === true) !== !!settings?.catch_all_enabled);
+                }}
+              />
+              <Label htmlFor="catch-all-enabled" className="text-sm font-medium leading-none cursor-pointer">
+                Enable Catch-All Routing
+              </Label>
+            </div>
+            {dirty && (
+              <Button
+                onClick={handleSave}
+                disabled={updateSettings.isPending}
+                size="sm"
+              >
+                {updateSettings.isPending && (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                )}
+                Save Changes
+              </Button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function MailServerManager() {
   return (
     <div className="space-y-4">
       <ServerHostnameCard />
+      <CatchAllCard />
       <TlsCertificateCard />
     </div>
   );

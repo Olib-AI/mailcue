@@ -153,6 +153,7 @@ export interface Mailbox {
   display_name: string;
   domain: string;
   is_active: boolean;
+  is_catchall?: boolean;
   created_at: string;
   email_count: number;
   unread_count: number;
@@ -407,10 +408,12 @@ export interface CertificateInfo {
 
 export interface ServerSettings {
   hostname: string;
+  catch_all_enabled: boolean;
 }
 
 export interface UpdateServerSettingsRequest {
   hostname: string;
+  catch_all_enabled: boolean;
 }
 
 // --- API Key Types ---

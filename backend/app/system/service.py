@@ -53,6 +53,99 @@ async def set_server_hostname(hostname: str, db: AsyncSession) -> str:
     return hostname
 
 
+async def get_server_settings(db: AsyncSession) -> dict[str, Any]:
+    """Read server settings from DB, fall back to settings.hostname ENV var."""
+    stmt = select(ServerSettings).where(ServerSettings.id == 1)
+    result = await db.execute(stmt)
+    row = result.scalar_one_or_none()
+    hostname = settings.hostname
+    catch_all_enabled = False
+    if row:
+        if row.hostname:
+            hostname = row.hostname
+        catch_all_enabled = row.catch_all_enabled
+    return {"hostname": hostname, "catch_all_enabled": catch_all_enabled}
+
+
+async def update_server_settings(
+    hostname: str, catch_all_enabled: bool, db: AsyncSession
+) -> dict[str, Any]:
+    """Upsert settings into server_settings row. Return saved values."""
+    stmt = select(ServerSettings).where(ServerSettings.id == 1)
+    result = await db.execute(stmt)
+    row = result.scalar_one_or_none()
+    if row:
+        row.hostname = hostname
+        row.catch_all_enabled = catch_all_enabled
+    else:
+        row = ServerSettings(id=1, hostname=hostname, catch_all_enabled=catch_all_enabled)
+        db.add(row)
+    await db.commit()
+
+    # 1. Update Dovecot config
+    update_dovecot_catchall_config(catch_all_enabled)
+
+    # 2. Rebuild Postfix virtual mailboxes/catchall
+    from app.domains.service import rebuild_postfix_virtual_mailboxes
+
+    await rebuild_postfix_virtual_mailboxes(db)
+
+    # 3. Reload services (Postfix and Dovecot)
+    await _reload_tls_services()
+
+    return {"hostname": hostname, "catch_all_enabled": catch_all_enabled}
+
+
+def update_dovecot_catchall_config(enabled: bool) -> None:
+    """Comment/uncomment the catch-all fallback userdb block in /etc/dovecot/dovecot.conf."""
+    path = Path("/etc/dovecot/dovecot.conf")
+    if not path.exists():
+        logger.debug("Dovecot config file not found at %s. Skipping update.", path)
+        return
+    try:
+        content = path.read_text(encoding="utf-8")
+
+        # We want to match the static userdb block
+        import re
+
+        pattern = re.compile(
+            r"(?:#\s*)?userdb\s*\{\s*\r?\n"
+            r"(?:#\s*)?driver\s*=\s*static\s*\r?\n"
+            r"(?:#\s*)?args\s*=\s*uid=5000\s+gid=5000\s+home=/var/mail/vhosts/%d/%n\s+allow_all_users=yes\s*\r?\n"
+            r"(?:#\s*)?\}",
+            re.MULTILINE,
+        )
+
+        if enabled:
+            replacement = (
+                "userdb {\n"
+                "  driver = static\n"
+                "  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes\n"
+                "}"
+            )
+        else:
+            replacement = (
+                "#userdb {\n"
+                "#  driver = static\n"
+                "#  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes\n"
+                "#}"
+            )
+
+        new_content, count = pattern.subn(replacement, content)
+        if count > 0:
+            path.write_text(new_content, encoding="utf-8")
+            logger.info(
+                "Successfully updated Dovecot dovecot.conf catch-all userdb block (enabled=%s).",
+                enabled,
+            )
+        else:
+            logger.warning(
+                "Could not find the catch-all fallback userdb block in /etc/dovecot/dovecot.conf to update."
+            )
+    except Exception as exc:
+        logger.exception("Failed to update Dovecot dovecot.conf: %s", exc)
+
+
 # ── TLS Certificate ─────────────────────────────────────────────
 
 

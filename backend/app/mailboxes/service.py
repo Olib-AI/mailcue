@@ -79,6 +79,7 @@ async def sync_filesystem_mailboxes(db: AsyncSession) -> None:
                     and catchall_owner_id is not None
                 ):
                     existing.user_id = catchall_owner_id
+                    existing.is_catchall = True
                     backfilled_count += 1
                 continue
             mailbox = Mailbox(
@@ -86,6 +87,7 @@ async def sync_filesystem_mailboxes(db: AsyncSession) -> None:
                 display_name=local_part,
                 domain=domain,
                 user_id=catchall_owner_id,
+                is_catchall=True,
             )
             db.add(mailbox)
             known_mailboxes[address] = mailbox
@@ -136,6 +138,17 @@ async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mai
     stmt = select(Mailbox).where(Mailbox.is_active.is_(True)).order_by(Mailbox.created_at.desc())
     if user is not None:
         stmt = stmt.where(Mailbox.user_id == user.id)
+        if settings.is_production:
+            if user.is_admin:
+                from app.system.models import ServerSettings
+
+                settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
+                settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
+                catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
+                if not catch_all_enabled:
+                    stmt = stmt.where(Mailbox.is_catchall.is_(False))
+            else:
+                stmt = stmt.where(Mailbox.is_catchall.is_(False))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -153,6 +166,16 @@ async def get_mailbox(mailbox_id: str, db: AsyncSession) -> Mailbox:
         mailbox = (await db.execute(stmt)).scalar_one_or_none()
     if mailbox is None or not mailbox.is_active:
         raise NotFoundError("Mailbox", mailbox_id)
+
+    if settings.is_production and mailbox.is_catchall:
+        from app.system.models import ServerSettings
+
+        settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
+        settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
+        catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
+        if not catch_all_enabled:
+            raise NotFoundError("Mailbox", mailbox_id)
+
     return mailbox
 
 
@@ -163,6 +186,16 @@ async def get_mailbox_by_address(address: str, db: AsyncSession) -> Mailbox:
     mailbox = result.scalar_one_or_none()
     if mailbox is None:
         raise NotFoundError("Mailbox", address)
+
+    if settings.is_production and mailbox.is_catchall:
+        from app.system.models import ServerSettings
+
+        settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
+        settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
+        catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
+        if not catch_all_enabled:
+            raise NotFoundError("Mailbox", address)
+
     return mailbox
 
 
@@ -198,11 +231,21 @@ async def create_mailbox(
     # Enforce per-user mailbox quota
     if user_id is not None:
         user = await db.get(User, user_id)
-        if user is not None and not user.is_admin:
+        # Check if there are active domains
+        from app.domains.models import Domain
+
+        domain_stmt = select(sa_func.count()).select_from(Domain).where(Domain.is_active.is_(True))
+        domain_count = (await db.execute(domain_stmt)).scalar() or 0
+
+        if user is not None and (not user.is_admin or settings.is_production or domain_count > 0):
             count_stmt = (
                 select(sa_func.count())
                 .select_from(Mailbox)
-                .where(Mailbox.user_id == user_id, Mailbox.is_active.is_(True))
+                .where(
+                    Mailbox.user_id == user_id,
+                    Mailbox.is_active.is_(True),
+                    Mailbox.is_catchall.is_(False),
+                )
             )
             count_result = await db.execute(count_stmt)
             current_count = count_result.scalar() or 0

@@ -37,6 +37,7 @@ class Mailbox(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     domain: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_catchall: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     quota_mb: Mapped[int] = mapped_column(Integer, default=500)
     signature: Mapped[str] = mapped_column(Text, default="", server_default="")

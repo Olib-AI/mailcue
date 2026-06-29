@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -17,6 +17,7 @@ class ServerSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    catch_all_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class TlsCertificate(Base):
