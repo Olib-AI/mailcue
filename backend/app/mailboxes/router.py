@@ -63,7 +63,7 @@ async def verify_mailbox_access(mailbox_address: str, auth: AuthContext, db: Asy
     """
     decoded = unquote(mailbox_address).lower()
     mailbox = await get_mailbox_by_address(decoded, db)
-    if mailbox.user_id != auth.user.id:
+    if mailbox.user_id != auth.user.id and not (auth.user.is_admin and mailbox.is_catchall):
         raise AuthorizationError("You do not have access to this mailbox")
     if not auth.mailbox_allowed(decoded):
         raise AuthorizationError("This API key is not permitted to access this mailbox")

@@ -128,27 +128,31 @@ async def _get_catchall_owner_user_id(db: AsyncSession) -> str | None:
 
 
 async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mailbox]:
-    """Return active mailboxes owned by the given user.
+    """Return active mailboxes owned by the given user (plus catch-all for admins).
 
-    Every user -- including admins -- only sees their own mailboxes.
+    Users see their own mailboxes. Platform admins see their own mailboxes plus
+    catch-all mailboxes when catch-all is enabled.
     Pass ``user=None`` only for internal/system calls that need all.
     """
     # Sync filesystem-discovered mailboxes first (catch-all support)
     await sync_filesystem_mailboxes(db)
     stmt = select(Mailbox).where(Mailbox.is_active.is_(True)).order_by(Mailbox.created_at.desc())
     if user is not None:
-        stmt = stmt.where(Mailbox.user_id == user.id)
-        if settings.is_production:
-            if user.is_admin:
+        if user.is_admin:
+            catch_all_enabled = True
+            if settings.is_production:
                 from app.system.models import ServerSettings
 
                 settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
                 settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
                 catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
-                if not catch_all_enabled:
-                    stmt = stmt.where(Mailbox.is_catchall.is_(False))
+
+            if catch_all_enabled:
+                stmt = stmt.where((Mailbox.user_id == user.id) | (Mailbox.is_catchall.is_(True)))
             else:
-                stmt = stmt.where(Mailbox.is_catchall.is_(False))
+                stmt = stmt.where(Mailbox.user_id == user.id).where(Mailbox.is_catchall.is_(False))
+        else:
+            stmt = stmt.where(Mailbox.user_id == user.id).where(Mailbox.is_catchall.is_(False))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 

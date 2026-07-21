@@ -51,6 +51,9 @@ smtpd_reject_unlisted_recipient = no
 # All accepted mail goes through virtual_transport to Dovecot LMTP.
 relay_domains =
 
+# Auto-BCC sent emails to sender+sent@domain so Dovecot Sieve places them in Sent folder
+sender_bcc_maps = regexp:/etc/postfix/sender_bcc
+
 smtpd_relay_restrictions =
     permit_mynetworks,
     permit_sasl_authenticated,

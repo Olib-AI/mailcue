@@ -7,6 +7,7 @@ the API needs only a single credential to access every mailbox:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
 import email.utils
@@ -20,6 +21,7 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Any
 
 import aioimaplib
@@ -49,12 +51,38 @@ logger = logging.getLogger("mailcue.emails")
 # ── IMAP connection helper ───────────────────────────────────────
 
 
+async def _ensure_dovecot_user(address: str) -> None:
+    """Ensure the user entry and Maildir exist on disk for Dovecot master login."""
+    users_path = Path(settings.dovecot_users_file)
+    if not users_path.exists():
+        return
+    try:
+        content = await asyncio.to_thread(users_path.read_text, encoding="utf-8")
+        if f"{address}:" not in content:
+            local_part, _, domain = address.partition("@")
+            domain = domain or settings.domain
+            maildir = Path(settings.mail_storage_path) / domain / local_part
+            from app.mailboxes.service import (
+                _append_to_file,
+                _create_maildir,
+                _dovecot_hash_password,
+            )
+
+            await asyncio.to_thread(_create_maildir, maildir)
+            hashed = await asyncio.to_thread(_dovecot_hash_password, "mailcue-auto-password")
+            user_line = f"{address}:{hashed}:5000:5000::{maildir}::\n"
+            await asyncio.to_thread(_append_to_file, users_path, user_line)
+    except Exception as exc:
+        logger.warning("Could not auto-provision Dovecot user for %s: %s", address, exc)
+
+
 async def _imap_connect(mailbox_address: str) -> aioimaplib.IMAP4:
     """Open an authenticated IMAP connection using the Dovecot master user.
 
     The master user separator is ``*``, so we log in as
     ``user@domain*mailcue-master`` with the master password.
     """
+    await _ensure_dovecot_user(mailbox_address)
     master_login = f"{mailbox_address}*{settings.imap_master_user}"
     try:
         imap = aioimaplib.IMAP4(host=settings.imap_host, port=settings.imap_port)
@@ -390,7 +418,9 @@ async def send_email(
             request.list_unsubscribe_post or "List-Unsubscribe=One-Click"
         )
 
-    all_recipients = list(request.to_addresses) + list(request.cc_addresses)
+    all_recipients = (
+        list(request.to_addresses) + list(request.cc_addresses) + list(request.bcc_addresses)
+    )
 
     # GPG operations (require a database session for key lookup)
     raw_bytes = msg.as_bytes()

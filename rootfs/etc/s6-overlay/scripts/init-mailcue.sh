@@ -259,9 +259,11 @@ sed -i \
 # 3b2. Compile Sieve scripts & prepare SpamAssassin directories
 # -------------------------------------------------------------------------
 echo "[init-mailcue] Compiling Sieve scripts..."
-if [ -f /etc/dovecot/sieve/before.d/spam-to-junk.sieve ]; then
-    sievec /etc/dovecot/sieve/before.d/spam-to-junk.sieve || true
-fi
+for sieve_file in /etc/dovecot/sieve/before.d/*.sieve; do
+    if [ -f "${sieve_file}" ]; then
+        sievec "${sieve_file}" || true
+    fi
+done
 
 # Ensure SpamAssassin Bayes database directory exists
 mkdir -p /var/lib/spamassassin

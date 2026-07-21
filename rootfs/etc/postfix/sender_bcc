@@ -1,0 +1,7 @@
+# =============================================================================
+# Postfix Sender BCC Map — MailCue
+# =============================================================================
+# Automatically route a copy of all outbound/sent SMTP emails to sender+sent@domain
+# so Dovecot LMTP Sieve can save them directly into the sender's Sent folder.
+# =============================================================================
+/(.+)@(.+)/    $1+sent@$2
