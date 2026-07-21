@@ -82,10 +82,11 @@ function useKeyboardShortcuts({
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Never intercept when a modifier key (Ctrl/Cmd/Alt) is held,
-      // except for the Delete key which has no character conflict.
+      // except for the Delete and Backspace keys which have no character conflict.
       if (
         (event.ctrlKey || event.metaKey || event.altKey) &&
-        event.key !== "Delete"
+        event.key !== "Delete" &&
+        event.key !== "Backspace"
       ) {
         return;
       }
@@ -213,7 +214,8 @@ function useKeyboardShortcuts({
 
         // Delete selected email
         case "d":
-        case "Delete": {
+        case "Delete":
+        case "Backspace": {
           if (!store.selectedEmailUid || !store.selectedMailbox) return;
           event.preventDefault();
 

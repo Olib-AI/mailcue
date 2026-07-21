@@ -89,7 +89,12 @@ function buildSrcdoc(sanitizedHtml: string, isDark: boolean): string {
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="${FRAME_CSP}">
 <style>
-  html, body { margin: 0; padding: 0; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: auto !important;
+    min-height: 0 !important;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 14px;
@@ -160,7 +165,8 @@ function EmailRenderer({ html, mailbox, uid, attachments }: EmailRendererProps) 
       if (ev.source !== iframeRef.current?.contentWindow) return;
       const data = ev.data as { type?: string; height?: number } | undefined;
       if (data?.type === "mailcue:email-height" && typeof data.height === "number") {
-        setHeight(Math.max(200, Math.ceil(data.height) + 32));
+        const newHeight = Math.max(200, Math.ceil(data.height));
+        setHeight((prev) => (Math.abs(prev - newHeight) > 1 ? newHeight : prev));
       }
     }
     window.addEventListener("message", onMessage);
