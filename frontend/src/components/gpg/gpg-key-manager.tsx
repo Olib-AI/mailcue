@@ -40,7 +40,6 @@ import {
   usePublishGpgKey,
 } from "@/hooks/use-gpg";
 import { useMailboxes } from "@/hooks/use-mailboxes";
-import { useDomains } from "@/hooks/use-domains";
 import { formatEmailDate } from "@/lib/utils";
 
 // --- Generate Key Schema ---
@@ -70,7 +69,6 @@ type ImportKeyValues = z.infer<typeof importKeySchema>;
 function GpgKeyManager() {
   const { data, isLoading, isError, error, refetch } = useGpgKeys();
   const { data: mailboxData } = useMailboxes();
-  const { data: domainData } = useDomains();
   const generateKey = useGenerateGpgKey();
   const importKey = useImportGpgKey();
   const deleteKey = useDeleteGpgKey();
@@ -83,20 +81,6 @@ function GpgKeyManager() {
 
   const mailboxes = mailboxData?.mailboxes ?? [];
   const keys = data?.keys ?? [];
-
-  // Build set of local domains (managed domains + mailbox domains)
-  const localDomains = new Set<string>();
-  for (const d of domainData?.domains ?? []) {
-    localDomains.add(d.name.toLowerCase());
-  }
-  for (const mb of mailboxes) {
-    localDomains.add(mb.domain.toLowerCase());
-  }
-
-  const isLocalDomain = (address: string) => {
-    const domain = address.split("@")[1]?.toLowerCase();
-    return domain ? localDomains.has(domain) : true;
-  };
 
   // --- Generate Form ---
 
