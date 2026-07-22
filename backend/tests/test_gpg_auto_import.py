@@ -26,7 +26,9 @@ def test_send_email_request_accepts_bcc_addresses() -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_and_import_keys_from_email_extracts_armored_blocks(_engine_and_session, monkeypatch) -> None:
+async def test_extract_and_import_keys_from_email_extracts_armored_blocks(
+    _engine_and_session, monkeypatch
+) -> None:
     """extract_and_import_keys_from_email extracts PGP public key blocks from raw bytes and imports them."""
     _engine, factory = _engine_and_session
     sample_key = (
@@ -63,4 +65,3 @@ async def test_extract_and_import_keys_from_email_extracts_armored_blocks(_engin
         )
         assert len(imported) == 1
         assert imported[0].mailbox_address == "sender@example.com"
-

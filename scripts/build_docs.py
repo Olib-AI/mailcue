@@ -10,17 +10,61 @@ DOCS_DIR = os.path.join(WORKSPACE_ROOT, "docs")
 GUIDES_DIR = os.path.join(DOCS_DIR, "guides")
 
 GUIDES = [
-    {"file": "architecture.md", "title": "Architecture", "desc": "Container layout, request flow, and tech stack."},
-    {"file": "configuration.md", "title": "Configuration", "desc": "Environment variables and exposed ports."},
-    {"file": "api.md", "title": "API Reference", "desc": "REST endpoints, authentication, and API key scopes."},
-    {"file": "production.md", "title": "Production Deployment", "desc": "Hardened mode, DNS records, and TLS certificates."},
-    {"file": "tunnel.md", "title": "SMTP Tunnel", "desc": "Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel."},
-    {"file": "clients.md", "title": "Email Clients & TLS Trust", "desc": "IMAP/POP3/SMTP setup and trusting the CA."},
-    {"file": "ci.md", "title": "Using in CI/CD", "desc": "Pipeline setup and platform examples."},
-    {"file": "mcp.md", "title": "MCP Server", "desc": "Give an AI agent its own mailbox over MCP."},
-    {"file": "sandbox.md", "title": "Provider Sandbox & HTTP Bin", "desc": "Capture SMS, voice, and chat traffic, and inspect HTTP requests."},
-    {"file": "networking.md", "title": "Sharing MailCue", "desc": "Run one container behind a shared Docker network."},
-    {"file": "development.md", "title": "Development & Contributing", "desc": "Local setup, linting, tests, and the PR process."}
+    {
+        "file": "architecture.md",
+        "title": "Architecture",
+        "desc": "Container layout, request flow, and tech stack.",
+    },
+    {
+        "file": "configuration.md",
+        "title": "Configuration",
+        "desc": "Environment variables and exposed ports.",
+    },
+    {
+        "file": "api.md",
+        "title": "API Reference",
+        "desc": "REST endpoints, authentication, and API key scopes.",
+    },
+    {
+        "file": "production.md",
+        "title": "Production Deployment",
+        "desc": "Hardened mode, DNS records, and TLS certificates.",
+    },
+    {
+        "file": "tunnel.md",
+        "title": "SMTP Tunnel",
+        "desc": "Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.",
+    },
+    {
+        "file": "clients.md",
+        "title": "Email Clients & TLS Trust",
+        "desc": "IMAP/POP3/SMTP setup and trusting the CA.",
+    },
+    {
+        "file": "ci.md",
+        "title": "Using in CI/CD",
+        "desc": "Pipeline setup and platform examples.",
+    },
+    {
+        "file": "mcp.md",
+        "title": "MCP Server",
+        "desc": "Give an AI agent its own mailbox over MCP.",
+    },
+    {
+        "file": "sandbox.md",
+        "title": "Provider Sandbox & HTTP Bin",
+        "desc": "Capture SMS, voice, and chat traffic, and inspect HTTP requests.",
+    },
+    {
+        "file": "networking.md",
+        "title": "Sharing MailCue",
+        "desc": "Run one container behind a shared Docker network.",
+    },
+    {
+        "file": "development.md",
+        "title": "Development & Contributing",
+        "desc": "Local setup, linting, tests, and the PR process.",
+    },
 ]
 
 # Generate Pygments syntax highlighting CSS
@@ -466,9 +510,10 @@ mermaid.initialize({{ startOnLoad: true, theme: 'dark', securityLevel: 'loose' }
 </html>
 """
 
+
 def generate_docs():
     print("Generating HTML documentation...")
-    
+
     # Auto-copy and adapt tunnel README to docs/guides/tunnel.md
     tunnel_readme = os.path.join(WORKSPACE_ROOT, "tunnel", "README.md")
     tunnel_guide = os.path.join(GUIDES_DIR, "tunnel.md")
@@ -476,41 +521,52 @@ def generate_docs():
         with open(tunnel_readme, "r", encoding="utf-8") as f:
             content = f.read()
         # Fix relative links to tunnel/docs/PROTOCOL.md and SECURITY.md
-        content = content.replace("](docs/PROTOCOL.md)", "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md)")
-        content = content.replace("](docs/SECURITY.md)", "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md)")
+        content = content.replace(
+            "](docs/PROTOCOL.md)",
+            "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md)",
+        )
+        content = content.replace(
+            "](docs/SECURITY.md)",
+            "](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md)",
+        )
         with open(tunnel_guide, "w", encoding="utf-8") as f:
             f.write(content)
         print("Copied and adapted tunnel/README.md to docs/guides/tunnel.md")
-        
+
     # Render all markdown guides
     for guide in GUIDES:
         md_file_path = os.path.join(GUIDES_DIR, guide["file"])
         html_filename = guide["file"].replace(".md", ".html")
         html_file_path = os.path.join(GUIDES_DIR, html_filename)
-        
+
         if not os.path.exists(md_file_path):
             print(f"Warning: {md_file_path} not found.")
             continue
-            
+
         with open(md_file_path, "r", encoding="utf-8") as f:
             md_content = f.read()
-            
+
         # Pre-process markdown to extract mermaid blocks before markdown parses them (and codehilite ruins them)
         mermaid_blocks = []
+
         def extract_mermaid(match):
             block_content = match.group(1).strip()
             mermaid_blocks.append(block_content)
-            return f"\n\n<!-- MERMAID_PLACEHOLDER_{len(mermaid_blocks)-1} -->\n\n"
-            
-        md_content_no_mermaid = re.sub(r'```mermaid([\s\S]*?)```', extract_mermaid, md_content)
-            
+            return f"\n\n<!-- MERMAID_PLACEHOLDER_{len(mermaid_blocks) - 1} -->\n\n"
+
+        md_content_no_mermaid = re.sub(
+            r"```mermaid([\s\S]*?)```", extract_mermaid, md_content
+        )
+
         # Parse markdown to HTML
         # Using extensions:
         # extra: includes tables, footnotes, attribute lists, etc.
         # codehilite: syntax highlighting
         # fenced_code: code blocks
-        html_body = markdown.markdown(md_content_no_mermaid, extensions=['extra', 'codehilite', 'fenced_code'])
-        
+        html_body = markdown.markdown(
+            md_content_no_mermaid, extensions=["extra", "codehilite", "fenced_code"]
+        )
+
         # Post-process HTML
         # 1. Map relative markdown links to HTML links
         # Match links to other guides (e.g. 'architecture.md' or '../guides/architecture.md')
@@ -525,9 +581,9 @@ def generate_docs():
                     if g["file"] == basename:
                         return f'href="{basename.replace(".md", ".html")}"'
             return match.group(0)
-            
+
         html_body = re.sub(r'href="([^"]+)"', replace_link, html_body)
-        
+
         # 2. Put mermaid blocks back as clean <pre class="mermaid"> tags
         for i, block in enumerate(mermaid_blocks):
             placeholder = f"<!-- MERMAID_PLACEHOLDER_{i} -->"
@@ -537,7 +593,7 @@ def generate_docs():
                 html_body = html_body.replace(p_placeholder, mermaid_html)
             else:
                 html_body = html_body.replace(placeholder, mermaid_html)
-        
+
         # 3. Generate Sidebar Links dynamically
         sidebar_links = []
         for g in GUIDES:
@@ -547,7 +603,7 @@ def generate_docs():
                 f'<li><a href="{g_html}" class="sidebar-link {active_class}">{g["title"]}</a></li>'
             )
         sidebar_links_str = "\n      ".join(sidebar_links)
-        
+
         # Populate Page Template
         page_html = PAGE_TEMPLATE.format(
             title=guide["title"],
@@ -555,18 +611,20 @@ def generate_docs():
             html_filename=html_filename,
             sidebar_links=sidebar_links_str,
             content=html_body,
-            pygments_css=pygments_css
+            pygments_css=pygments_css,
         )
-        
+
         with open(html_file_path, "w", encoding="utf-8") as f:
             f.write(page_html)
-            
+
         print(f"Generated: docs/guides/{html_filename}")
 
     # Generate robots.txt
     robots_path = os.path.join(DOCS_DIR, "robots.txt")
     with open(robots_path, "w", encoding="utf-8") as f:
-        f.write("User-agent: *\nAllow: /\n\nSitemap: https://olib-ai.github.io/mailcue/sitemap.xml\n")
+        f.write(
+            "User-agent: *\nAllow: /\n\nSitemap: https://olib-ai.github.io/mailcue/sitemap.xml\n"
+        )
     print("Generated: docs/robots.txt")
 
     # Generate sitemap.xml
@@ -575,20 +633,30 @@ def generate_docs():
         "https://olib-ai.github.io/mailcue/",
     ]
     for g in GUIDES:
-        sitemap_urls.append(f"https://olib-ai.github.io/mailcue/guides/{g['file'].replace('.md', '.html')}")
-        
-    sitemap_xml = ['<?xml version="1.0" encoding="UTF-8"?>', '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+        sitemap_urls.append(
+            f"https://olib-ai.github.io/mailcue/guides/{g['file'].replace('.md', '.html')}"
+        )
+
+    sitemap_xml = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
     for url in sitemap_urls:
         sitemap_xml.append("  <url>")
         sitemap_xml.append(f"    <loc>{url}</loc>")
         sitemap_xml.append("    <changefreq>weekly</changefreq>")
-        sitemap_xml.append("    <priority>1.0</priority>" if url.endswith("/mailcue/") else "    <priority>0.8</priority>")
+        sitemap_xml.append(
+            "    <priority>1.0</priority>"
+            if url.endswith("/mailcue/")
+            else "    <priority>0.8</priority>"
+        )
         sitemap_xml.append("  </url>")
     sitemap_xml.append("</urlset>")
-    
+
     with open(sitemap_path, "w", encoding="utf-8") as f:
         f.write("\n".join(sitemap_xml))
     print("Generated: docs/sitemap.xml")
+
 
 if __name__ == "__main__":
     generate_docs()

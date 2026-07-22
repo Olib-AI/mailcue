@@ -171,7 +171,8 @@ async def main_async() -> None:
         username = f"sdk-async-{uuid.uuid4().hex[:8]}"
         addr = f"{username}@mailcue.local"
         await step_async(
-            "mailboxes.create", mc.mailboxes.create(username, "testpass123", domain="mailcue.local")
+            "mailboxes.create",
+            mc.mailboxes.create(username, "testpass123", domain="mailcue.local"),
         )
         await step_async(
             "emails.inject",
@@ -210,7 +211,11 @@ async def main_async() -> None:
             nonlocal got_event, got_type
             async for ev in mc.events.stream():
                 got_event = True
-                got_type = getattr(ev, "type", None) or getattr(ev, "event_type", None) or repr(ev)
+                got_type = (
+                    getattr(ev, "type", None)
+                    or getattr(ev, "event_type", None)
+                    or repr(ev)
+                )
                 break
 
         with contextlib.suppress(asyncio.TimeoutError):

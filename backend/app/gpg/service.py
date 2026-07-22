@@ -189,7 +189,6 @@ async def extract_and_import_keys_from_email(
     return imported
 
 
-
 def _parse_uid(uid: str) -> tuple[str | None, str | None]:
     """Parse a GnuPG UID string like ``Name <email>`` into ``(name, email)``."""
     if "<" in uid and ">" in uid:
