@@ -72,7 +72,14 @@ function ThreadMessage({
         <Avatar name={fromDisplay} size="sm" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium truncate">{fromDisplay}</span>
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="text-sm font-semibold truncate">{fromDisplay}</span>
+              {email.from_address && (
+                <span className="text-xs text-muted-foreground truncate">
+                  &lt;{email.from_address}&gt;
+                </span>
+              )}
+            </div>
             <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
               {expanded ? formatFullDate(email.date) : formatEmailDate(email.date)}
             </span>
@@ -83,8 +90,18 @@ function ThreadMessage({
             </p>
           )}
           {expanded && (
-            <div className="text-xs text-muted-foreground mt-0.5 truncate">
-              To: {email.to_addresses.join(", ")}
+            <div className="space-y-0.5 mt-1 text-xs text-muted-foreground">
+              <div className="truncate">
+                <span className="font-medium text-foreground/80">From: </span>
+                <span>{fromDisplay}</span>
+                {email.from_address && (
+                  <span className="ml-1 text-muted-foreground">&lt;{email.from_address}&gt;</span>
+                )}
+              </div>
+              <div className="truncate">
+                <span className="font-medium text-foreground/80">To: </span>
+                <span>{email.to_addresses.join(", ")}</span>
+              </div>
             </div>
           )}
         </div>

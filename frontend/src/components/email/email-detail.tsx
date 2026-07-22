@@ -299,32 +299,59 @@ function EmailDetail() {
           <Avatar name={fromDisplay} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium">
-                {fromDisplay}
-              </p>
-              {email.from_name && (
-                <p className="text-xs text-muted-foreground">
-                  {email.from_address}
-                </p>
-              )}
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
+              <div className="flex items-baseline gap-1.5 min-w-0">
+                <span className="text-sm font-semibold text-foreground truncate">
+                  {fromDisplay}
+                </span>
+                {email.from_address && (
+                  <span className="text-xs text-muted-foreground truncate">
+                    &lt;{email.from_address}&gt;
+                  </span>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                 {formatFullDate(email.date)}
               </span>
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              <span>To: </span>
-              {email.to_addresses
-                .map((a) => formatEmailAddress(a))
-                .join(", ")}
-            </div>
-            {email.cc_addresses && email.cc_addresses.length > 0 && (
-              <div className="text-xs text-muted-foreground">
-                <span>Cc: </span>
-                {email.cc_addresses
-                  .map((a) => formatEmailAddress(a))
-                  .join(", ")}
+
+            {/* Envelope Details */}
+            <div className="space-y-0.5 mt-1.5 text-xs text-muted-foreground">
+              <div className="truncate">
+                <span className="font-medium text-foreground/80">From: </span>
+                <span>{fromDisplay}</span>
+                {email.from_address && (
+                  <span className="ml-1 text-muted-foreground">&lt;{email.from_address}&gt;</span>
+                )}
               </div>
-            )}
+              <div className="truncate">
+                <span className="font-medium text-foreground/80">To: </span>
+                <span>
+                  {email.to_addresses
+                    .map((a) => formatEmailAddress(a))
+                    .join(", ")}
+                </span>
+              </div>
+              {email.cc_addresses && email.cc_addresses.length > 0 && (
+                <div className="truncate">
+                  <span className="font-medium text-foreground/80">Cc: </span>
+                  <span>
+                    {email.cc_addresses
+                      .map((a) => formatEmailAddress(a))
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+              {email.bcc_addresses && email.bcc_addresses.length > 0 && (
+                <div className="truncate">
+                  <span className="font-medium text-foreground/80">Bcc: </span>
+                  <span>
+                    {email.bcc_addresses
+                      .map((a) => formatEmailAddress(a))
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
 
             {/* Expand headers toggle */}
             <button
