@@ -8,6 +8,7 @@ is never blocked.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import email as email_stdlib
 import json
 import logging
@@ -360,6 +361,30 @@ async def publish_to_keyserver(
     )
 
 
+async def fetch_key_from_keyserver(address: str, db: AsyncSession) -> GpgKeyResponse:
+    """Search keys.openpgp.org by email address, download public key, and import into DB."""
+    import urllib.parse
+
+    url = f"https://keys.openpgp.org/pks/lookup?op=get&options=mr&search={urllib.parse.quote(address)}"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mailcue/1.0"})
+
+    try:
+        resp_bytes = await asyncio.to_thread(
+            lambda: urllib.request.urlopen(req, timeout=15).read()
+        )
+        armored_key = resp_bytes.decode("utf-8", errors="replace")
+        if "-----BEGIN PGP PUBLIC KEY BLOCK-----" not in armored_key:
+            raise ValueError(f"No public key found on keyserver for {address}")
+        return await import_key(
+            ImportKeyRequest(armored_key=armored_key, mailbox_address=address),
+            db,
+        )
+    except Exception as exc:
+        if isinstance(exc, ValueError):
+            raise
+        raise ValueError(f"No public key found on keyserver for {address}") from exc
+
+
 # ── Cryptographic operations ─────────────────────────────────────
 
 
@@ -435,6 +460,9 @@ async def encrypt_message(raw_bytes: bytes, recipients: list[str], db: AsyncSess
     fingerprints: list[str] = []
     for addr in recipients:
         key = await get_key_for_address(addr, db)
+        if not key:
+            with contextlib.suppress(Exception):
+                key = await fetch_key_from_keyserver(addr, db)
         if not key:
             raise ValueError(f"No public key found for {addr}")
         fingerprints.append(key.fingerprint)

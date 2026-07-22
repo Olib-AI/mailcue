@@ -93,3 +93,15 @@ export function usePublishGpgKey() {
       ),
   });
 }
+
+export function useFetchGpgKey() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (address: string) =>
+      api.post<GpgKey>("/gpg/keys/fetch", { address }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: gpgKeys.all });
+    },
+  });
+}

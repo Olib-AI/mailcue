@@ -35,6 +35,12 @@ class ImportKeyRequest(BaseModel):
     mailbox_address: str | None = None  # override auto-detected address
 
 
+class FetchKeyRequest(BaseModel):
+    """Request body for searching and fetching a key from keyserver by email address."""
+
+    address: str
+
+
 class GpgKeyResponse(BaseModel):
     """Serialised GPG key metadata returned by the API."""
 

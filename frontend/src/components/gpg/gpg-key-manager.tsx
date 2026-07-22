@@ -14,6 +14,7 @@ import {
   Download,
   Copy,
   Globe,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import {
   useDeleteGpgKey,
   useExportGpgKey,
   usePublishGpgKey,
+  useFetchGpgKey,
 } from "@/hooks/use-gpg";
 import { useMailboxes } from "@/hooks/use-mailboxes";
 import { formatEmailDate } from "@/lib/utils";
@@ -74,13 +76,33 @@ function GpgKeyManager() {
   const deleteKey = useDeleteGpgKey();
   const exportKey = useExportGpgKey();
   const publishKey = usePublishGpgKey();
+  const fetchKey = useFetchGpgKey();
 
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
+  const [fetchAddress, setFetchAddress] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const mailboxes = mailboxData?.mailboxes ?? [];
   const keys = data?.keys ?? [];
+
+  const handleFetchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fetchAddress.trim()) return;
+    fetchKey.mutate(fetchAddress.trim(), {
+      onSuccess: (result) => {
+        toast.success(`Public key for ${result.mailbox_address} downloaded and imported`);
+        setFetchAddress("");
+        setFetchDialogOpen(false);
+      },
+      onError: (err) => {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to search keyserver"
+        );
+      },
+    });
+  };
 
   // --- Generate Form ---
 
@@ -245,6 +267,13 @@ function GpgKeyManager() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setFetchDialogOpen(true)}
+          >
+            <Search className="mr-2 h-4 w-4" />
+            Search Keyserver
+          </Button>
           <Button
             variant="outline"
             onClick={() => setImportDialogOpen(true)}
@@ -623,6 +652,51 @@ function GpgKeyManager() {
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Search Keyserver Dialog */}
+      <Dialog open={fetchDialogOpen} onOpenChange={setFetchDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Search Keyserver</DialogTitle>
+            <DialogDescription>
+              Search keys.openpgp.org for an email address to download and import their public GPG key.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleFetchSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="fetch-address">Email Address</Label>
+              <Input
+                id="fetch-address"
+                type="email"
+                placeholder="user@example.com"
+                value={fetchAddress}
+                onChange={(e) => setFetchAddress(e.target.value)}
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setFetchAddress("");
+                  setFetchDialogOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={fetchKey.isPending}>
+                {fetchKey.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Search & Import
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

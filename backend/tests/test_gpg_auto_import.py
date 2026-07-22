@@ -65,3 +65,44 @@ async def test_extract_and_import_keys_from_email_extracts_armored_blocks(
         )
         assert len(imported) == 1
         assert imported[0].mailbox_address == "sender@example.com"
+
+
+@pytest.mark.asyncio
+async def test_fetch_key_from_keyserver_success(_engine_and_session, monkeypatch) -> None:
+    """fetch_key_from_keyserver fetches key from keyserver and imports it."""
+    _engine, factory = _engine_and_session
+    sample_armor = (
+        "-----BEGIN PGP PUBLIC KEY BLOCK-----\n"
+        "Version: Test\n\n"
+        "mQENBF...fakekey...\n"
+        "-----END PGP PUBLIC KEY BLOCK-----"
+    )
+
+    class FakeResponse:
+        def read(self):
+            return sample_armor.encode("utf-8")
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=15: FakeResponse())
+
+    async def fake_import_key(req, db):
+        return GpgKeyResponse(
+            id="test-id",
+            mailbox_address=req.mailbox_address or "akram@olib.email",
+            fingerprint="1234567890ABCDEF1234567890ABCDEF12345678",
+            key_id="90ABCDEF12345678",
+            uid_name="Akram",
+            uid_email="akram@olib.email",
+            algorithm="RSA",
+            key_length=2048,
+            created_at=datetime.now(UTC),
+            expires_at=None,
+            is_private=False,
+            public_key_armor=req.armored_key,
+            is_active=True,
+        )
+
+    monkeypatch.setattr(gpg_service, "import_key", fake_import_key)
+
+    async with factory() as session:
+        res = await gpg_service.fetch_key_from_keyserver("akram@olib.email", session)
+        assert res.mailbox_address == "akram@olib.email"

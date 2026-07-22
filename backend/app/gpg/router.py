@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies import AuthContext, get_auth, require_scope
 from app.gpg import service as gpg_service
 from app.gpg.schemas import (
+    FetchKeyRequest,
     GenerateKeyRequest,
     GpgKeyExportResponse,
     GpgKeyListResponse,
@@ -170,6 +171,24 @@ async def import_key(
         return await gpg_service.import_key(request, db)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post(
+    "/keys/fetch",
+    response_model=GpgKeyResponse,
+    status_code=201,
+    dependencies=[Depends(require_scope(scopes.GPG_MANAGE))],
+)
+async def fetch_key(
+    request: FetchKeyRequest,
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> GpgKeyResponse:
+    """Search and import a GPG public key from keys.openpgp.org by email address."""
+    try:
+        return await gpg_service.fetch_key_from_keyserver(request.address, db)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete(
