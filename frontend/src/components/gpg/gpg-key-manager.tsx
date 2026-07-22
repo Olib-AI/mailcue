@@ -352,23 +352,21 @@ function GpgKeyManager() {
                     >
                       <Download className="h-4 w-4" />
                     </Button>
-                    {!isLocalDomain(key.mailbox_address) && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        onClick={() => handlePublish(key.mailbox_address)}
-                        disabled={publishKey.isPending}
-                        title="Publish to keys.openpgp.org"
-                        aria-label={`Publish key for ${key.mailbox_address} to keyserver`}
-                      >
-                        {publishKey.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Globe className="h-4 w-4" />
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => handlePublish(key.mailbox_address)}
+                      disabled={publishKey.isPending}
+                      title="Publish to keys.openpgp.org"
+                      aria-label={`Publish key for ${key.mailbox_address} to keyserver`}
+                    >
+                      {publishKey.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Globe className="h-4 w-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"

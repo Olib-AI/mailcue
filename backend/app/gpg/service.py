@@ -277,10 +277,11 @@ KEYSERVER_VERIFY_URL = "https://keys.openpgp.org/vks/v1/request-verify"
 
 def _upload_to_keyserver(armored_key: str) -> dict[str, Any]:
     """Upload an armored public key to keys.openpgp.org (blocking)."""
+    payload = json.dumps({"keytext": armored_key}).encode("utf-8")
     req = urllib.request.Request(
         KEYSERVER_UPLOAD_URL,
-        data=armored_key.encode("utf-8"),
-        headers={"Content-Type": "application/pgp-keys"},
+        data=payload,
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
