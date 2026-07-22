@@ -273,7 +273,33 @@ async def get_email(
                     # Re-parse with decrypted content
                     detail = await parse_email_async(decrypted_bytes, uid=uid, mailbox=mailbox)
                     detail.is_read = True
+                    with contextlib.suppress(Exception):
+                        await gpg_service.extract_and_import_keys_from_email(
+                            decrypted_bytes, detail.from_address, db
+                        )
                 detail.gpg = gpg_info
+
+            # Auto-import public key block(s) contained in the email
+            with contextlib.suppress(Exception):
+                await gpg_service.extract_and_import_keys_from_email(
+                    raw_bytes, detail.from_address, db
+                )
+
+            # Auto-import public key from GnuPG keyring if verified signature fingerprint exists
+            if detail.gpg and detail.gpg.signer_fingerprint:
+                with contextlib.suppress(Exception):
+                    gpg_inst = gpg_service._get_gpg()
+                    armor = await asyncio.to_thread(
+                        gpg_inst.export_keys, detail.gpg.signer_fingerprint
+                    )
+                    if armor:
+                        await gpg_service.import_key(
+                            gpg_service.ImportKeyRequest(
+                                armored_key=str(armor),
+                                mailbox_address=detail.from_address,
+                            ),
+                            db,
+                        )
 
         return detail
     finally:

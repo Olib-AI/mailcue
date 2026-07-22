@@ -125,21 +125,69 @@ async def import_key(request: ImportKeyRequest, db: AsyncSession) -> GpgKeyRespo
     )
     address = request.mailbox_address or uid_parts[1] or ""
 
-    db_key = GpgKey(
-        mailbox_address=address,
-        fingerprint=fingerprint,
-        key_id=fingerprint[-16:],
-        uid_name=uid_parts[0],
-        uid_email=uid_parts[1],
-        algorithm=key_info.get("algo") if key_info else None,
-        key_length=int(key_info.get("length", 0)) if key_info else None,
-        is_private=False,
-        public_key_armor=request.armored_key,
-    )
-    db.add(db_key)
+    # Check if key already exists in DB
+    existing_res = await db.execute(select(GpgKey).where(GpgKey.fingerprint == fingerprint))
+    db_key = existing_res.scalars().first()
+
+    if db_key:
+        if address:
+            db_key.mailbox_address = address
+        if request.armored_key:
+            db_key.public_key_armor = request.armored_key
+        if uid_parts[0]:
+            db_key.uid_name = uid_parts[0]
+        if uid_parts[1]:
+            db_key.uid_email = uid_parts[1]
+        if key_info and key_info.get("algo"):
+            db_key.algorithm = key_info.get("algo")
+        if key_info and key_info.get("length"):
+            db_key.key_length = int(key_info.get("length", 0))
+        db_key.is_active = True
+    else:
+        db_key = GpgKey(
+            mailbox_address=address,
+            fingerprint=fingerprint,
+            key_id=fingerprint[-16:],
+            uid_name=uid_parts[0],
+            uid_email=uid_parts[1],
+            algorithm=key_info.get("algo") if key_info else None,
+            key_length=int(key_info.get("length", 0)) if key_info else None,
+            is_private=False,
+            public_key_armor=request.armored_key,
+        )
+        db.add(db_key)
+
     await db.commit()
     await db.refresh(db_key)
     return GpgKeyResponse.model_validate(db_key)
+
+
+async def extract_and_import_keys_from_email(
+    raw_bytes: bytes,
+    sender_address: str,
+    db: AsyncSession,
+) -> list[GpgKeyResponse]:
+    """Scan raw email bytes/text for armored PGP public keys and persist them in DB."""
+    import re
+
+    imported: list[GpgKeyResponse] = []
+    text_content = raw_bytes.decode("utf-8", errors="replace")
+
+    pattern = r"-----BEGIN PGP PUBLIC KEY BLOCK-----[\s\S]*?-----END PGP PUBLIC KEY BLOCK-----"
+    key_blocks = re.findall(pattern, text_content)
+
+    for block in key_blocks:
+        try:
+            key_resp = await import_key(
+                ImportKeyRequest(armored_key=block, mailbox_address=sender_address),
+                db,
+            )
+            imported.append(key_resp)
+        except Exception as exc:
+            logger.warning("Failed to auto-import PGP key block: %s", exc)
+
+    return imported
+
 
 
 def _parse_uid(uid: str) -> tuple[str | None, str | None]:

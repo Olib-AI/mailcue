@@ -78,6 +78,7 @@ class SendEmailRequest(BaseModel):
     from_name: str = ""
     to_addresses: list[str]
     cc_addresses: list[str] = []
+    bcc_addresses: list[str] = []
     subject: str
     body: str = ""
     body_type: str = "plain"

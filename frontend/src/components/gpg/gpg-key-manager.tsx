@@ -576,22 +576,16 @@ function GpgKeyManager() {
 
             <div className="space-y-1.5">
               <Label htmlFor="import-mailbox">
-                Mailbox Override{" "}
+                Associated Email Address{" "}
                 <span className="text-muted-foreground font-normal">
-                  (optional)
+                  (optional, defaults to key UID)
                 </span>
               </Label>
-              <Select
+              <Input
                 id="import-mailbox"
+                placeholder="user@example.com"
                 {...importForm.register("mailbox_address")}
-              >
-                <option value="">Auto-detect from key UID</option>
-                {mailboxes.map((mb) => (
-                  <option key={mb.address} value={mb.address}>
-                    {mb.address}
-                  </option>
-                ))}
-              </Select>
+              />
             </div>
 
             <DialogFooter>
