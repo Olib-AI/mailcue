@@ -38,6 +38,7 @@ Need async? Use `AsyncMailcue` — same surface, all methods become coroutines:
 import asyncio
 from mailcue import AsyncMailcue
 
+
 async def main() -> None:
     async with AsyncMailcue(api_key="mc_xxx") as client:
         await client.emails.send(
@@ -46,6 +47,7 @@ async def main() -> None:
             subject="Welcome",
             html="<h1>Hi there</h1>",
         )
+
 
 asyncio.run(main())
 ```
@@ -147,11 +149,11 @@ except ValidationError as exc:
 
 ```python
 client = Mailcue(
-    api_key="mc_xxx",                        # or bearer_token="eyJ..."
-    base_url="https://mail.example.com",     # default: http://localhost:8088
-    timeout=30.0,                            # seconds
-    max_retries=3,                           # 502/503/504 + network errors
-    verify=True,                             # set False for self-signed dev TLS
+    api_key="mc_xxx",  # or bearer_token="eyJ..."
+    base_url="https://mail.example.com",  # default: http://localhost:8088
+    timeout=30.0,  # seconds
+    max_retries=3,  # 502/503/504 + network errors
+    verify=True,  # set False for self-signed dev TLS
 )
 ```
 
