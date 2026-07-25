@@ -93,6 +93,26 @@ async def test_campaign_lifecycle(client: AsyncClient, _engine_and_session) -> N
         )
         await db.commit()
 
+    second_account_response = await client.post(
+        "/api/v1/warmup/accounts",
+        json={
+            "name": "Gmail seed",
+            "email": "seed@gmail.com",
+            "provider": "gmail",
+            "smtp_host": "smtp.gmail.com",
+            "imap_host": "imap.gmail.com",
+            "username": "seed@gmail.com",
+            "password": "app-password",
+            "ownership_confirmed": True,
+        },
+    )
+    second_account_id = second_account_response.json()["id"]
+    async with factory() as db:
+        second_account = await db.get(WarmupAccount, second_account_id)
+        assert second_account is not None
+        second_account.verified = True
+        await db.commit()
+
     response = await client.post(
         "/api/v1/warmup/campaigns",
         json={
@@ -124,6 +144,33 @@ async def test_campaign_lifecycle(client: AsyncClient, _engine_and_session) -> N
     assert started.status_code == 200
     assert started.json()["status"] == "active"
     assert started.json()["next_run_at"] is not None
+
+    updated = await client.put(
+        f"/api/v1/warmup/campaigns/{campaign_id}",
+        json={
+            "name": "Updated domain warmup",
+            "local_address": "sender@mailcue.local",
+            "account_ids": [account_id, second_account_id],
+            "start_daily_volume": 4,
+            "daily_ramp": 1,
+            "max_daily_volume": 30,
+            "min_delay_minutes": 15,
+            "max_delay_minutes": 60,
+            "reply_rate": 80,
+            "active_hour_start": 7,
+            "active_hour_end": 21,
+            "timezone": "UTC",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Updated domain warmup"
+    assert updated.json()["account_ids"] == [account_id, second_account_id]
+    assert updated.json()["status"] == "active"
+    assert updated.json()["next_run_at"] == started.json()["next_run_at"]
+    assert updated.json()["total_sent"] == 0
+
+    provider_states = await client.get(f"/api/v1/warmup/provider-states?campaign_id={campaign_id}")
+    assert {state["provider"] for state in provider_states.json()} == {"custom", "gmail"}
 
     paused = await client.post(f"/api/v1/warmup/campaigns/{campaign_id}/pause", json={})
     assert paused.json()["status"] == "paused"

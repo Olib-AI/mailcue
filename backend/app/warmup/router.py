@@ -35,6 +35,7 @@ from app.warmup.service import (
     ensure_provider_states,
     provider_defaults,
     set_campaign_status,
+    update_campaign,
     validate_sender_domain,
 )
 
@@ -174,6 +175,27 @@ async def add_campaign(
 ) -> WarmupCampaignResponse:
     try:
         row = await create_campaign(body, db)
+    except ValueError as exc:
+        raise _bad_request(exc) from exc
+    return WarmupCampaignResponse.model_validate(row)
+
+
+@router.put(
+    "/campaigns/{campaign_id}",
+    response_model=WarmupCampaignResponse,
+    dependencies=[Depends(require_scope(scopes.WARMUP_MANAGE))],
+)
+async def edit_campaign(
+    campaign_id: str,
+    body: WarmupCampaignCreate,
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> WarmupCampaignResponse:
+    row = await db.get(WarmupCampaign, campaign_id)
+    if row is None:
+        raise HTTPException(404, "Warmup campaign not found")
+    try:
+        row = await update_campaign(row, body, db)
     except ValueError as exc:
         raise _bad_request(exc) from exc
     return WarmupCampaignResponse.model_validate(row)

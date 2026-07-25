@@ -84,6 +84,15 @@ export function useCreateWarmupCampaign() {
   return useMutation({ mutationFn: (body: CreateWarmupCampaignRequest) => api.post<WarmupCampaign>("/warmup/campaigns", body), onSuccess: invalidate });
 }
 
+export function useUpdateWarmupCampaign() {
+  const invalidate = useInvalidateWarmup();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: CreateWarmupCampaignRequest }) =>
+      api.put<WarmupCampaign>(`/warmup/campaigns/${id}`, body),
+    onSuccess: invalidate,
+  });
+}
+
 export function useControlWarmupCampaign() {
   const invalidate = useInvalidateWarmup();
   return useMutation({ mutationFn: ({ id, action }: { id: string; action: "start" | "pause" | "stop" }) => api.post<WarmupCampaign>(`/warmup/campaigns/${id}/${action}`, {}), onSuccess: invalidate });

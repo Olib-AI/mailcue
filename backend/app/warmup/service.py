@@ -203,10 +203,39 @@ async def check_account(account: WarmupAccount, db: AsyncSession) -> tuple[bool,
 
 
 async def create_campaign(body: WarmupCampaignCreate, db: AsyncSession) -> WarmupCampaign:
+    accounts = await _validate_campaign_configuration(body, db)
+    campaign = WarmupCampaign(id=str(uuid.uuid4()), **body.model_dump())
+    db.add(campaign)
+    await ensure_provider_states(campaign, accounts, db)
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def update_campaign(
+    campaign: WarmupCampaign, body: WarmupCampaignCreate, db: AsyncSession
+) -> WarmupCampaign:
+    """Replace editable campaign settings without resetting progress or status."""
+    accounts = await _validate_campaign_configuration(body, db)
+    for key, value in body.model_dump().items():
+        setattr(campaign, key, value)
+    await ensure_provider_states(campaign, accounts, db)
+    if campaign.status == "active" and campaign.next_run_at is None:
+        campaign.next_run_at = datetime.now(UTC).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(campaign)
+    return campaign
+
+
+async def _validate_campaign_configuration(
+    body: WarmupCampaignCreate, db: AsyncSession
+) -> list[WarmupAccount]:
     try:
         ZoneInfo(body.timezone)
     except ZoneInfoNotFoundError as exc:
         raise ValueError(f"Unknown timezone: {body.timezone}") from exc
+    if len(body.account_ids) != len(set(body.account_ids)):
+        raise ValueError("External accounts cannot be selected more than once")
     accounts = (
         (await db.execute(select(WarmupAccount).where(WarmupAccount.id.in_(body.account_ids))))
         .scalars()
@@ -222,19 +251,7 @@ async def create_campaign(body: WarmupCampaignCreate, db: AsyncSession) -> Warmu
     if mailbox is None:
         raise ValueError("The local sender must be an existing MailCue mailbox")
     await validate_sender_domain(body.local_address, db)
-    campaign = WarmupCampaign(id=str(uuid.uuid4()), **body.model_dump())
-    db.add(campaign)
-    for provider in sorted({normalize_provider(account.provider) for account in accounts}):
-        db.add(
-            WarmupProviderState(
-                id=str(uuid.uuid4()),
-                campaign_id=campaign.id,
-                provider=provider,
-            )
-        )
-    await db.commit()
-    await db.refresh(campaign)
-    return campaign
+    return list(accounts)
 
 
 def normalize_provider(provider: str) -> str:
