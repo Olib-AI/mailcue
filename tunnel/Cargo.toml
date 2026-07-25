@@ -27,7 +27,7 @@ webpki-roots = "1.0"
 snow = { version = "0.10", default-features = false, features = ["default-resolver", "default-resolver-crypto", "std"] }
 rand = "0.10"
 zeroize = { version = "1.8", features = ["zeroize_derive"] }
-base64 = "0.22"
+base64 = "0.23"
 
 # Serialization / framing
 serde = { version = "1", features = ["derive"] }
