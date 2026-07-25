@@ -28,7 +28,7 @@
     "clsx": "^2.1.1",
     "dompurify": "^3.4.11",
     "lucide-react": "^1.23.0",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "react-dom": "^19.2.7",
     "react-hook-form": "^7.82.0",
     "react-router": "^8.1.0",
