@@ -36,7 +36,8 @@ async def _engine_and_session():
     import app.mailboxes.models
     import app.sandbox.models
     import app.system.models
-    import app.tunnels.models  # noqa: F401
+    import app.tunnels.models
+    import app.warmup.models  # noqa: F401
     from app.sandbox.seeds.available_numbers import reset_pool
 
     reset_pool()

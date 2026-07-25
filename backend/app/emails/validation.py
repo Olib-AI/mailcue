@@ -418,7 +418,11 @@ async def validate_email(email: str) -> EmailValidationResponse:
         return EmailValidationResponse(
             email=email,
             is_valid=False,
-            status="invalid",
+            # A known disposable provider remains disposable even when its
+            # DNS is temporarily unavailable (or DNS access is restricted in
+            # the running environment). This classification is more specific
+            # and does not depend on a live network lookup.
+            status="disposable" if is_disposable else "invalid",
             syntax=syntax,
             dns=dns_res,
             mailbox=EmailValidationMailbox(is_valid=None, error="DNS validation failed"),

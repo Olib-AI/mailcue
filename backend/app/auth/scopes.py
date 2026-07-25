@@ -53,6 +53,10 @@ SYSTEM_MANAGE = "system:manage"
 TUNNEL_READ = "tunnel:read"
 TUNNEL_MANAGE = "tunnel:manage"
 
+# ── Email warmup (admin) ────────────────────────────────────────
+WARMUP_READ = "warmup:read"
+WARMUP_MANAGE = "warmup:manage"
+
 # ── API key self-management ──────────────────────────────────────
 APIKEY_READ = "apikey:read"
 APIKEY_MANAGE = "apikey:manage"
@@ -153,6 +157,20 @@ SCOPES: tuple[ScopeDef, ...] = (
         "Tunnels",
         "Manage tunnels",
         "Create, edit, delete, and check tunnels.",
+        admin_only=True,
+    ),
+    ScopeDef(
+        WARMUP_READ,
+        "Warmup",
+        "Read warmup",
+        "Read warmup accounts, campaigns, and delivery history.",
+        admin_only=True,
+    ),
+    ScopeDef(
+        WARMUP_MANAGE,
+        "Warmup",
+        "Manage warmup",
+        "Configure external accounts and control warmup campaigns.",
         admin_only=True,
     ),
 )

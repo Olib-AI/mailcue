@@ -9,6 +9,7 @@ disposal).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -73,6 +74,13 @@ from app.tunnels.models import (  # noqa: F401 — imported for table creation
     TunnelClientIdentity,
 )
 from app.tunnels.router import router as tunnels_router
+from app.warmup.models import (  # noqa: F401 — imported for table creation
+    WarmupAccount,
+    WarmupCampaign,
+    WarmupEvent,
+    WarmupProviderState,
+)
+from app.warmup.router import router as warmup_router
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -106,6 +114,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables ensured.")
+
+    # Warmup is deliberately driven by one low-frequency scheduler. Each
+    # campaign claims its next slot before performing network I/O, preventing
+    # accidental bursts when an SMTP provider is slow.
+    from app.warmup.service import scheduler_loop
+
+    _app.state.warmup_scheduler_task = asyncio.create_task(scheduler_loop())
 
     async with AsyncSessionLocal() as session:
         await create_default_admin(session)
@@ -242,6 +257,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # ── Shutdown ─────────────────────────────────────────────────
+    _app.state.warmup_scheduler_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await _app.state.warmup_scheduler_task
     await engine.dispose()
     logger.info("MailCue API shut down.")
 
@@ -296,6 +314,7 @@ def create_app() -> FastAPI:
     app.include_router(forwarding_router, prefix="/api/v1")
     app.include_router(aliases_router, prefix="/api/v1")
     app.include_router(tunnels_router, prefix="/api/v1")
+    app.include_router(warmup_router, prefix="/api/v1")
 
     # ── HTTP Bin ──────────────────────────────────────────────────
     # Test-only debugging endpoint.  Production hosts never want a

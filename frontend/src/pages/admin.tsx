@@ -4,6 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MailboxManager } from "@/components/admin/mailbox-manager";
 import { InjectForm } from "@/components/admin/inject-form";
 import { UserManager } from "@/components/admin/user-manager";
+import { WarmupManager } from "@/components/admin/warmup-manager";
 import { useAuth } from "@/hooks/use-auth";
 import { useFeatures } from "@/hooks/use-features";
 
@@ -15,14 +16,15 @@ function AdminPage() {
   const { features } = useFeatures();
   const showInject = isAdmin && features.inject;
 
-  // If a user lands on ?tab=inject in production (e.g. via a stale
-  // bookmark), bounce them back to the default tab.  Otherwise the
-  // Tabs component would highlight a trigger that no longer exists.
+  // Bounce stale or unauthorized tab URLs back to the default tab.
   useEffect(() => {
-    if (currentTab === "inject" && !showInject) {
+    if (
+      (currentTab === "inject" && !showInject) ||
+      (!isAdmin && (currentTab === "users" || currentTab === "warmup"))
+    ) {
       setSearchParams({}, { replace: true });
     }
-  }, [currentTab, showInject, setSearchParams]);
+  }, [currentTab, isAdmin, showInject, setSearchParams]);
 
   const handleTabChange = (value: string) => {
     setSearchParams({ tab: value }, { replace: true });
@@ -34,6 +36,7 @@ function AdminPage() {
         <TabsList className="mb-6">
           <TabsTrigger value="mailboxes">Mailboxes</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">Users</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="warmup">Email Warmup</TabsTrigger>}
           {showInject && <TabsTrigger value="inject">Inject Email</TabsTrigger>}
         </TabsList>
 
@@ -44,6 +47,12 @@ function AdminPage() {
         {isAdmin && (
           <TabsContent value="users">
             <UserManager />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="warmup">
+            <WarmupManager />
           </TabsContent>
         )}
 

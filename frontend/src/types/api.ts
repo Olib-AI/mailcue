@@ -602,3 +602,113 @@ export interface APIError {
   detail: string;
   status_code?: number;
 }
+
+// --- Email Warmup Types ---
+
+export interface WarmupAccount {
+  id: string;
+  name: string;
+  email: string;
+  provider: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: "ssl" | "starttls" | "plain";
+  imap_host: string;
+  imap_port: number;
+  imap_security: "ssl" | "starttls" | "plain";
+  username: string;
+  enabled: boolean;
+  verified: boolean;
+  last_checked_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+
+export interface CreateWarmupAccountRequest {
+  name: string;
+  email: string;
+  provider: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_security: "ssl" | "starttls" | "plain";
+  imap_host: string;
+  imap_port: number;
+  imap_security: "ssl" | "starttls" | "plain";
+  username: string;
+  password: string;
+  enabled: boolean;
+  ownership_confirmed: boolean;
+}
+
+export interface WarmupCampaign {
+  id: string;
+  name: string;
+  local_address: string;
+  account_ids: string[];
+  status: "draft" | "active" | "paused" | "stopped";
+  start_daily_volume: number;
+  daily_ramp: number;
+  max_daily_volume: number;
+  min_delay_minutes: number;
+  max_delay_minutes: number;
+  reply_rate: number;
+  active_hour_start: number;
+  active_hour_end: number;
+  timezone: string;
+  messages_sent_today: number;
+  total_sent: number;
+  total_failed: number;
+  started_at: string | null;
+  stopped_at: string | null;
+  next_run_at: string | null;
+  created_at: string;
+}
+
+export interface CreateWarmupCampaignRequest {
+  name: string;
+  local_address: string;
+  account_ids: string[];
+  start_daily_volume: number;
+  daily_ramp: number;
+  max_daily_volume: number;
+  min_delay_minutes: number;
+  max_delay_minutes: number;
+  reply_rate: number;
+  active_hour_start: number;
+  active_hour_end: number;
+  timezone: string;
+}
+
+export interface WarmupEvent {
+  id: string;
+  campaign_id: string;
+  account_id: string | null;
+  provider: string | null;
+  direction: "local_to_external" | "external_to_local" | "delivery_feedback";
+  status: "sent" | "failed" | "deferred" | "bounced";
+  subject: string;
+  message_id: string | null;
+  error: string | null;
+  smtp_code: number | null;
+  enhanced_status: string | null;
+  created_at: string;
+}
+
+export interface WarmupProviderState {
+  id: string;
+  campaign_id: string;
+  provider: string;
+  status: "healthy" | "cooling" | "blocked";
+  sent_today: number;
+  failed_today: number;
+  total_sent: number;
+  total_failed: number;
+  consecutive_failures: number;
+  next_attempt_at: string | null;
+  paused_until: string | null;
+  last_sent_at: string | null;
+  last_failure_at: string | null;
+  last_smtp_code: number | null;
+  last_enhanced_status: string | null;
+  last_response: string | null;
+}

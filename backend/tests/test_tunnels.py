@@ -15,7 +15,6 @@ import asyncio
 import base64
 import hashlib
 import json
-import socket
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -262,48 +261,52 @@ async def test_health_check_open_and_closed_ports(
 ) -> None:
     _override_settings_path(monkeypatch, tmp_path / "tunnels.json")
 
-    # Bind a listener on a free local port -- echoes are unnecessary; a
-    # plain ``listen()`` is enough for ``asyncio.open_connection`` to win.
-    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    listener.bind(("127.0.0.1", 0))
-    listener.listen(1)
-    open_port: int = listener.getsockname()[1]
+    # Mock the OS connection boundary. Some CI sandboxes prohibit binding a
+    # listener even on loopback; the health-check behavior itself should stay
+    # deterministic and is fully exercised through the API here.
+    class FakeWriter:
+        def close(self) -> None:
+            pass
 
-    try:
-        create_open = await client.post(
-            "/api/v1/tunnels",
-            json={
-                "name": "open-edge",
-                "endpoint_host": "127.0.0.1",
-                "endpoint_port": open_port,
-                "server_pubkey": _VALID_PUBKEY_B64,
-            },
-        )
-        assert create_open.status_code == 201
-        open_id = create_open.json()["id"]
+        async def wait_closed(self) -> None:
+            pass
 
-        check_open = await client.post(f"/api/v1/tunnels/{open_id}/check")
-        assert check_open.status_code == 200
-        assert check_open.json()["ok"] is True
+    async def connect_ok(_host: str, _port: int):
+        return object(), FakeWriter()
 
-    finally:
-        listener.close()
+    monkeypatch.setattr(asyncio, "open_connection", connect_ok)
+    probe_port = 43210
+    create_open = await client.post(
+        "/api/v1/tunnels",
+        json={
+            "name": "open-edge",
+            "endpoint_host": "127.0.0.1",
+            "endpoint_port": probe_port,
+            "server_pubkey": _VALID_PUBKEY_B64,
+        },
+    )
+    assert create_open.status_code == 201
+    open_id = create_open.json()["id"]
 
-    # Probe the port we just released -- should now refuse.
+    check_open = await client.post(f"/api/v1/tunnels/{open_id}/check")
+    assert check_open.status_code == 200
+    assert check_open.json()["ok"] is True
+
+    async def connect_refused(_host: str, _port: int):
+        raise ConnectionRefusedError("connection refused")
+
+    monkeypatch.setattr(asyncio, "open_connection", connect_refused)
     create_closed = await client.post(
         "/api/v1/tunnels",
         json={
             "name": "closed-edge",
             "endpoint_host": "127.0.0.1",
-            "endpoint_port": open_port,
+            "endpoint_port": probe_port,
             "server_pubkey": _VALID_PUBKEY_B64_ALT,
         },
     )
     assert create_closed.status_code == 201
     closed_id = create_closed.json()["id"]
-
-    # Give the kernel a beat to release the port (some platforms take a tick).
-    await asyncio.sleep(0.05)
 
     check_closed = await client.post(f"/api/v1/tunnels/{closed_id}/check")
     assert check_closed.status_code == 200

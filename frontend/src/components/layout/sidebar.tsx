@@ -19,6 +19,7 @@ import {
   ArrowRightLeft,
   AtSign,
   User,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MailCueLogo } from "@/components/mailcue-logo";
@@ -247,7 +248,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             onClick={() => void navigate("/admin")}
             className={cn(
               "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors mt-1",
-              isAdminPage && !location.search.includes("inject") && !location.search.includes("users")
+              isAdminPage && !location.search.includes("inject") && !location.search.includes("users") && !location.search.includes("warmup")
                 ? "bg-sidebar-accent text-sidebar-accent-foreground"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
             )}
@@ -268,6 +269,21 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
             >
               <User className="h-4 w-4 shrink-0" />
               {!sidebarCollapsed && <span>Users</span>}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => void navigate("/admin?tab=warmup")}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors",
+                isAdminPage && location.search.includes("warmup")
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              )}
+            >
+              <Flame className="h-4 w-4 shrink-0" />
+              {!sidebarCollapsed && <span>Email Warmup</span>}
             </button>
           )}
           {isAdmin && features.inject && (
