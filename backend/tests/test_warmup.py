@@ -11,11 +11,20 @@ from httpx import AsyncClient
 
 from app.warmup.models import WarmupProviderState
 from app.warmup.service import (
+    _BODIES,
+    _REPLIES,
+    _SUBJECTS,
     _dsn_feedback,
     apply_provider_feedback,
     detect_provider,
     extract_smtp_feedback,
 )
+
+
+def test_warmup_content_pools_are_varied_and_unique() -> None:
+    for pool in (_SUBJECTS, _BODIES, _REPLIES):
+        assert len(pool) >= 24
+        assert len(pool) == len(set(pool))
 
 
 async def test_account_credentials_are_write_only(client: AsyncClient) -> None:
