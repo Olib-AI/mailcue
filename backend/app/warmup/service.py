@@ -587,6 +587,42 @@ def _mark_local_seen_sync(local_address: str, sender: str) -> None:
             imap.logout()
 
 
+def clear_local_warmup_mailbox_sync(local_address: str, external_emails: list[str]) -> int:
+    """Purge sent and received warmup emails for configured external emails from the local mailbox."""
+    if not external_emails:
+        return 0
+    context = ssl.create_default_context()
+    if settings.imap_port == 993:
+        imap: imaplib.IMAP4 = imaplib.IMAP4_SSL(
+            settings.imap_host, settings.imap_port, ssl_context=context, timeout=30
+        )
+    else:
+        imap = imaplib.IMAP4(settings.imap_host, settings.imap_port, timeout=30)
+    deleted_count = 0
+    try:
+        imap.login(f"{local_address}*{settings.imap_master_user}", settings.imap_master_password)
+        # Check INBOX and Sent folders
+        for folder in ("INBOX", "Sent", "Sent Items", "INBOX.Sent"):
+            status, _ = imap.select(f'"{folder}"' if " " in folder else folder)
+            if status != "OK":
+                continue
+            for ext_email in external_emails:
+                # Find messages where external email is sender or recipient
+                for criteria in (f'FROM "{ext_email}"', f'TO "{ext_email}"'):
+                    search_status, data = imap.search(None, criteria)
+                    if search_status == "OK" and data and data[0]:
+                        msg_ids = data[0].split()
+                        if msg_ids:
+                            for msg_id in msg_ids:
+                                imap.store(msg_id, "+FLAGS", "\\Deleted")
+                            deleted_count += len(msg_ids)
+            imap.expunge()
+    finally:
+        with contextlib.suppress(Exception):
+            imap.logout()
+    return deleted_count
+
+
 def _dsn_feedback(message: Message) -> list[tuple[str, int | None, str | None, str]]:
     """Extract recipient/status tuples from an RFC 3464 delivery report."""
     results: list[tuple[str, int | None, str | None, str]] = []
@@ -965,6 +1001,15 @@ async def process_campaign(campaign_id: str) -> None:
             logger.exception("Warmup delivery failed for campaign %s", campaign.id)
         db.add(event)
         await db.commit()
+
+        if campaign.auto_clean_local_mailbox:
+            try:
+                external_emails = [a.email for a in accounts]
+                await asyncio.to_thread(
+                    clear_local_warmup_mailbox_sync, campaign.local_address, external_emails
+                )
+            except Exception:
+                logger.warning("Auto-clean of local warmup mailbox failed", exc_info=True)
 
 
 async def scheduler_loop() -> None:

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Activity, CheckCircle2, Pause, Pencil, Play, Plus, ShieldCheck, Square, Trash2, XCircle } from "lucide-react";
+import { Activity, CheckCircle2, Eraser, Pause, Pencil, Play, Plus, ShieldCheck, Square, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { useMailboxes } from "@/hooks/use-mailboxes";
 import {
   useCheckWarmupAccount,
+  useClearWarmupMailbox,
   useControlWarmupCampaign,
   useCreateWarmupAccount,
   useCreateWarmupCampaign,
@@ -43,6 +44,7 @@ const defaultCampaign: CreateWarmupCampaignRequest = {
   daily_ramp: 1, max_daily_volume: 20, min_delay_minutes: 30, max_delay_minutes: 120,
   reply_rate: 70, active_hour_start: 8, active_hour_end: 20,
   timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+  auto_clean_local_mailbox: false,
 };
 
 function errorMessage(error: unknown) {
@@ -71,6 +73,7 @@ export function WarmupManager() {
   const createCampaign = useCreateWarmupCampaign();
   const updateCampaign = useUpdateWarmupCampaign();
   const controlCampaign = useControlWarmupCampaign();
+  const clearMailbox = useClearWarmupMailbox();
   const resumeProvider = useResumeWarmupProvider();
 
   const setAccount = <K extends keyof CreateWarmupAccountRequest>(key: K, value: CreateWarmupAccountRequest[K]) =>
@@ -132,6 +135,7 @@ export function WarmupManager() {
       active_hour_start: campaign.active_hour_start,
       active_hour_end: campaign.active_hour_end,
       timezone: campaign.timezone,
+      auto_clean_local_mailbox: campaign.auto_clean_local_mailbox,
     });
     setEditingCampaignId(campaign.id);
     setShowCampaignForm(true);
@@ -212,15 +216,19 @@ export function WarmupManager() {
             <Field label="Active from (hour)"><Input type="number" min={0} max={23} value={campaignForm.active_hour_start} onChange={(e) => setCampaign("active_hour_start", Number(e.target.value))} /></Field>
             <Field label="Active until (hour)"><Input type="number" min={1} max={24} value={campaignForm.active_hour_end} onChange={(e) => setCampaign("active_hour_end", Number(e.target.value))} /></Field>
           </div>
+          <div className="flex items-center gap-2">
+            <Checkbox id="auto-clean-local" checked={campaignForm.auto_clean_local_mailbox ?? false} onCheckedChange={(val) => setCampaign("auto_clean_local_mailbox", Boolean(val))} />
+            <Label htmlFor="auto-clean-local" className="cursor-pointer text-sm font-normal">Auto-clean warmup emails from local mailbox (automatically purges sent & received warmup traffic after each run)</Label>
+          </div>
           <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={closeCampaignForm}>Cancel</Button><Button type="submit" disabled={createCampaign.isPending || updateCampaign.isPending || campaignForm.account_ids.length === 0 || !campaignForm.local_address}>{editingCampaignId ? "Save changes" : "Create campaign"}</Button></div>
         </form></CardContent></Card>}
         <div className="space-y-3">{campaigns.map((campaign) => <Card key={campaign.id}><CardContent className="pt-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><h3 className="font-semibold">{campaign.name}</h3><Badge variant={campaign.status === "active" ? "default" : "secondary"}>{campaign.status}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{campaign.local_address} · {campaign.messages_sent_today} outbound today · {campaign.total_sent} conversation messages · {campaign.total_failed} failed</p><p className="mt-1 text-xs text-muted-foreground">Plan: {campaign.start_daily_volume}/day +{campaign.daily_ramp}/day, capped at {campaign.max_daily_volume}; {campaign.min_delay_minutes}–{campaign.max_delay_minutes} min jitter</p></div>
-            <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openCampaignEditor(campaign)}><Pencil />Edit</Button>{campaign.status !== "active" && <Button size="sm" onClick={() => void control(campaign.id, "start")}><Play />{campaign.status === "paused" ? "Resume" : "Start"}</Button>}{campaign.status === "active" && <Button size="sm" variant="outline" onClick={() => void control(campaign.id, "pause")}><Pause />Pause</Button>}{campaign.status !== "stopped" && <Button size="sm" variant="destructive" onClick={() => void control(campaign.id, "stop")}><Square />Stop</Button>}</div></div></CardContent></Card>)}{campaigns.length === 0 && <p className="text-sm text-muted-foreground">No warmup campaigns yet.</p>}</div>
+            <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => openCampaignEditor(campaign)}><Pencil />Edit</Button><Button size="sm" variant="outline" disabled={clearMailbox.isPending} onClick={() => { if (window.confirm(`Purge sent and received warmup emails for ${campaign.name} from ${campaign.local_address}?`)) { void clearMailbox.mutateAsync(campaign.id).then((r) => toast.success(`Cleared ${r.deleted_count} warmup emails from ${campaign.local_address}`)).catch((err) => toast.error(errorMessage(err))); } }}><Eraser />Clear Mailbox</Button>{campaign.status !== "active" && <Button size="sm" onClick={() => void control(campaign.id, "start")}><Play />{campaign.status === "paused" ? "Resume" : "Start"}</Button>}{campaign.status === "active" && <Button size="sm" variant="outline" onClick={() => void control(campaign.id, "pause")}><Pause />Pause</Button>}{campaign.status !== "stopped" && <Button size="sm" variant="destructive" onClick={() => void control(campaign.id, "stop")}><Square />Stop</Button>}</div></div></CardContent></Card>)}{campaigns.length === 0 && <p className="text-sm text-muted-foreground">No warmup campaigns yet.</p>}</div>
       </section>
 
       <section className="space-y-3"><div><h2 className="text-lg font-semibold">Provider health</h2><p className="text-sm text-muted-foreground">Outbound volume is balanced per ISP. Deferrals cool down automatically; permanent failures require review.</p></div><div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">{providerStates.map((state) => <Card key={state.id}><CardContent className="pt-6"><div className="flex items-center justify-between"><span className="font-semibold capitalize">{state.provider}</span><Badge variant={state.status === "healthy" ? "default" : state.status === "blocked" ? "destructive" : "secondary"}>{state.status}</Badge></div><p className="mt-3 text-sm">{state.sent_today} outbound today · {state.failed_today} failed</p>{state.paused_until && <p className="mt-1 text-xs text-muted-foreground">Retry after {new Date(state.paused_until).toLocaleString()}</p>}{state.last_response && <p className="mt-2 line-clamp-2 text-xs text-destructive">{state.last_smtp_code ?? state.last_enhanced_status}: {state.last_response}</p>}{state.status === "blocked" && <Button className="mt-3" size="sm" variant="outline" onClick={() => resumeProvider.mutate(state.id)}>Resume after fix</Button>}</CardContent></Card>)}{providerStates.length === 0 && <p className="text-sm text-muted-foreground">Provider health appears after a campaign is created.</p>}</div></section>
 
-      <section className="space-y-3"><div className="flex items-center gap-2"><Activity className="h-5 w-5" /><h2 className="text-lg font-semibold">Recent activity</h2></div><Card><CardContent className="pt-6"><div className="divide-y">{events.map((event) => <div key={event.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">{event.status === "sent" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}<div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{event.subject}</p><p className="text-xs text-muted-foreground">{event.direction === "local_to_external" ? `MailCue → ${event.provider ?? "external"}` : event.direction === "external_to_local" ? `${event.provider ?? "External"} → MailCue` : `${event.provider ?? "Provider"} delivery feedback`} · {new Date(event.created_at).toLocaleString()}</p></div>{event.error && <span className="max-w-xs truncate text-xs text-destructive">{event.smtp_code ?? event.enhanced_status ?? "Error"}: {event.error}</span>}</div>)}{events.length === 0 && <p className="text-sm text-muted-foreground">No deliveries yet.</p>}</div></CardContent></Card></section>
+      <section className="space-y-3"><div className="flex items-center gap-2"><Activity className="h-5 w-5" /><h2 className="text-lg font-semibold">Recent activity</h2></div><Card><CardContent className="pt-6"><div className="divide-y">{events.slice(0, 5).map((event) => <div key={event.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">{event.status === "sent" ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-destructive" />}<div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{event.subject}</p><p className="text-xs text-muted-foreground">{event.direction === "local_to_external" ? `MailCue → ${event.provider ?? "external"}` : event.direction === "external_to_local" ? `${event.provider ?? "External"} → MailCue` : `${event.provider ?? "Provider"} delivery feedback`} · {new Date(event.created_at).toLocaleString()}</p></div>{event.error && <span className="max-w-xs truncate text-xs text-destructive">{event.smtp_code ?? event.enhanced_status ?? "Error"}: {event.error}</span>}</div>)}{events.length === 0 && <p className="text-sm text-muted-foreground">No deliveries yet.</p>}</div></CardContent></Card></section>
     </div>
   );
 }

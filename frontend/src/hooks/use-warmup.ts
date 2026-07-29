@@ -29,10 +29,10 @@ export function useWarmupCampaigns() {
   });
 }
 
-export function useWarmupEvents() {
+export function useWarmupEvents(limit: number = 5) {
   return useQuery({
-    queryKey: keys.events,
-    queryFn: () => api.get<WarmupEvent[]>("/warmup/events?limit=30"),
+    queryKey: [...keys.events, limit],
+    queryFn: () => api.get<WarmupEvent[]>(`/warmup/events?limit=${limit}`),
     refetchInterval: 15_000,
   });
 }
@@ -96,4 +96,13 @@ export function useUpdateWarmupCampaign() {
 export function useControlWarmupCampaign() {
   const invalidate = useInvalidateWarmup();
   return useMutation({ mutationFn: ({ id, action }: { id: string; action: "start" | "pause" | "stop" }) => api.post<WarmupCampaign>(`/warmup/campaigns/${id}/${action}`, {}), onSuccess: invalidate });
+}
+
+export function useClearWarmupMailbox() {
+  const invalidate = useInvalidateWarmup();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ ok: boolean; deleted_count: number }>(`/warmup/campaigns/${id}/clear-mailbox`, {}),
+    onSuccess: invalidate,
+  });
 }

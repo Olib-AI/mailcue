@@ -80,6 +80,7 @@ class WarmupCampaignCreate(BaseModel):
     active_hour_start: int = Field(default=8, ge=0, le=23)
     active_hour_end: int = Field(default=20, ge=1, le=24)
     timezone: str = Field(default="UTC", max_length=64)
+    auto_clean_local_mailbox: bool = False
 
     @field_validator("local_address")
     @classmethod
@@ -115,6 +116,7 @@ class WarmupCampaignResponse(BaseModel):
     active_hour_start: int
     active_hour_end: int
     timezone: str
+    auto_clean_local_mailbox: bool
     messages_sent_today: int
     total_sent: int
     total_failed: int

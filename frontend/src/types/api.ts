@@ -655,6 +655,7 @@ export interface WarmupCampaign {
   active_hour_start: number;
   active_hour_end: number;
   timezone: string;
+  auto_clean_local_mailbox: boolean;
   messages_sent_today: number;
   total_sent: number;
   total_failed: number;
@@ -677,6 +678,7 @@ export interface CreateWarmupCampaignRequest {
   active_hour_start: number;
   active_hour_end: number;
   timezone: string;
+  auto_clean_local_mailbox?: boolean;
 }
 
 export interface WarmupEvent {
