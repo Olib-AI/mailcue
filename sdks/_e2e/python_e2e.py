@@ -51,7 +51,7 @@ def main_sync() -> None:
     def t_create_mailbox():
         username = f"sdk-e2e-{uuid.uuid4().hex[:8]}"
         addr = f"{username}@mailcue.local"
-        mc.mailboxes.create(username, "testpass123", domain="mailcue.local")
+        mc.mailboxes.create(username, "testpass123!", domain="mailcue.local")
         return addr
 
     @step("emails.inject")
@@ -172,7 +172,7 @@ async def main_async() -> None:
         addr = f"{username}@mailcue.local"
         await step_async(
             "mailboxes.create",
-            mc.mailboxes.create(username, "testpass123", domain="mailcue.local"),
+            mc.mailboxes.create(username, "testpass123!", domain="mailcue.local"),
         )
         await step_async(
             "emails.inject",

@@ -34,7 +34,7 @@ let uid;
 
 try {
   await step('system.health', () => mc.system.health());
-  await step('mailboxes.create', () => mc.mailboxes.create({ username, password: 'testpass123', domain: 'mailcue.local' }));
+  await step('mailboxes.create', () => mc.mailboxes.create({ username, password: 'testpass123!', domain: 'mailcue.local' }));
   await step('emails.inject', () => mc.emails.inject({
     mailbox: addr,
     from: 'sender@example.com',
