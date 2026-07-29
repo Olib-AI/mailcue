@@ -69,7 +69,7 @@ async def test_account_requires_ownership_confirmation(client: AsyncClient) -> N
     assert response.status_code == 422
 
 
-async def test_campaign_lifecycle(client: AsyncClient, _engine_and_session) -> None:
+async def test_campaign_lifecycle(client: AsyncClient, _engine_and_session, monkeypatch) -> None:
     _engine, factory = _engine_and_session
     account_response = await client.post(
         "/api/v1/warmup/accounts",
@@ -142,6 +142,14 @@ async def test_campaign_lifecycle(client: AsyncClient, _engine_and_session) -> N
     assert response.status_code == 201, response.text
     campaign_id = response.json()["id"]
     assert response.json()["status"] == "draft"
+
+    monkeypatch.setattr(
+        "app.warmup.router.clear_local_warmup_mailbox_sync",
+        lambda _local_address, _external_emails: 7,
+    )
+    cleared = await client.post(f"/api/v1/warmup/campaigns/{campaign_id}/clear-mailbox", json={})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json() == {"ok": True, "deleted_count": 7}
 
     provider_states = await client.get(f"/api/v1/warmup/provider-states?campaign_id={campaign_id}")
     assert provider_states.status_code == 200

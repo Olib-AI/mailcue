@@ -203,6 +203,37 @@ async def edit_campaign(
     return WarmupCampaignResponse.model_validate(row)
 
 
+# Keep fixed campaign subroutes above the generic ``/{action}`` route.
+# Starlette resolves routes in declaration order, so otherwise
+# ``clear-mailbox`` is consumed as an action and returns the misleading
+# "Action must be start, pause, or stop" response.
+@router.post(
+    "/campaigns/{campaign_id}/clear-mailbox",
+    dependencies=[Depends(require_scope(scopes.WARMUP_MANAGE))],
+)
+async def clear_campaign_mailbox(
+    campaign_id: str,
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    row = await db.get(WarmupCampaign, campaign_id)
+    if row is None:
+        raise HTTPException(404, "Warmup campaign not found")
+    accounts = (
+        (await db.execute(select(WarmupAccount).where(WarmupAccount.id.in_(row.account_ids))))
+        .scalars()
+        .all()
+    )
+    external_emails = [a.email for a in accounts]
+    try:
+        deleted = await asyncio.to_thread(
+            clear_local_warmup_mailbox_sync, row.local_address, external_emails
+        )
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to clear local mailbox: {exc}") from exc
+    return {"ok": True, "deleted_count": deleted}
+
+
 @router.post(
     "/campaigns/{campaign_id}/{action}",
     response_model=WarmupCampaignResponse,
@@ -237,33 +268,6 @@ async def control_campaign(
     except ValueError as exc:
         raise _bad_request(exc) from exc
     return WarmupCampaignResponse.model_validate(row)
-
-
-@router.post(
-    "/campaigns/{campaign_id}/clear-mailbox",
-    dependencies=[Depends(require_scope(scopes.WARMUP_MANAGE))],
-)
-async def clear_campaign_mailbox(
-    campaign_id: str,
-    _admin: User = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, object]:
-    row = await db.get(WarmupCampaign, campaign_id)
-    if row is None:
-        raise HTTPException(404, "Warmup campaign not found")
-    accounts = (
-        (await db.execute(select(WarmupAccount).where(WarmupAccount.id.in_(row.account_ids))))
-        .scalars()
-        .all()
-    )
-    external_emails = [a.email for a in accounts]
-    try:
-        deleted = await asyncio.to_thread(
-            clear_local_warmup_mailbox_sync, row.local_address, external_emails
-        )
-    except Exception as exc:
-        raise HTTPException(500, f"Failed to clear local mailbox: {exc}") from exc
-    return {"ok": True, "deleted_count": deleted}
 
 
 @router.delete(
