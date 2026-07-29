@@ -148,6 +148,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    location = /email-frame.html {
+        include /etc/nginx/email_frame_headers.conf;
+        try_files $uri =404;
+    }
     location / {
         try_files $uri $uri/ /index.html;
     }

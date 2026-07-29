@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Email content</title>
+    <style>
+      html,
+      body {
+        height: auto !important;
+        min-height: 0 !important;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        box-sizing: border-box;
+        padding: 16px;
+        overflow-wrap: break-word;
+        color: var(--email-fg, #1f2937);
+        background: var(--email-bg, #ffffff);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      img,
+      table {
+        max-width: 100%;
+      }
+
+      img {
+        height: auto;
+      }
+
+      a {
+        color: #3b82f6;
+      }
+
+      pre,
+      code {
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+      }
+    </style>
+    <script src="/email-frame.js" defer></script>
+  </head>
+  <body>
+    <main id="email-content"></main>
+  </body>
+</html>

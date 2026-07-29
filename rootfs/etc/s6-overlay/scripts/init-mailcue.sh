@@ -601,6 +601,11 @@ server {
     }
 
     # --- Static frontend ---
+    location = /email-frame.html {
+        include /etc/nginx/email_frame_headers.conf;
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
