@@ -4,6 +4,7 @@ import {
   loginUser,
   logoutUser,
   fetchCurrentUser,
+  refreshAuth,
   verify2fa as verify2faApi,
 } from "@/lib/auth";
 import { setAccessToken, getAccessToken } from "@/lib/api";
@@ -102,7 +103,17 @@ export const useAuth = create<AuthState>((set, get) => ({
   initialize: async () => {
     const token = getAccessToken();
     if (!token) {
-      set({ isLoading: false });
+      const restored = await refreshAuth();
+      if (restored) {
+        set({
+          user: restored.user,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+      } else {
+        set({ user: null, isAuthenticated: false, isLoading: false });
+      }
       return;
     }
     try {

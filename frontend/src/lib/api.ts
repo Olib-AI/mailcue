@@ -2,11 +2,14 @@
 // API Client — thin fetch wrapper with JWT auth and auto-refresh
 // =============================================================================
 
+import type { LoginResponse } from "@/types/api";
+
 const BASE_URL = "/api/v1";
 
 // Access tokens stay in memory. The httpOnly refresh cookie restores a session
 // after reload without exposing a long-lived credential to JavaScript storage.
 let accessToken: string | null = null;
+let refreshRequest: Promise<LoginResponse | null> | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -16,19 +19,32 @@ export function getAccessToken(): string | null {
   return accessToken;
 }
 
+export function restoreSession(): Promise<LoginResponse | null> {
+  if (refreshRequest) return refreshRequest;
+
+  refreshRequest = (async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!response.ok) return null;
+
+      const data = (await response.json()) as LoginResponse;
+      setAccessToken(data.access_token);
+      return data;
+    } catch {
+      return null;
+    }
+  })().finally(() => {
+    refreshRequest = null;
+  });
+
+  return refreshRequest;
+}
+
 async function tryRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE_URL}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { access_token: string };
-    setAccessToken(data.access_token);
-    return true;
-  } catch {
-    return false;
-  }
+  return (await restoreSession()) !== null;
 }
 
 async function request<T>(

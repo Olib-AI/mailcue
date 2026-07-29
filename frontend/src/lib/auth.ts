@@ -2,7 +2,7 @@
 // Auth helpers — token storage and login/logout operations
 // =============================================================================
 
-import { api, setAccessToken } from "./api";
+import { api, restoreSession, setAccessToken } from "./api";
 import type {
   ChangePasswordRequest,
   LoginRequest,
@@ -53,14 +53,12 @@ export async function refreshAuth(): Promise<{
   user: User;
   token: string;
 } | null> {
-  try {
-    const response = await api.post<LoginResponse>("/auth/refresh");
-    setAccessToken(response.access_token);
-    return { user: response.user, token: response.access_token };
-  } catch {
+  const response = await restoreSession();
+  if (!response) {
     setAccessToken(null);
     return null;
   }
+  return { user: response.user, token: response.access_token };
 }
 
 export async function fetchCurrentUser(): Promise<User | null> {
