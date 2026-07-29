@@ -34,11 +34,14 @@ class EventBus:
     """
 
     def __init__(self) -> None:
-        self._subscribers: dict[str, asyncio.Queue[dict[str, Any]]] = {}
+        self._subscribers: dict[str, tuple[asyncio.Queue[dict[str, Any]], frozenset[str]]] = {}
         self._listeners: dict[str, list[EventListener]] = {}
 
     async def subscribe(
-        self, client_id: str | None = None
+        self,
+        client_id: str | None = None,
+        *,
+        allowed_mailboxes: set[str] | frozenset[str],
     ) -> tuple[str, asyncio.Queue[dict[str, Any]]]:
         """Register a new subscriber and return ``(client_id, queue)``.
 
@@ -47,7 +50,8 @@ class EventBus:
         if client_id is None:
             client_id = str(uuid.uuid4())
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
-        self._subscribers[client_id] = queue
+        normalized = frozenset(address.lower() for address in allowed_mailboxes)
+        self._subscribers[client_id] = (queue, normalized)
         logger.debug("SSE subscriber connected: %s (total=%d)", client_id, len(self._subscribers))
         return client_id, queue
 
@@ -78,7 +82,10 @@ class EventBus:
         logger.debug("Publishing event '%s' to %d subscribers", event_type, len(self._subscribers))
 
         stale: list[str] = []
-        for cid, queue in self._subscribers.items():
+        event_mailbox = self._event_mailbox(event_type, data)
+        for cid, (queue, allowed_mailboxes) in self._subscribers.items():
+            if event_mailbox is None or event_mailbox not in allowed_mailboxes:
+                continue
             try:
                 queue.put_nowait(message)
             except asyncio.QueueFull:
@@ -97,6 +104,22 @@ class EventBus:
                 await listener(event_type, data)
             except Exception:
                 logger.exception("Listener for event '%s' raised an exception.", event_type)
+
+    @staticmethod
+    def _event_mailbox(event_type: str, data: dict[str, Any]) -> str | None:
+        """Return the mailbox whose owner may receive an SSE event.
+
+        Events without an attributable mailbox are intentionally not exposed to
+        tenant streams. Internal listeners still receive every published event.
+        """
+        candidate: object | None
+        if event_type == "email.sent":
+            candidate = data.get("from")
+        else:
+            candidate = data.get("mailbox", data.get("address"))
+        if isinstance(candidate, str) and "@" in candidate:
+            return candidate.lower()
+        return None
 
     @property
     def subscriber_count(self) -> int:

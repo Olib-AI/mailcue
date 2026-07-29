@@ -10,6 +10,14 @@
 # =============================================================================
 set -eu
 
+if [ "${MAILCUE_MODE:-test}" = "production" ]; then
+    echo "[init-provider-proxies] Disabled in production mode."
+    MAILCUE_PROVIDER_PROXIES_ENABLED=false \
+        /opt/mailcue/venv/bin/python -m app.sandbox.scripts.generate_provider_nginx \
+        || echo "[init-provider-proxies] conf emission failed; continuing."
+    exit 0
+fi
+
 if [ "${MAILCUE_PROVIDER_PROXIES_ENABLED:-true}" = "false" ] \
    || [ "${MAILCUE_PROVIDER_PROXIES_ENABLED:-true}" = "0" ] \
    || [ "${MAILCUE_PROVIDER_PROXIES_ENABLED:-true}" = "no" ]; then

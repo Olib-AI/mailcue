@@ -35,7 +35,7 @@ def upgrade() -> None:
             sa.Column(
                 "enabled",
                 sa.Boolean(),
-                server_default=sa.text("1"),
+                server_default=sa.true(),
                 nullable=False,
             ),
             sa.Column(

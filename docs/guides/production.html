@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Production Deployment — MailCue Documentation</title>
+<title>Production Deployment - MailCue Documentation</title>
 <meta name="description" content="Hardened mode, DNS records, and TLS certificates.">
 <link rel="canonical" href="https://olib-ai.github.io/mailcue/guides/production.html" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olib-ai.github.io/mailcue/guides/production.html">
-<meta property="og:title" content="Production Deployment — MailCue Documentation">
+<meta property="og:title" content="Production Deployment - MailCue Documentation">
 <meta property="og:description" content="Hardened mode, DNS records, and TLS certificates.">
 <meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image">
 <meta property="twitter:url" content="https://olib-ai.github.io/mailcue/guides/production.html">
-<meta property="twitter:title" content="Production Deployment — MailCue Documentation">
+<meta property="twitter:title" content="Production Deployment - MailCue Documentation">
 <meta property="twitter:description" content="Hardened mode, DNS records, and TLS certificates.">
 <meta property="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
@@ -485,16 +485,35 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <li><strong>MTA-STS</strong>: Policy switches from <code>mode: testing</code> to <code>mode: enforce</code></li>
 <li><strong>Cookies</strong>: Secure flag enabled, SameSite set to <code>strict</code></li>
 <li><strong>Mailboxes</strong>: Domain validation enforced, so mailboxes can only be created for registered domains</li>
+<li><strong>Tenant isolation</strong>: Forwarding, event streams, API keys, and GPG keys are restricted to their owning user</li>
+<li><strong>Sessions</strong>: Refresh tokens rotate once, logout and password changes revoke existing tokens</li>
+<li><strong>Startup validation</strong>: Known passwords, missing TLS, wildcard CORS, and weak secrets stop startup</li>
 </ul>
+<h2>Required security settings</h2>
+<p>Production startup fails until all of these are configured:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">MAILCUE_MODE</span><span class="o">=</span><span class="n">production</span>
+<span class="n">MAILCUE_DOMAIN</span><span class="o">=</span><span class="n">example</span><span class="p">.</span><span class="n">com</span>
+<span class="n">MAILCUE_HOSTNAME</span><span class="o">=</span><span class="n">mail</span><span class="p">.</span><span class="n">example</span><span class="p">.</span><span class="n">com</span>
+<span class="n">MAILCUE_ADMIN_PASSWORD</span><span class="o">=</span><span class="n">a</span><span class="o">-</span><span class="k">unique</span><span class="o">-</span><span class="n">password</span><span class="o">-</span><span class="k">of</span><span class="o">-</span><span class="k">at</span><span class="o">-</span><span class="n">least</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="n">characters</span>
+<span class="n">MAILCUE_SECRET_KEY</span><span class="o">=</span><span class="n">generate</span><span class="o">-</span><span class="k">with</span><span class="o">-</span><span class="n">openssl</span><span class="o">-</span><span class="nf">rand</span><span class="o">-</span><span class="n">hex</span><span class="o">-</span><span class="mi">32</span>
+<span class="n">MAILCUE_IMAP_MASTER_PASSWORD</span><span class="o">=</span><span class="n">generate</span><span class="o">-</span><span class="n">a</span><span class="o">-</span><span class="n">different</span><span class="o">-</span><span class="n">secret</span><span class="o">-</span><span class="k">with</span><span class="o">-</span><span class="n">openssl</span><span class="o">-</span><span class="nf">rand</span><span class="o">-</span><span class="n">hex</span><span class="o">-</span><span class="mi">32</span>
+<span class="n">MAILCUE_ACME_EMAIL</span><span class="o">=</span><span class="n">postmaster</span><span class="nv">@example</span><span class="p">.</span><span class="n">com</span>
+<span class="n">MAILCUE_CORS_ORIGINS</span><span class="o">=</span><span class="err">[]</span>
+</code></pre></div>
+
+<p>Generate the application and Dovecot secrets separately. Do not reuse either
+secret as the admin password or database password.</p>
 <h2>Docker Compose (production)</h2>
 <p>The easiest way to deploy is the standalone <a href="../../docker-compose.deploy.yml"><code>docker-compose.deploy.yml</code></a>:</p>
 <div class="codehilite"><pre><span></span><code><span class="c1"># 1. Download the deploy file to your server</span>
 curl<span class="w"> </span>-O<span class="w"> </span>https://raw.githubusercontent.com/Olib-AI/mailcue/main/docker-compose.deploy.yml
 
-<span class="c1"># 2. Replace the placeholder values</span>
+<span class="c1"># 2. Replace every placeholder value. Generate the two secrets separately.</span>
 sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/CHANGE_ME_DOMAIN/yourdomain.com/g&#39;</span><span class="w"> </span>docker-compose.deploy.yml
 sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/CHANGE_ME_PASSWORD/your-strong-password/g&#39;</span><span class="w"> </span>docker-compose.deploy.yml
 sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/CHANGE_ME_EMAIL/you@example.com/g&#39;</span><span class="w"> </span>docker-compose.deploy.yml
+openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span>
+openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span>
 
 <span class="c1"># 3. Deploy</span>
 docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.deploy.yml<span class="w"> </span>up<span class="w"> </span>-d
@@ -504,12 +523,119 @@ docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> 
 <div class="codehilite"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span>-f<span class="w"> </span>docker-compose.yml<span class="w"> </span>-f<span class="w"> </span>docker-compose.production.yml<span class="w"> </span>up<span class="w"> </span>-d
 </code></pre></div>
 
+<h2>PostgreSQL for production</h2>
+<p>SQLite remains suitable for small and single-user installations. For sustained
+concurrent API, sandbox, HTTP-bin, or warmup traffic, configure an external
+PostgreSQL 14+ database:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">MAILCUE_DATABASE_BACKEND</span><span class="o">=</span><span class="n">postgresql</span>
+<span class="n">MAILCUE_DATABASE_HOST</span><span class="o">=</span><span class="n">db</span><span class="p">.</span><span class="n">example</span><span class="p">.</span><span class="n">com</span>
+<span class="n">MAILCUE_DATABASE_PORT</span><span class="o">=</span><span class="mi">5432</span>
+<span class="n">MAILCUE_DATABASE_USER</span><span class="o">=</span><span class="n">mailcue</span>
+<span class="n">MAILCUE_DATABASE_PASSWORD</span><span class="o">=</span><span class="n">replace</span><span class="o">-</span><span class="n">me</span>
+<span class="n">MAILCUE_DATABASE_NAME</span><span class="o">=</span><span class="n">mailcue</span>
+<span class="n">MAILCUE_DATABASE_SSLMODE</span><span class="o">=</span><span class="n">verify</span><span class="o">-</span><span class="n">full</span>
+</code></pre></div>
+
+<p>Use a migration role that can create and alter tables and indexes. The runtime
+role only needs data access. Configure the two roles separately:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">MAILCUE_MIGRATION_DATABASE_URL</span><span class="o">=</span><span class="n">postgresql</span><span class="o">+</span><span class="nl">psycopg</span><span class="p">:</span><span class="o">//</span><span class="nl">mailcue_migrator</span><span class="p">:</span><span class="n">password</span><span class="nv">@db</span><span class="p">.</span><span class="n">example</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">mailcue</span><span class="vm">?</span><span class="n">sslmode</span><span class="o">=</span><span class="n">verify</span><span class="o">-</span><span class="k">full</span>
+<span class="n">MAILCUE_DATABASE_URL</span><span class="o">=</span><span class="n">postgresql</span><span class="o">+</span><span class="nl">psycopg</span><span class="p">:</span><span class="o">//</span><span class="nl">mailcue_app</span><span class="p">:</span><span class="n">password</span><span class="nv">@db</span><span class="p">.</span><span class="n">example</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">mailcue</span><span class="vm">?</span><span class="n">sslmode</span><span class="o">=</span><span class="n">verify</span><span class="o">-</span><span class="k">full</span>
+</code></pre></div>
+
+<p>Migrations run under a PostgreSQL advisory lock, so concurrent container starts
+cannot change the schema simultaneously.</p>
+<h3>Run PostgreSQL as its own container</h3>
+<p>The following Compose override adds PostgreSQL 17 on the same private Docker
+network as MailCue. PostgreSQL is not published on a host port. Store both
+password values in <code>.env</code>, use a unique strong password, and keep the database
+volume in your backup plan.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># docker-compose.postgres.yml</span>
+<span class="nt">services</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">postgres</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres:17</span>
+<span class="w">    </span><span class="nt">restart</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">unless-stopped</span>
+<span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">POSTGRES_USER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mailcue</span>
+<span class="w">      </span><span class="nt">POSTGRES_PASSWORD</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${MAILCUE_POSTGRES_PASSWORD:?set in .env}</span>
+<span class="w">      </span><span class="nt">POSTGRES_DB</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mailcue</span>
+<span class="w">    </span><span class="nt">volumes</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mailcue-postgres:/var/lib/postgresql/data</span>
+<span class="w">    </span><span class="nt">healthcheck</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">test</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">&quot;CMD-SHELL&quot;</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">&quot;pg_isready</span><span class="nv"> </span><span class="s">-U</span><span class="nv"> </span><span class="s">mailcue</span><span class="nv"> </span><span class="s">-d</span><span class="nv"> </span><span class="s">mailcue&quot;</span><span class="p p-Indicator">]</span>
+<span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">      </span><span class="nt">timeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5s</span>
+<span class="w">      </span><span class="nt">retries</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">12</span>
+
+<span class="w">  </span><span class="nt">mailcue</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">depends_on</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">postgres</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">condition</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">service_healthy</span>
+<span class="w">    </span><span class="nt">environment</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_BACKEND</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgresql</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_HOST</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">postgres</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_PORT</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5432</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_USER</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mailcue</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_PASSWORD</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${MAILCUE_POSTGRES_PASSWORD:?set in .env}</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_NAME</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mailcue</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_SSLMODE</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">disable</span>
+<span class="w">      </span><span class="nt">MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+
+<span class="nt">volumes</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">mailcue-postgres</span><span class="p">:</span>
+</code></pre></div>
+
+<p>Start the production files together:</p>
+<div class="codehilite"><pre><span></span><code>docker<span class="w"> </span>compose<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>docker-compose.deploy.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-f<span class="w"> </span>docker-compose.postgres.yml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>up<span class="w"> </span>-d
+</code></pre></div>
+
+<p>Do not publish port 5432 unless administrators genuinely need remote database
+access. If it must be published, restrict it with a firewall and configure
+PostgreSQL TLS and host-based authentication.</p>
+<h3>Migrate from SQLite or SQLCipher</h3>
+<p>The transfer is deliberately offline. It never modifies or deletes the SQLite
+source, creates a timestamped backup beside it, refuses a non-empty PostgreSQL
+target, and validates row counts and primary-key hashes before committing.</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Pull the new image and start once with the existing SQLite settings.</span>
+<span class="c1">#    This upgrades SQLite to the current schema.</span>
+docker<span class="w"> </span>compose<span class="w"> </span>pull<span class="w"> </span>mailcue
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>mailcue
+
+<span class="c1"># 2. Stop every MailCue replica to prevent writes during the copy.</span>
+docker<span class="w"> </span>compose<span class="w"> </span>stop<span class="w"> </span>mailcue
+
+<span class="c1"># 3. Add the PostgreSQL settings above to .env, then run the one-time copier.</span>
+docker<span class="w"> </span>compose<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--no-deps<span class="w"> </span>--entrypoint<span class="w"> </span>mailcue-db<span class="w"> </span>mailcue<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sqlite-to-postgres<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--source<span class="w"> </span>/var/lib/mailcue/mailcue.db<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--yes-i-have-stopped-mailcue
+
+<span class="c1"># 4. Start MailCue against PostgreSQL and inspect health/logs.</span>
+docker<span class="w"> </span>compose<span class="w"> </span>up<span class="w"> </span>-d<span class="w"> </span>mailcue
+docker<span class="w"> </span>compose<span class="w"> </span>logs<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span><span class="w"> </span>mailcue
+</code></pre></div>
+
+<p>The PostgreSQL target must be empty. The command creates the current schema,
+copies tables in foreign-key order, resets PostgreSQL sequences, and compares
+the row count and primary-key hash for every copied table. It exits without
+committing the target data if validation fails.</p>
+<p>For SQLCipher, leave <code>MAILCUE_DATABASE_ENCRYPTION_KEY</code> set during step 3 so the
+copier can read the encrypted source. After successful cutover, PostgreSQL does
+not use that key. To roll back, stop MailCue, restore the SQLite database
+settings, and restart; the original SQLite file remains untouched.</p>
+<p>This migration covers application metadata and captured sandbox data. Maildir
+email content remains in <code>/var/mail/vhosts</code> and is not moved into PostgreSQL.
+Keep the SQLite backup until the PostgreSQL deployment has passed application,
+login, mailbox, and sandbox checks and has been included in a successful
+database backup.</p>
 <h2>TLS Certificates</h2>
 <p>Production mode supports three approaches:</p>
 <ol>
 <li><strong>Let's Encrypt (automatic)</strong>: Set <code>MAILCUE_ACME_EMAIL=you@example.com</code> and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup.</li>
 <li><strong>External certificates</strong>: Set <code>MAILCUE_TLS_CERT_PATH</code> and <code>MAILCUE_TLS_KEY_PATH</code> to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning.</li>
-<li><strong>Upload via API</strong>: Use <code>PUT /api/v1/system/tls</code> to upload certificate and key through the admin UI or API.</li>
+<li><strong>Upload via API</strong>: Use <code>PUT /api/v1/system/tls</code> to rotate a certificate after production has started with ACME or externally mounted certificates.</li>
 </ol>
 <h2>DNS Requirements</h2>
 <p>For each domain, configure the following DNS records. The domain management UI (<code>/api/v1/domains/:name</code>) provides the exact values for your setup. Replace <code>example.com</code> with your domain and <code>mail.example.com</code> with your mail server hostname.</p>

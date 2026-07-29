@@ -30,13 +30,13 @@ def upgrade() -> None:
         op.add_column(
             "server_settings",
             sa.Column(
-                "catch_all_enabled", sa.Boolean(), nullable=False, server_default=sa.text("0")
+                "catch_all_enabled", sa.Boolean(), nullable=False, server_default=sa.false()
             ),
         )
     if not _column_exists("mailboxes", "is_catchall"):
         op.add_column(
             "mailboxes",
-            sa.Column("is_catchall", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+            sa.Column("is_catchall", sa.Boolean(), nullable=False, server_default=sa.false()),
         )
 
 

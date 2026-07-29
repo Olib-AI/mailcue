@@ -33,6 +33,7 @@ node_modules
 
 # Documentation and project metadata
 docs/
+sdks/
 .claude/
 CLAUDE.md
 

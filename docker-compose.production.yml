@@ -15,6 +15,9 @@
 
 services:
   mailcue:
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
     ports:
       # HTTPS — Nginx reverse proxy with TLS
       - "443:443"
@@ -40,6 +43,13 @@ services:
       # Used for JWT tokens, TOTP secrets, etc. Generate with:
       #   openssl rand -hex 32
       - MAILCUE_SECRET_KEY=CHANGE_ME_GENERATE_WITH_OPENSSL_RAND
+
+      # --- Dovecot API master credential (required) ---
+      # Generate separately with: openssl rand -hex 32
+      - MAILCUE_IMAP_MASTER_PASSWORD=CHANGE_ME_GENERATE_ANOTHER_RANDOM_SECRET
+
+      # Provider interception proxies are a sandbox feature and stay disabled.
+      - MAILCUE_PROVIDER_PROXIES_ENABLED=false
 
       # --- Let's Encrypt / ACME (optional) ---
       # Set your email to automatically request a Let's Encrypt certificate.

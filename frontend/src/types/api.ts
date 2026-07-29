@@ -20,7 +20,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string | null;
   token_type: string;
   user: User;
 }

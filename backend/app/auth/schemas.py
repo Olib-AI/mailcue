@@ -157,7 +157,7 @@ class TokenResponse(BaseModel):
     """JWT access + refresh token pair, including the authenticated user."""
 
     access_token: str
-    refresh_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
     user: UserResponse
 

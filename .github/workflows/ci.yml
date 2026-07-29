@@ -6,10 +6,27 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   backend:
     name: Backend Lint & Type Check
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mailcue
+          POSTGRES_PASSWORD: mailcue-test
+          POSTGRES_DB: mailcue
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mailcue"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -31,6 +48,16 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
 
+      - name: SQLite migrations and tests
+        run: pytest -q
+
+      - name: PostgreSQL migration chain and schema check
+        env:
+          MAILCUE_DATABASE_URL: postgresql+psycopg://mailcue:mailcue-test@127.0.0.1:5432/mailcue
+        run: |
+          alembic upgrade head
+          alembic check
+
   frontend:
     name: Frontend Lint & Type Check
     runs-on: ubuntu-latest
@@ -47,7 +74,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: ESLint
         run: npm run lint

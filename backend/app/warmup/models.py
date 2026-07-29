@@ -5,8 +5,17 @@ from __future__ import annotations
 from datetime import datetime
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -28,23 +37,48 @@ class WarmupAccount(Base):
     imap_security: Mapped[str] = mapped_column(String(12), nullable=False, default="ssl")
     username: Mapped[str] = mapped_column(String(320), nullable=False)
     password_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("1"))
-    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("0"))
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.true())
+    verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.false())
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=sa.func.now())
+    campaign_links: Mapped[list[WarmupCampaignAccount]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
+
+
+class WarmupCampaignAccount(Base):
+    """Ordered many-to-many link between campaigns and external accounts."""
+
+    __tablename__ = "warmup_campaign_accounts"
+
+    campaign_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("warmup_campaigns.id", ondelete="CASCADE"), primary_key=True
+    )
+    account_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("warmup_accounts.id", ondelete="CASCADE"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    campaign: Mapped[WarmupCampaign] = relationship(back_populates="account_links")
+    account: Mapped[WarmupAccount] = relationship(back_populates="campaign_links")
 
 
 class WarmupCampaign(Base):
     """A gradual, rate-capped warmup plan for one local sender."""
 
     __tablename__ = "warmup_campaigns"
+    __table_args__ = (Index("ix_warmup_campaigns_status_next_run", "status", "next_run_at", "id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     local_address: Mapped[str] = mapped_column(String(320), nullable=False)
-    account_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    account_links: Mapped[list[WarmupCampaignAccount]] = relationship(
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="WarmupCampaignAccount.position",
+    )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
     start_daily_volume: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     daily_ramp: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -66,15 +100,42 @@ class WarmupCampaign(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=sa.func.now())
 
+    @property
+    def account_ids(self) -> list[str]:
+        return [link.account_id for link in self.account_links]
+
+    @account_ids.setter
+    def account_ids(self, values: list[str]) -> None:
+        self.account_links = [
+            WarmupCampaignAccount(account_id=account_id, position=position)
+            for position, account_id in enumerate(values)
+        ]
+
 
 class WarmupEvent(Base):
     """Audit record for each scheduler attempt."""
 
     __tablename__ = "warmup_events"
+    __table_args__ = (
+        Index(
+            "ix_warmup_events_campaign_account_status_created",
+            "campaign_id",
+            "account_id",
+            "status",
+            "created_at",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("warmup_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    account_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("warmup_accounts.id", ondelete="SET NULL"), nullable=True
+    )
     provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
     direction: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -93,7 +154,12 @@ class WarmupProviderState(Base):
     __table_args__ = (UniqueConstraint("campaign_id", "provider"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    campaign_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("warmup_campaigns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="healthy")
     sent_today: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

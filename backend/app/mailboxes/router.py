@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import scopes
@@ -144,6 +144,13 @@ async def create_new_mailbox(
 
     Any authenticated user can create mailboxes up to their quota.
     """
+    from app.config import settings
+
+    if settings.is_production and not auth.user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators may provision mailbox addresses in production",
+        )
     mailbox = await create_mailbox(body, db, user_id=auth.user.id)
     local_part = (
         mailbox.address.split("@", maxsplit=1)[0] if "@" in mailbox.address else mailbox.address
@@ -279,7 +286,9 @@ async def get_mailbox_email(
     """Fetch a single email by UID from a specific mailbox."""
     await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
-    return await get_email(mailbox=decoded, uid=uid, folder=folder, db=db)
+    return await get_email(
+        mailbox=decoded, uid=uid, folder=folder, db=db, gpg_user_id=auth.user.id
+    )
 
 
 @router.post(

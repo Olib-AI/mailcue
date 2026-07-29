@@ -89,9 +89,9 @@ async def _parse_send_body(request: Request) -> SendSMSRequest:
                     else ([v] if (v := form.get(key)) is not None else [])
                 )
                 media.extend([str(v) for v in values if v])
-        payload = {k: str(v) for k, v in form.items() if k != "MediaUrl"}
+        payload: dict[str, Any] = {k: str(v) for k, v in form.items() if k != "MediaUrl"}
         if media:
-            payload["MediaUrl"] = media  # type: ignore[assignment]
+            payload["MediaUrl"] = media
         return SendSMSRequest(**payload)
     data: Any = await request.json()
     if isinstance(data, dict) and "MediaUrl" in data and isinstance(data["MediaUrl"], str):

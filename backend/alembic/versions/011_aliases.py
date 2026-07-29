@@ -29,10 +29,20 @@ def upgrade() -> None:
             sa.Column("source_address", sa.String(255), unique=True, index=True, nullable=False),
             sa.Column("destination_address", sa.String(255), nullable=False),
             sa.Column("domain", sa.String(255), index=True, nullable=False),
-            sa.Column("is_catchall", sa.Boolean(), server_default="0", nullable=False),
-            sa.Column("enabled", sa.Boolean(), server_default="1", nullable=False),
-            sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-            sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+            sa.Column("is_catchall", sa.Boolean(), server_default=sa.false(), nullable=False),
+            sa.Column("enabled", sa.Boolean(), server_default=sa.true(), nullable=False),
+            sa.Column(
+                "created_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
+            sa.Column(
+                "updated_at",
+                sa.DateTime(timezone=True),
+                server_default=sa.func.now(),
+                nullable=False,
+            ),
         )
 
 

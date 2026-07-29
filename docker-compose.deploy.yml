@@ -1,8 +1,8 @@
 # =============================================================================
-# MailCue — Production Deployment (standalone)
+# MailCue - Production Deployment (standalone)
 # =============================================================================
 # A single-file compose for deploying MailCue in production mode.
-# Uses the pre-built image from GHCR — no local build required.
+# Uses the pre-built image from GHCR. No local build is required.
 #
 # Usage:
 #   1. Copy this file to your server
@@ -14,7 +14,7 @@
 #   MX    yourdomain.com       →  10 mail.yourdomain.com.
 #   TXT   yourdomain.com       →  v=spf1 mx a:mail.yourdomain.com ~all
 #   TXT   mail.yourdomain.com  →  v=spf1 a -all
-#   TXT   mail._domainkey....  →  (DKIM key — run: docker exec mailcue cat /etc/opendkim/keys/yourdomain.com/mail.txt)
+#   TXT   mail._domainkey....  →  (DKIM key; run: docker exec mailcue cat /etc/opendkim/keys/yourdomain.com/mail.txt)
 #   TXT   _dmarc.yourdomain..  →  v=DMARC1; p=reject; rua=mailto:postmaster@yourdomain.com
 #   PTR   <server-ip>          →  mail.yourdomain.com (set at your VPS provider)
 # =============================================================================
@@ -23,18 +23,19 @@ services:
   mailcue:
     image: ghcr.io/olib-ai/mailcue:latest
     container_name: mailcue
-    # Set hostname to your mail server FQDN — used in SMTP EHLO greeting
+    # Set hostname to your mail server FQDN. It is used in the SMTP EHLO greeting.
     hostname: mail.CHANGE_ME_DOMAIN
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
     ports:
       - "80:80"       # HTTP (Nginx + ACME challenge)
       - "443:443"     # HTTPS (Nginx with TLS)
       - "25:25"       # SMTP (inbound MTA-to-MTA)
       - "465:465"     # SMTPS (submission over implicit TLS)
       - "587:587"     # SMTP Submission (STARTTLS + SASL)
-      - "143:143"     # IMAP (STARTTLS)
       - "993:993"     # IMAPS (implicit TLS)
-      - "110:110"     # POP3 (STARTTLS)
       - "995:995"     # POP3S (implicit TLS)
     environment:
       # --- Required settings ---
@@ -42,6 +43,9 @@ services:
       - MAILCUE_DOMAIN=CHANGE_ME_DOMAIN
       - MAILCUE_HOSTNAME=mail.CHANGE_ME_DOMAIN
       - MAILCUE_ADMIN_PASSWORD=CHANGE_ME_PASSWORD
+      - MAILCUE_SECRET_KEY=CHANGE_ME_GENERATE_WITH_OPENSSL_RAND
+      - MAILCUE_IMAP_MASTER_PASSWORD=CHANGE_ME_GENERATE_ANOTHER_RANDOM_SECRET
+      - MAILCUE_PROVIDER_PROXIES_ENABLED=false
 
       # --- Let's Encrypt (recommended) ---
       # Set your email for automatic TLS certificate provisioning.
@@ -58,6 +62,17 @@ services:
       # - MAILCUE_RELAY_PORT=587
       # - MAILCUE_RELAY_USER=
       # - MAILCUE_RELAY_PASSWORD=
+
+      # --- External PostgreSQL (recommended for larger installations) ---
+      # A full MAILCUE_DATABASE_URL may be used instead of these values.
+      # - MAILCUE_DATABASE_BACKEND=postgresql
+      # - MAILCUE_DATABASE_HOST=db.example.com
+      # - MAILCUE_DATABASE_PORT=5432
+      # - MAILCUE_DATABASE_USER=mailcue
+      # - MAILCUE_DATABASE_PASSWORD=CHANGE_ME_DATABASE_PASSWORD
+      # - MAILCUE_DATABASE_NAME=mailcue
+      # - MAILCUE_DATABASE_SSLMODE=verify-full
+      # - MAILCUE_MIGRATION_DATABASE_URL=postgresql+psycopg://mailcue_migrator:password@db.example.com/mailcue?sslmode=verify-full
     volumes:
       - mailcue-data:/var/mail/vhosts          # Email storage (Maildir)
       - mailcue-db:/var/lib/mailcue            # Database + GPG keys

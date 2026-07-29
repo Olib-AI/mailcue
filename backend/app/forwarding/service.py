@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
-import re
+import socket
 from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+import regex
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +26,7 @@ from app.forwarding.schemas import (
     TestRuleResponse,
     WebhookConfig,
 )
+from app.mailboxes.models import Mailbox
 
 logger = logging.getLogger("mailcue.forwarding")
 
@@ -133,10 +136,37 @@ def _matches_pattern(pattern: str | None, value: str) -> bool:
     if not pattern:
         return True
     try:
-        return re.search(pattern, value, re.IGNORECASE) is not None
-    except re.error:
-        logger.warning("Invalid regex in forwarding rule pattern: %s", pattern)
+        return regex.search(pattern, value, regex.IGNORECASE, timeout=0.05) is not None
+    except (regex.error, TimeoutError):
+        logger.warning("Invalid or excessively expensive forwarding regex")
         return False
+
+
+async def _validate_webhook_destination(url: str) -> None:
+    """Reject webhook destinations that resolve to non-public networks."""
+    parsed = httpx.URL(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.host:
+        raise ValidationError("Webhook URL must use HTTP or HTTPS")
+    if parsed.username or parsed.password:
+        raise ValidationError("Webhook URL must not contain embedded credentials")
+    try:
+        addresses = (
+            await __import__("asyncio")
+            .get_running_loop()
+            .getaddrinfo(
+                parsed.host,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        )
+    except socket.gaierror as exc:
+        raise ValidationError("Webhook hostname could not be resolved") from exc
+    if not addresses:
+        raise ValidationError("Webhook hostname did not resolve")
+    for entry in addresses:
+        address = ipaddress.ip_address(entry[4][0])
+        if not address.is_global:
+            raise ValidationError("Webhook destinations must resolve only to public IP addresses")
 
 
 def evaluate_rule(
@@ -250,11 +280,13 @@ async def _execute_webhook(
     email_data: dict[str, Any],
 ) -> None:
     """POST the email data as JSON to the configured webhook URL."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    url = str(config.url)
+    await _validate_webhook_destination(url)
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
         try:
             response = await client.request(
                 method=config.method,
-                url=config.url,
+                url=url,
                 json=email_data,
                 headers=config.headers,
             )
@@ -303,7 +335,19 @@ async def process_incoming_email(
     Errors in individual rule actions are logged but do not abort processing
     of remaining rules.
     """
-    stmt = select(ForwardingRule).where(ForwardingRule.enabled.is_(True))
+    owner_stmt = select(Mailbox.user_id).where(
+        Mailbox.address == mailbox.lower(),
+        Mailbox.is_active.is_(True),
+    )
+    owner_id = (await db.execute(owner_stmt)).scalar_one_or_none()
+    if owner_id is None:
+        logger.warning("Skipping forwarding for unowned mailbox %s", mailbox)
+        return 0
+
+    stmt = select(ForwardingRule).where(
+        ForwardingRule.enabled.is_(True),
+        ForwardingRule.user_id == owner_id,
+    )
     result = await db.execute(stmt)
     rules = list(result.scalars().all())
 

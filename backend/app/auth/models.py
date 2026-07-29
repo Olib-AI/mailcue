@@ -45,6 +45,9 @@ class User(Base):
     locked_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
     )
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     # ── Mailbox quota ──────────────────────────────────────────────
     max_mailboxes: Mapped[int] = mapped_column(Integer, default=5)

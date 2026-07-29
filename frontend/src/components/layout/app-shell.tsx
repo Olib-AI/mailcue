@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet } from "react-router";
 import { X } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";

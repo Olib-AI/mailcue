@@ -484,6 +484,18 @@ async def rebuild_postfix_virtual_mailboxes(db: AsyncSession) -> None:
                 capture_output=True,
             )
 
+            # Bind SMTP AUTH identities to their permitted envelope sender.
+            # Dovecot authenticates mailbox users by their complete address.
+            sender_login_path = Path("/etc/postfix/sender_login_maps")
+            sender_login_path.write_text(
+                "\n".join(f"{mb.address}    {mb.address}" for mb in mailboxes) + "\n"
+            )
+            subprocess.run(
+                ["postmap", str(sender_login_path)],
+                check=False,
+                capture_output=True,
+            )
+
             if settings.is_production:
                 catchall_path = Path("/etc/postfix/virtual_mailboxes_catchall")
                 if catch_all_enabled and active_domains:

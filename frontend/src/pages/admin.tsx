@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MailboxManager } from "@/components/admin/mailbox-manager";
 import { InjectForm } from "@/components/admin/inject-form";

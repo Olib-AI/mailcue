@@ -56,9 +56,10 @@ if certbot certonly --webroot \
 
     # Generate Nginx HTTPS config
     mkdir -p /etc/nginx/conf.d
+    sed -i 's/listen 80 default_server;/listen 127.0.0.1:8081;/' /etc/nginx/nginx.conf
     cat > /etc/nginx/conf.d/https.conf << 'NGINXHTTPS'
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;
     location /.well-known/acme-challenge/ {
         root /var/www/acme-challenge;
@@ -79,6 +80,7 @@ server {
     ssl_session_cache   shared:SSL:10m;
     ssl_session_timeout 1d;
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    include /etc/nginx/security_headers.conf;
 
     root /var/www/mailcue;
     index index.html;
@@ -132,6 +134,7 @@ server {
         chunked_transfer_encoding off;
         proxy_read_timeout 3600s;
         add_header X-Accel-Buffering no;
+        include /etc/nginx/security_headers.conf;
     }
     location /.well-known/acme-challenge/ {
         root /var/www/acme-challenge;
@@ -151,6 +154,7 @@ server {
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 7d;
         add_header Cache-Control "public, immutable";
+        include /etc/nginx/security_headers.conf;
         try_files $uri =404;
     }
 }

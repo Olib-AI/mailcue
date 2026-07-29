@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Configuration — MailCue Documentation</title>
+<title>Configuration - MailCue Documentation</title>
 <meta name="description" content="Environment variables and exposed ports.">
 <link rel="canonical" href="https://olib-ai.github.io/mailcue/guides/configuration.html" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olib-ai.github.io/mailcue/guides/configuration.html">
-<meta property="og:title" content="Configuration — MailCue Documentation">
+<meta property="og:title" content="Configuration - MailCue Documentation">
 <meta property="og:description" content="Environment variables and exposed ports.">
 <meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image">
 <meta property="twitter:url" content="https://olib-ai.github.io/mailcue/guides/configuration.html">
-<meta property="twitter:title" content="Configuration — MailCue Documentation">
+<meta property="twitter:title" content="Configuration - MailCue Documentation">
 <meta property="twitter:description" content="Environment variables and exposed ports.">
 <meta property="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
@@ -514,8 +514,8 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 <tr>
 <td><code>MAILCUE_SECRET_KEY</code></td>
-<td><em>(auto-generated)</em></td>
-<td>JWT signing key. Leave empty for auto-generation on first boot.</td>
+<td><em>(auto-generated in test mode)</em></td>
+<td>JWT and TOTP encryption key. A unique value of at least 32 characters is required in production.</td>
 </tr>
 <tr>
 <td><code>MAILCUE_DB_PATH</code></td>
@@ -524,8 +524,83 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 <tr>
 <td><code>MAILCUE_DATABASE_URL</code></td>
-<td><code>sqlite+aiosqlite:///...</code></td>
-<td>Full database URL (override for PostgreSQL)</td>
+<td><em>(empty)</em></td>
+<td>Full SQLAlchemy database URL. Takes precedence over individual PostgreSQL settings.</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_BACKEND</code></td>
+<td><code>sqlite</code></td>
+<td><code>sqlite</code> or <code>postgresql</code></td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_HOST</code></td>
+<td><em>(empty)</em></td>
+<td>PostgreSQL hostname. Setting this also selects PostgreSQL.</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_PORT</code></td>
+<td><code>5432</code></td>
+<td>PostgreSQL port</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_USER</code></td>
+<td><em>(empty)</em></td>
+<td>PostgreSQL user</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_PASSWORD</code></td>
+<td><em>(empty)</em></td>
+<td>PostgreSQL password</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_NAME</code></td>
+<td><code>mailcue</code></td>
+<td>PostgreSQL database name</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_SSLMODE</code></td>
+<td><code>prefer</code></td>
+<td>Psycopg SSL mode; use <code>verify-full</code> for hosted production databases</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK</code></td>
+<td><code>false</code></td>
+<td>Explicitly permit PostgreSQL without verified TLS on an isolated private container network</td>
+</tr>
+<tr>
+<td><code>MAILCUE_MIGRATION_DATABASE_URL</code></td>
+<td><em>(empty)</em></td>
+<td>Optional migration-only PostgreSQL URL for a role with DDL privileges</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_POOL_SIZE</code></td>
+<td><code>10</code></td>
+<td>Persistent PostgreSQL connections per application worker</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_MAX_OVERFLOW</code></td>
+<td><code>20</code></td>
+<td>Temporary connections allowed above the pool size</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_POOL_TIMEOUT</code></td>
+<td><code>30</code></td>
+<td>Seconds to wait for a pooled connection</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_POOL_RECYCLE</code></td>
+<td><code>1800</code></td>
+<td>Seconds before a pooled connection is replaced</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_CONNECT_TIMEOUT</code></td>
+<td><code>10</code></td>
+<td>Seconds allowed when opening a PostgreSQL connection</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DATABASE_STATEMENT_TIMEOUT_MS</code></td>
+<td><code>30000</code></td>
+<td>PostgreSQL statement timeout in milliseconds. Set to <code>0</code> to disable it.</td>
 </tr>
 <tr>
 <td><code>MAILCUE_SMTP_HOST</code></td>
@@ -554,8 +629,8 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 <tr>
 <td><code>MAILCUE_IMAP_MASTER_PASSWORD</code></td>
-<td><code>master-secret</code></td>
-<td>Dovecot master user password</td>
+<td><code>master-secret</code> in test mode</td>
+<td>Required unique value of at least 32 characters in production</td>
 </tr>
 <tr>
 <td><code>MAILCUE_GPG_HOME</code></td>
@@ -575,7 +650,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <tr>
 <td><code>MAILCUE_DATABASE_ENCRYPTION_KEY</code></td>
 <td><em>(empty)</em></td>
-<td>SQLCipher encryption key. Set for AES-256 database encryption.</td>
+<td>SQLCipher encryption key for SQLite only. PostgreSQL encryption is managed by the database provider.</td>
 </tr>
 <tr>
 <td><code>MAILCUE_RELAY_HOST</code></td>
@@ -619,8 +694,8 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 <tr>
 <td><code>MAILCUE_CORS_ORIGINS</code></td>
-<td><code>["*"]</code></td>
-<td>Allowed CORS origins (JSON array)</td>
+<td><code>[]</code></td>
+<td>Exact allowed CORS origins as a JSON array. Wildcards are rejected in production.</td>
 </tr>
 <tr>
 <td><code>MAILCUE_DEBUG</code></td>
@@ -629,6 +704,46 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 </tbody>
 </table>
+<h2>Database configuration</h2>
+<p>SQLite is the default and requires no database settings. Use it for local
+development, CI, and smaller installations. Use PostgreSQL for production
+installations that handle sustained concurrent requests or large metadata and
+sandbox datasets.</p>
+<p>Configure PostgreSQL with individual environment variables:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">MAILCUE_DATABASE_BACKEND</span><span class="o">=</span><span class="n">postgresql</span>
+<span class="n">MAILCUE_DATABASE_HOST</span><span class="o">=</span><span class="n">postgres</span>
+<span class="n">MAILCUE_DATABASE_PORT</span><span class="o">=</span><span class="mi">5432</span>
+<span class="n">MAILCUE_DATABASE_USER</span><span class="o">=</span><span class="n">mailcue</span>
+<span class="n">MAILCUE_DATABASE_PASSWORD</span><span class="o">=</span><span class="n">replace</span><span class="o">-</span><span class="n">me</span>
+<span class="n">MAILCUE_DATABASE_NAME</span><span class="o">=</span><span class="n">mailcue</span>
+<span class="n">MAILCUE_DATABASE_SSLMODE</span><span class="o">=</span><span class="n">disable</span>
+<span class="n">MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK</span><span class="o">=</span><span class="n">true</span>
+</code></pre></div>
+
+<p><code>MAILCUE_DATABASE_HOST</code> also selects PostgreSQL when
+<code>MAILCUE_DATABASE_BACKEND</code> is not set. Setting the backend explicitly is
+recommended because it makes deployment intent clear.</p>
+<p>Alternatively, provide one SQLAlchemy URL. The URL takes precedence over all
+individual connection settings:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">MAILCUE_DATABASE_URL</span><span class="o">=</span><span class="n">postgresql</span><span class="o">+</span><span class="nl">psycopg</span><span class="p">:</span><span class="o">//</span><span class="nl">mailcue</span><span class="p">:</span><span class="nf">replace</span><span class="o">-</span><span class="n">me</span><span class="nv">@postgres</span><span class="err">:</span><span class="mi">5432</span><span class="o">/</span><span class="n">mailcue</span><span class="vm">?</span><span class="n">sslmode</span><span class="o">=</span><span class="n">disable</span>
+</code></pre></div>
+
+<p>Percent-encode special characters in usernames or passwords used in a URL. The
+individual variables do not require URL encoding. Use <code>verify-full</code> for managed
+or remote PostgreSQL with a trusted TLS certificate. Use <code>disable</code> only for a
+PostgreSQL service on a trusted private Docker network or another protected
+local network, and set <code>MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK=true</code>
+to acknowledge that exception. Never use this exception for a remote host.</p>
+<p>Pool limits apply per MailCue application process. With multiple replicas, the
+maximum normal connection count is approximately <code>replicas * pool size</code>, plus
+temporary overflow connections. Size the PostgreSQL connection limit with this
+total in mind.</p>
+<p>MailCue runs Alembic migrations automatically before the API starts. PostgreSQL
+migrations use an advisory lock, which prevents multiple MailCue replicas from
+changing the schema at the same time. Set <code>MAILCUE_MIGRATION_DATABASE_URL</code> to a
+DDL-capable role and use a separate, lower-privilege <code>MAILCUE_DATABASE_URL</code> for
+the running API. Existing SQLite installations require the offline copy
+procedure in <a href="production.md#migrate-from-sqlite-or-sqlcipher">Production deployment</a>.</p>
 <h2>Exposed ports</h2>
 <table>
 <thead>

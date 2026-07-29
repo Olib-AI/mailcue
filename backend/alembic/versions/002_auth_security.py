@@ -23,7 +23,7 @@ def upgrade() -> None:
     with op.batch_alter_table("users") as batch_op:
         batch_op.add_column(sa.Column("totp_secret", sa.String(255), nullable=True))
         batch_op.add_column(
-            sa.Column("totp_enabled", sa.Boolean(), nullable=False, server_default="0")
+            sa.Column("totp_enabled", sa.Boolean(), nullable=False, server_default=sa.false())
         )
         batch_op.add_column(
             sa.Column("failed_login_attempts", sa.Integer(), nullable=False, server_default="0")

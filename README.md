@@ -51,7 +51,7 @@ MailCue packages Postfix, Dovecot, OpenDKIM, OpenDMARC, SpamAssassin, a FastAPI 
 | Multi-user | Per-user mailbox quotas and isolated mailboxes, emails, GPG keys, and API keys. |
 | Production mode | A hardened mail server with strict domains, required TLS, DMARC reject, and Let's Encrypt certificates. |
 | Provider sandbox | Capture outbound SMS, voice, and chat API traffic with wire-identical endpoints and signed webhooks. |
-| Single container | One docker run. No external database, Redis, or message queue. SQLite with optional AES-256 encryption. |
+| Flexible database | Zero-config SQLite with optional AES-256 encryption, or external PostgreSQL for concurrent production workloads. |
 
 ## Quick start
 
@@ -88,6 +88,20 @@ docker run -d \
 curl http://localhost:8088/api/v1/health
 ```
 
+### Database choices
+
+MailCue uses SQLite by default, which keeps local and small deployments simple.
+Production installations with concurrent API, provider sandbox, HTTP-bin, or
+email warmup traffic should use PostgreSQL. MailCue supports a managed
+PostgreSQL database or a PostgreSQL container on the same private Docker
+network. Connection pooling, production indexes, foreign keys, automatic schema
+migrations, and an offline SQLite-to-PostgreSQL migration command are included.
+
+See [Production deployment](docs/guides/production.md#postgresql-for-production)
+for Docker Compose examples and the migration procedure. See
+[Configuration](docs/guides/configuration.md#database-configuration) for every
+database environment variable.
+
 ## Documentation
 
 > 📖 Read the full, interactive guides on the **[Official MailCue Documentation Website](https://olib-ai.github.io/mailcue/)**.
@@ -97,7 +111,7 @@ curl http://localhost:8088/api/v1/health
 | [Architecture](docs/guides/architecture.md) | Container layout, request flow, and tech stack. |
 | [Configuration](docs/guides/configuration.md) | Environment variables and exposed ports. |
 | [API reference](docs/guides/api.md) | REST endpoints, authentication, and API key scopes. |
-| [Production deployment](docs/guides/production.md) | Hardened mode, DNS records, and TLS certificates. |
+| [Production deployment](docs/guides/production.md) | Hardened mode, PostgreSQL deployment and migration, DNS records, and TLS certificates. |
 | [Email clients and TLS trust](docs/guides/clients.md) | IMAP/POP3/SMTP setup and trusting the CA. |
 | [Using in CI/CD](docs/guides/ci.md) | Pipeline setup and platform examples. |
 | [MCP server](docs/guides/mcp.md) | Give an AI agent its own mailbox over MCP. |

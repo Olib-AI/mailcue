@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +24,7 @@ class HttpBinBin(Base):
     """A request-capture bin owned by a user."""
 
     __tablename__ = "httpbin_bins"
+    __table_args__ = (Index("ix_httpbin_bins_user_created", "user_id", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -46,6 +47,7 @@ class HttpBinRequest(Base):
     """A captured HTTP request to a bin."""
 
     __tablename__ = "httpbin_requests"
+    __table_args__ = (Index("ix_httpbin_requests_bin_created", "bin_id", "created_at", "id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     bin_id: Mapped[str] = mapped_column(

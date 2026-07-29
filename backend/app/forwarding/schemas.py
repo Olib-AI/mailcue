@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, field_validator, model_validator
+import regex
+from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
+
+MAX_PATTERN_LENGTH = 512
 
 
 class SmtpForwardConfig(BaseModel):
     """Action configuration for SMTP forwarding."""
 
-    to_address: str
+    to_address: str = Field(min_length=3, max_length=254, pattern=r"^[^\s@]+@[^\s@]+$")
 
 
 class WebhookConfig(BaseModel):
     """Action configuration for webhook delivery."""
 
-    url: str
-    method: str = "POST"
-    headers: dict[str, str] = {}
+    url: AnyHttpUrl
+    method: Literal["POST", "PUT", "PATCH"] = "POST"
+    headers: dict[str, str] = Field(default_factory=dict)
 
 
 class ForwardingRuleCreateRequest(BaseModel):
@@ -40,9 +42,11 @@ class ForwardingRuleCreateRequest(BaseModel):
     def validate_regex_pattern(cls, v: str | None) -> str | None:
         if v is None or v == "":
             return None
+        if len(v) > MAX_PATTERN_LENGTH:
+            raise ValueError(f"Regex pattern must not exceed {MAX_PATTERN_LENGTH} characters")
         try:
-            re.compile(v)
-        except re.error as exc:
+            regex.compile(v)
+        except regex.error as exc:
             raise ValueError(f"Invalid regex pattern: {exc}") from exc
         return v
 
@@ -73,9 +77,11 @@ class ForwardingRuleUpdateRequest(BaseModel):
     def validate_regex_pattern(cls, v: str | None) -> str | None:
         if v is None or v == "":
             return None
+        if len(v) > MAX_PATTERN_LENGTH:
+            raise ValueError(f"Regex pattern must not exceed {MAX_PATTERN_LENGTH} characters")
         try:
-            re.compile(v)
-        except re.error as exc:
+            regex.compile(v)
+        except regex.error as exc:
             raise ValueError(f"Invalid regex pattern: {exc}") from exc
         return v
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import JWTError, jwt
+import jwt
 
 from app.config import settings
 
@@ -33,23 +33,23 @@ def decode_jwt(token: str) -> dict[str, Any]:
             token, settings.secret_key, algorithms=[settings.jwt_algorithm]
         )
         return payload
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise ValueError(f"Invalid token: {exc}") from exc
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(user_id: str, token_version: int = 0) -> str:
     """Build a short-lived access JWT for *user_id*."""
     expire = datetime.now(UTC) + timedelta(minutes=settings.access_token_expire_minutes)
-    return encode_jwt({"sub": user_id, "type": "access", "exp": expire})
+    return encode_jwt({"sub": user_id, "type": "access", "ver": token_version, "exp": expire})
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, token_version: int = 0) -> str:
     """Build a long-lived refresh JWT for *user_id*."""
     expire = datetime.now(UTC) + timedelta(days=settings.refresh_token_expire_days)
-    return encode_jwt({"sub": user_id, "type": "refresh", "exp": expire})
+    return encode_jwt({"sub": user_id, "type": "refresh", "ver": token_version, "exp": expire})
 
 
-def create_2fa_temp_token(user_id: str) -> str:
+def create_2fa_temp_token(user_id: str, token_version: int = 0) -> str:
     """Build a short-lived (90 s) JWT for the 2FA verification step."""
     expire = datetime.now(UTC) + timedelta(seconds=90)
-    return encode_jwt({"sub": user_id, "type": "2fa_temp", "exp": expire})
+    return encode_jwt({"sub": user_id, "type": "2fa_temp", "ver": token_version, "exp": expire})

@@ -50,7 +50,9 @@ def _get_gpg() -> gnupg.GPG:
 # ── Key management ───────────────────────────────────────────────
 
 
-async def generate_key(request: GenerateKeyRequest, db: AsyncSession) -> GpgKeyResponse:
+async def generate_key(
+    request: GenerateKeyRequest, db: AsyncSession, *, user_id: str
+) -> GpgKeyResponse:
     """Generate a new GPG keypair and persist metadata to the database."""
     gpg = _get_gpg()
 
@@ -89,6 +91,7 @@ async def generate_key(request: GenerateKeyRequest, db: AsyncSession) -> GpgKeyR
     key_info = next((k for k in keys if k["fingerprint"] == fingerprint), None)
 
     db_key = GpgKey(
+        user_id=user_id,
         mailbox_address=request.mailbox_address,
         fingerprint=fingerprint,
         key_id=fingerprint[-16:],
@@ -107,7 +110,9 @@ async def generate_key(request: GenerateKeyRequest, db: AsyncSession) -> GpgKeyR
     return GpgKeyResponse.model_validate(db_key)
 
 
-async def import_key(request: ImportKeyRequest, db: AsyncSession) -> GpgKeyResponse:
+async def import_key(
+    request: ImportKeyRequest, db: AsyncSession, *, user_id: str
+) -> GpgKeyResponse:
     """Import an armored PGP key and persist metadata to the database."""
     gpg = _get_gpg()
     result = await asyncio.to_thread(gpg.import_keys, request.armored_key)
@@ -127,7 +132,12 @@ async def import_key(request: ImportKeyRequest, db: AsyncSession) -> GpgKeyRespo
     address = request.mailbox_address or uid_parts[1] or ""
 
     # Check if key already exists in DB
-    existing_res = await db.execute(select(GpgKey).where(GpgKey.fingerprint == fingerprint))
+    existing_res = await db.execute(
+        select(GpgKey).where(
+            GpgKey.fingerprint == fingerprint,
+            GpgKey.user_id == user_id,
+        )
+    )
     db_key = existing_res.scalars().first()
 
     if db_key:
@@ -146,6 +156,7 @@ async def import_key(request: ImportKeyRequest, db: AsyncSession) -> GpgKeyRespo
         db_key.is_active = True
     else:
         db_key = GpgKey(
+            user_id=user_id,
             mailbox_address=address,
             fingerprint=fingerprint,
             key_id=fingerprint[-16:],
@@ -167,6 +178,8 @@ async def extract_and_import_keys_from_email(
     raw_bytes: bytes,
     sender_address: str,
     db: AsyncSession,
+    *,
+    user_id: str,
 ) -> list[GpgKeyResponse]:
     """Scan raw email bytes/text for armored PGP public keys and persist them in DB."""
     import re
@@ -182,6 +195,7 @@ async def extract_and_import_keys_from_email(
             key_resp = await import_key(
                 ImportKeyRequest(armored_key=block, mailbox_address=sender_address),
                 db,
+                user_id=user_id,
             )
             imported.append(key_resp)
         except Exception as exc:
@@ -199,10 +213,13 @@ def _parse_uid(uid: str) -> tuple[str | None, str | None]:
     return uid.strip() or None, None
 
 
-async def list_keys(db: AsyncSession) -> GpgKeyListResponse:
+async def list_keys(db: AsyncSession, *, user_id: str) -> GpgKeyListResponse:
     """Return all active GPG keys from the database."""
     result = await db.execute(
-        select(GpgKey).where(GpgKey.is_active == True)  # noqa: E712
+        select(GpgKey).where(
+            GpgKey.is_active == True,  # noqa: E712
+            GpgKey.user_id == user_id,
+        )
     )
     keys = list(result.scalars().all())
     return GpgKeyListResponse(
@@ -211,12 +228,15 @@ async def list_keys(db: AsyncSession) -> GpgKeyListResponse:
     )
 
 
-async def get_key_for_address(address: str, db: AsyncSession) -> GpgKeyResponse | None:
+async def get_key_for_address(
+    address: str, db: AsyncSession, *, user_id: str
+) -> GpgKeyResponse | None:
     """Look up an active GPG key for the given email address."""
     result = await db.execute(
         select(GpgKey).where(
             GpgKey.mailbox_address == address,
             GpgKey.is_active == True,  # noqa: E712
+            GpgKey.user_id == user_id,
         )
     )
     key = result.scalars().first()
@@ -225,12 +245,15 @@ async def get_key_for_address(address: str, db: AsyncSession) -> GpgKeyResponse 
     return None
 
 
-async def export_public_key(address: str, db: AsyncSession) -> GpgKeyExportResponse:
+async def export_public_key(
+    address: str, db: AsyncSession, *, user_id: str
+) -> GpgKeyExportResponse:
     """Export the ASCII-armored public key for an address."""
     result = await db.execute(
         select(GpgKey).where(
             GpgKey.mailbox_address == address,
             GpgKey.is_active == True,  # noqa: E712
+            GpgKey.user_id == user_id,
         )
     )
     key = result.scalars().first()
@@ -250,9 +273,14 @@ async def export_public_key(address: str, db: AsyncSession) -> GpgKeyExportRespo
     )
 
 
-async def delete_key(address: str, db: AsyncSession) -> None:
+async def delete_key(address: str, db: AsyncSession, *, user_id: str) -> None:
     """Delete all GPG keys for an address from the keyring and database."""
-    result = await db.execute(select(GpgKey).where(GpgKey.mailbox_address == address))
+    result = await db.execute(
+        select(GpgKey).where(
+            GpgKey.mailbox_address == address,
+            GpgKey.user_id == user_id,
+        )
+    )
     keys = list(result.scalars().all())
     if not keys:
         raise ValueError(f"No key found for {address}")
@@ -305,13 +333,15 @@ def _request_verify(token: str, addresses: list[str]) -> dict[str, Any]:
 async def publish_to_keyserver(
     address: str,
     db: AsyncSession,
+    *,
+    user_id: str,
 ) -> KeyserverPublishResponse:
     """Publish a GPG public key to keys.openpgp.org.
 
     Uploads the key and requests email verification so the key becomes
     discoverable by email address on the keyserver.
     """
-    export = await export_public_key(address, db)
+    export = await export_public_key(address, db, user_id=user_id)
 
     # Upload the public key
     try:
@@ -361,7 +391,9 @@ async def publish_to_keyserver(
     )
 
 
-async def fetch_key_from_keyserver(address: str, db: AsyncSession) -> GpgKeyResponse:
+async def fetch_key_from_keyserver(
+    address: str, db: AsyncSession, *, user_id: str
+) -> GpgKeyResponse:
     """Search keys.openpgp.org by email address, download public key, and import into DB."""
     import urllib.parse
 
@@ -378,6 +410,7 @@ async def fetch_key_from_keyserver(address: str, db: AsyncSession) -> GpgKeyResp
         return await import_key(
             ImportKeyRequest(armored_key=armored_key, mailbox_address=address),
             db,
+            user_id=user_id,
         )
     except Exception as exc:
         if isinstance(exc, ValueError):
@@ -388,9 +421,9 @@ async def fetch_key_from_keyserver(address: str, db: AsyncSession) -> GpgKeyResp
 # ── Cryptographic operations ─────────────────────────────────────
 
 
-async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession) -> bytes:
+async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession, *, user_id: str) -> bytes:
     """Sign a message using PGP/MIME (RFC 3156 ``multipart/signed``)."""
-    key = await get_key_for_address(sender, db)
+    key = await get_key_for_address(sender, db, user_id=user_id)
     if not key or not key.is_private:
         raise ValueError(f"No private key found for {sender}")
 
@@ -454,15 +487,21 @@ async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession) -> bytes
     return signed_msg.as_bytes()
 
 
-async def encrypt_message(raw_bytes: bytes, recipients: list[str], db: AsyncSession) -> bytes:
+async def encrypt_message(
+    raw_bytes: bytes,
+    recipients: list[str],
+    db: AsyncSession,
+    *,
+    user_id: str,
+) -> bytes:
     """Encrypt a message using PGP/MIME (RFC 3156 ``multipart/encrypted``)."""
     # Collect recipient fingerprints
     fingerprints: list[str] = []
     for addr in recipients:
-        key = await get_key_for_address(addr, db)
+        key = await get_key_for_address(addr, db, user_id=user_id)
         if not key:
             with contextlib.suppress(Exception):
-                key = await fetch_key_from_keyserver(addr, db)
+                key = await fetch_key_from_keyserver(addr, db, user_id=user_id)
         if not key:
             raise ValueError(f"No public key found for {addr}")
         fingerprints.append(key.fingerprint)

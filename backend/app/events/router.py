@@ -13,12 +13,15 @@ import logging
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.auth import scopes
-from app.auth.models import User
-from app.dependencies import get_current_user, require_scope
+from app.database import get_db
+from app.dependencies import AuthContext, get_auth, require_scope
 from app.events.bus import event_bus
+from app.mailboxes.models import Mailbox
 
 logger = logging.getLogger("mailcue.events")
 
@@ -59,7 +62,8 @@ async def _event_generator(
     dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
 )
 async def event_stream(
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
     """Open an SSE stream for the authenticated user.
 
@@ -67,10 +71,16 @@ async def event_stream(
     sends a heartbeat comment every 30 seconds to keep the TCP
     connection alive through proxies and load balancers.
     """
-    client_id, queue = await event_bus.subscribe()
+    stmt = select(Mailbox.address).where(
+        Mailbox.user_id == auth.user.id,
+        Mailbox.is_active.is_(True),
+    )
+    owned_mailboxes = set((await db.execute(stmt)).scalars().all())
+    allowed = {address for address in owned_mailboxes if auth.mailbox_allowed(address)}
+    client_id, queue = await event_bus.subscribe(allowed_mailboxes=allowed)
     logger.info(
         "SSE stream opened for user '%s' (client=%s)",
-        current_user.username,
+        auth.user.username,
         client_id,
     )
     return EventSourceResponse(

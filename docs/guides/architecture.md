@@ -31,7 +31,7 @@ graph TB
         end
 
         subgraph storage["Persistent Storage"]
-            sqlite[("SQLite / SQLCipher<br/><sub>/var/lib/mailcue/mailcue.db</sub>")]
+            database[("SQLite / SQLCipher<br/><sub>default</sub><br/>or PostgreSQL<br/><sub>production scale</sub>")]
             maildir[("Maildir<br/><sub>/var/mail/vhosts/</sub>")]
             gpg[("GPG Keyring<br/><sub>/var/lib/mailcue/gpg/</sub>")]
         end
@@ -46,7 +46,7 @@ graph TB
 
     uvicorn -- "IMAP<br/><sub>master-user</sub>" --> dovecot
     uvicorn -- "local SMTP" --> postfix
-    uvicorn --> sqlite
+    uvicorn --> database
     uvicorn --> gpg
 
     postfix -- "LMTP" --> dovecot
@@ -71,7 +71,7 @@ graph TB
 ### Backend
 
 - **Python 3.12** with **FastAPI** and **Uvicorn** (async)
-- **SQLAlchemy 2** (async) + **aiosqlite** (SQLite by default, swappable to PostgreSQL)
+- **SQLAlchemy 2** (async) + **aiosqlite** (SQLite default) or **Psycopg 3** (PostgreSQL)
 - **Alembic** for database migrations
 - **Argon2id** password hashing, **JWT** (HS256) authentication
 - **aioimaplib** and **aiosmtplib** for async IMAP/SMTP operations
@@ -100,4 +100,5 @@ graph TB
 - **Nginx**: Reverse proxy and static file server
 - **s6-overlay v3**: Process supervisor (PID 1)
 - **SQLCipher**: Optional AES-256 database encryption (drop-in SQLite replacement)
+- **PostgreSQL**: Optional external metadata store with pooled async connections and production indexes
 - **Debian Bookworm** slim base image

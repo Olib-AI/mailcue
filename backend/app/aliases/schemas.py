@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.addressing import normalize_email_address
+
 
 class AliasCreateRequest(BaseModel):
     """Create a new email alias."""
@@ -16,20 +18,12 @@ class AliasCreateRequest(BaseModel):
     @field_validator("source_address")
     @classmethod
     def validate_source(cls, v: str) -> str:
-        v = v.strip().lower()
-        if not v:
-            raise ValueError("Source address must not be empty")
-        if "@" not in v:
-            raise ValueError("Source address must contain '@'")
-        return v
+        return normalize_email_address(v)
 
     @field_validator("destination_address")
     @classmethod
     def validate_destination(cls, v: str) -> str:
-        v = v.strip().lower()
-        if not v or "@" not in v:
-            raise ValueError("Destination address must be a valid email")
-        return v
+        return normalize_email_address(v)
 
 
 class AliasUpdateRequest(BaseModel):
@@ -43,10 +37,7 @@ class AliasUpdateRequest(BaseModel):
     def validate_destination(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        v = v.strip().lower()
-        if not v or "@" not in v:
-            raise ValueError("Destination address must be a valid email")
-        return v
+        return normalize_email_address(v)
 
 
 class AliasResponse(BaseModel):

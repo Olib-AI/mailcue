@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -29,10 +29,19 @@ class GpgKey(Base):
     """
 
     __tablename__ = "gpg_keys"
+    __table_args__ = (
+        UniqueConstraint("user_id", "fingerprint", name="uq_gpg_keys_user_fingerprint"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     mailbox_address: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     key_id: Mapped[str] = mapped_column(String(16), nullable=False)
     uid_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     uid_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

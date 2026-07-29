@@ -3,8 +3,8 @@
 Most cloud and PaaS providers (Hetzner, AWS, Google Cloud, fly.io, Render,
 Railway, Vercel, ...) block outbound TCP/25, which is the only port public
 MX servers accept mail on. The MailCue tunnel works around that by relaying
-SMTP egress through a small VPS that **does** have port-25 access — an OVH
-Eco / Kimsufi / Public Cloud instance is the canonical choice — and by
+SMTP egress through a small VPS that **does** have port-25 access - an OVH
+Eco / Kimsufi / Public Cloud instance is the canonical choice - and by
 making it trivial to add more such VPSes for IP rotation and per-tenant
 egress isolation.
 
@@ -36,7 +36,7 @@ chmod +x install-edge.sh
 ./install-edge.sh
 ```
 
-The installer is **idempotent** — re-running it will detect an existing
+The installer is **idempotent** - re-running it will detect an existing
 install and only refresh the binary + unit file. It:
 
 - Detects the host architecture (`x86_64` or `aarch64`).
@@ -51,14 +51,14 @@ install and only refresh the binary + unit file. It:
   `/etc/systemd/system/mailcue-relay-edge.service`.
 - Generates a fresh long-term keypair via `mailcue-relay-edge keygen`.
 - Enables and starts the service.
-- Prints the **server public key** — copy this. The Mailcue API needs it
+- Prints the **server public key** - copy this. The Mailcue API needs it
   to bootstrap a sidecar.
 
 Useful flags:
 
-- `--listen-port <port>` — change the default `7843` listen port (the unit
+- `--listen-port <port>` - change the default `7843` listen port (the unit
   file is rewritten with the new port).
-- `--uninstall` — stop the service, remove the binary and the unit file.
+- `--uninstall` - stop the service, remove the binary and the unit file.
   **Leaves keys and config in place** so accidental re-runs cannot lose
   the long-term identity.
 
@@ -86,7 +86,7 @@ sudo mailcue-relay-edge authorize --pubkey <base64-pubkey> --name mailcue-prod-d
 ```
 
 This appends a line to `/etc/mailcue-edge/authorized_clients`. The edge
-re-reads the file on every handshake — no restart required.
+re-reads the file on every handshake - no restart required.
 
 > **Heads-up (pre-`tunnel-v0.1.1` only):** older edge binaries wrote the
 > allow-list as `root:root 0640`, which the unprivileged daemon
@@ -110,7 +110,7 @@ journalctl -u mailcue-relay-edge -f
 
 You should see one log line per accepted handshake and one per relay,
 including the envelope sender, recipient count, and delivery outcome
-(MX hostname + final SMTP code). **Message bodies are never logged** —
+(MX hostname + final SMTP code). **Message bodies are never logged** -
 see [`docs/SECURITY.md`](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md) for why.
 
 ### 5. Set the EHLO hostname (required for outbound)
@@ -120,7 +120,7 @@ opens to a destination MX. If that name doesn't match the source IP's
 forward-confirmed reverse DNS (FCrDNS), Gmail / Microsoft 365 / Yahoo
 will reject with `550 5.7.26 unauthenticated`. By default the edge
 uses `gethostname()`, which on a fresh OVH VPS is something like
-`vps-ad9f0b95` — almost never what you want.
+`vps-ad9f0b95` - almost never what you want.
 
 Set it via env var on the systemd unit:
 
@@ -128,7 +128,7 @@ Set it via env var on the systemd unit:
 sudo systemctl edit mailcue-relay-edge
 ```
 
-Append (replace with the FQDN you set as rDNS for **this** VPS — see
+Append (replace with the FQDN you set as rDNS for **this** VPS - see
 "DNS prerequisites" below):
 
 ```ini
@@ -148,7 +148,7 @@ helo_hostname = "relay-us.example.com"
 
 ## DNS prerequisites for outbound delivery
 
-Outbound SMTP delivery — the whole point of this tunnel — is a DNS
+Outbound SMTP delivery - the whole point of this tunnel - is a DNS
 problem first. To get past Gmail / M365 / Yahoo, every VPS that you
 relay through needs **all five** of the following set up before it can
 deliver mail. Skipping any one of them produces a 5xx rejection that
@@ -159,7 +159,7 @@ For each VPS hostname (e.g. `relay-us.example.com`):
 | # | Direction | What | Where set | Verify |
 |---|---|---|---|---|
 | 1 | **Forward (A)**: hostname → IPv4 | Your DNS provider | `dig +short A relay-us.example.com` |
-| 2 | **Forward (AAAA)**: hostname → IPv6 (if the VPS has IPv6 — most do) | Your DNS provider | `dig +short AAAA relay-us.example.com` |
+| 2 | **Forward (AAAA)**: hostname → IPv6 (if the VPS has IPv6 - most do) | Your DNS provider | `dig +short AAAA relay-us.example.com` |
 | 3 | **Reverse (PTR) v4**: IPv4 → hostname | OVH (or other VPS provider) manager | `dig +short -x 192.0.2.4` |
 | 4 | **Reverse (PTR) v6**: IPv6 → hostname | OVH manager (separate row from v4!) | `dig +short -x 2001:db8::24de` |
 | 5 | **SPF** for the apex domain (`example.com`) covering both IP families of every relay | Your DNS provider | `dig +short TXT example.com` |
@@ -175,7 +175,7 @@ Two recurring traps:
   on the apex (`example.com`).** Gmail's SPF check runs against the
   envelope `MAIL FROM` domain. Real Mailcue traffic will use
   `From: user@example.com`, so the apex must authorize *every* relay
-  IP. Use the `a:` mechanism — it covers both A and AAAA records:
+  IP. Use the `a:` mechanism - it covers both A and AAAA records:
 
   ```text
   example.com.   IN  TXT  "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"
@@ -186,7 +186,7 @@ Two recurring traps:
 
 Once published, validate end-to-end against
 [port25 verifier](http://www.port25.com/authentication-checker/) by
-sending a message via the tunnel to `check-auth@verifier.port25.com` —
+sending a message via the tunnel to `check-auth@verifier.port25.com` -
 its auto-reply grades SPF, DKIM, DMARC, and FCrDNS as seen from your
 relay's IP.
 
@@ -220,7 +220,7 @@ the main MailCue container, and rewires Postfix's `relayhost` to
 
 The sidecar reads its tunnel list from `/etc/mailcue-sidecar/tunnels.json`
 inside the container (mounted as the `mailcue-sidecar-config` volume).
-**You do not edit this file by hand** — the Mailcue API
+**You do not edit this file by hand** - the Mailcue API
 (`/api/v1/tunnels`) writes it whenever an admin adds, removes, or rotates
 an egress. Each entry contains:
 
@@ -232,10 +232,10 @@ an egress. Each entry contains:
 ### 3. One-time bootstrap
 
 On a fresh install, the sidecar will start with an empty `tunnels.json`
-and refuse to relay (Postfix will queue locally — that's the safe default).
+and refuse to relay (Postfix will queue locally - that's the safe default).
 The bootstrap flow is:
 
-1. `docker compose ... up -d` — sidecar generates `client.key` /
+1. `docker compose ... up -d` - sidecar generates `client.key` /
    `client.pub` in `/var/lib/mailcue-sidecar/`.
 2. Mailcue admin reads `client.pub` (the API exposes it at
    `GET /api/v1/tunnels/client-pubkey`) and sends it to a VPS operator.
@@ -244,7 +244,7 @@ The bootstrap flow is:
    API rewrites `tunnels.json`; the sidecar reloads it via inotify and
    the next outbound mail goes through.
 
-Postfix's queue will drain automatically once a tunnel is up — there is
+Postfix's queue will drain automatically once a tunnel is up - there is
 no need to restart the MailCue container.
 
 ---
@@ -267,7 +267,7 @@ cat /var/lib/mailcue-edge/server.pub
 
 Hand the new pubkey to every Mailcue admin who relays through this VPS.
 They update their tunnel record (`PATCH /api/v1/tunnels/{id}` with the new
-`edge_pubkey`) — the sidecar will switch over on the next reconnect. Once
+`edge_pubkey`) - the sidecar will switch over on the next reconnect. Once
 every consumer has switched, delete `server.key.old`.
 
 ### Sidecar client key
@@ -326,7 +326,7 @@ with the pubkey from `GET /api/v1/tunnels/client-pubkey`.
 ### MX delivery failed (`SMTP_DELIVERY_FAILED`)
 
 The edge couldn't deliver to the recipient's MX. From `tunnel-v0.1.1`
-onward each per-recipient outcome is logged at info level — you'll see
+onward each per-recipient outcome is logged at info level - you'll see
 a line like:
 
 ```text
@@ -351,9 +351,9 @@ Common causes (read these in order):
   IPv4 and IPv6 of the relay (use the `a:` mechanism, see "DNS
   prerequisites" above). Then verify with `dig +short TXT example.com`.
 - **`550 5.7.1 ... does not meet IPv6 sending guidelines regarding
-  PTR records`** — the IPv6 PTR for the source IP is missing or wrong.
+  PTR records`** - the IPv6 PTR for the source IP is missing or wrong.
   Set it in OVH manager (separate row from the IPv4 PTR), then re-test.
-- **`550 5.7.26 ... DKIM = did not pass`** with SPF passing — the
+- **`550 5.7.26 ... DKIM = did not pass`** with SPF passing - the
   message has no DKIM signature. MailCue signs with OpenDKIM by default;
   if the message is going through the tunnel without being signed first,
   check that the upstream `mailcue` container has `mail._domainkey.<domain>`
@@ -366,7 +366,7 @@ Common causes (read these in order):
   the VPS IP if your provider allows it, or fall back to an established
   submission service for that recipient.
 - **TLS handshake failed**: the destination MX has a broken cert chain.
-  Set `require_tls = false` on that tunnel (default) — the edge will
+  Set `require_tls = false` on that tunnel (default) - the edge will
   fall back to plaintext, matching standard MX policy.
 
 To validate the path independently of the tunnel, run `swaks` *directly
@@ -389,10 +389,10 @@ docker exec mailcue postqueue -p
 ```
 
 If everything is `(deferred: connect to mailcue-sidecar[...]:2525: ...)`,
-the sidecar isn't reachable — `docker compose ps` to confirm it's up.
+the sidecar isn't reachable - `docker compose ps` to confirm it's up.
 
 If everything is `(deferred: relay temporarily unavailable)`, the sidecar
-is up but has no working tunnel — check `docker logs mailcue-sidecar` for
+is up but has no working tunnel - check `docker logs mailcue-sidecar` for
 handshake errors and confirm `tunnels.json` has at least one valid entry.
 
 To force a flush after fixing the underlying issue:
@@ -438,7 +438,7 @@ Environment=MAILCUE_EDGE_SHUTDOWN_DRAIN_SECS=30
 
 ## Upgrading
 
-The install script is idempotent — re-running it replaces the binary
+The install script is idempotent - re-running it replaces the binary
 and the systemd unit, preserving state (`/var/lib/mailcue-edge/server.key`,
 `/etc/mailcue-edge/authorized_clients`, env-var drop-ins).
 

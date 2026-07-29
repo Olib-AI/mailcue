@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import logging
 import re
+import socket
 import time
 from typing import Literal
 
@@ -50,6 +52,17 @@ _resolver = dns.resolver.Resolver()
 _resolver.timeout = 1.0
 _resolver.lifetime = 2.0
 _resolver.cache = dns.resolver.LRUCache()
+
+
+async def _resolve_public_smtp_addresses(host: str) -> list[str]:
+    """Resolve one MX hostname and retain only globally routable addresses."""
+    resolved = await asyncio.get_running_loop().getaddrinfo(host, 25, type=socket.SOCK_STREAM)
+    addresses: list[str] = []
+    for entry in resolved:
+        address = ipaddress.ip_address(entry[4][0])
+        if address.is_global:
+            addresses.append(str(address))
+    return addresses
 
 
 def validate_syntax(email: str) -> EmailValidationSyntax:
@@ -300,7 +313,15 @@ async def validate_mailbox(
     last_error = None
     for host in hosts:
         try:
-            smtp = aiosmtplib.SMTP(hostname=host, port=25, timeout=5.0)
+            public_addresses = await _resolve_public_smtp_addresses(host)
+            if not public_addresses:
+                logger.warning("Blocked SMTP probe to non-public destination %s", host)
+                last_error = "MX host does not resolve to a public IP address"
+                continue
+
+            # Connect to the validated address directly to avoid a second DNS
+            # lookup changing the destination between validation and use.
+            smtp = aiosmtplib.SMTP(hostname=public_addresses[0], port=25, timeout=5.0)
             await smtp.connect()
             try:
                 try:
@@ -376,7 +397,7 @@ async def validate_mailbox(
                 catch_all=False,
             )
         except Exception as exc:
-            last_error = exc
+            last_error = str(exc)
             logger.debug("SMTP probe failed on host %s: %s", host, exc)
 
     return EmailValidationMailbox(

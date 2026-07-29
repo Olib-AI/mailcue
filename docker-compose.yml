@@ -1,5 +1,5 @@
 # =============================================================================
-# MailCue — docker-compose for local development and single-host deployment
+# MailCue - docker-compose for local development and single-host deployment
 # =============================================================================
 #
 # MailCue is a shared sandbox service.  Multiple consumer projects (fase, and
@@ -27,19 +27,19 @@ services:
       - "8088:80"
       # Phone-provider TLS interception proxy (SNI routed; see
       # app/sandbox/scripts/generate_provider_nginx.py).  Gated by
-      # MAILCUE_PROVIDER_PROXIES_ENABLED — leave unset to keep enabled.
+      # Leave MAILCUE_PROVIDER_PROXIES_ENABLED unset to keep it enabled.
       - "8443:443"
-      # SMTP — inbound MTA
+      # SMTP: inbound MTA
       - "25:25"
-      # SMTP Submission — client submission with STARTTLS + auth
+      # SMTP Submission: client submission with STARTTLS + auth
       - "587:587"
-      # IMAP — STARTTLS
+      # IMAP: STARTTLS
       - "143:143"
-      # IMAPS — implicit TLS
+      # IMAPS: implicit TLS
       - "993:993"
-      # POP3 — STARTTLS
+      # POP3: STARTTLS
       - "110:110"
-      # POP3S — implicit TLS
+      # POP3S: implicit TLS
       - "995:995"
     environment:
       - MAILCUE_DOMAIN=mailcue.local
@@ -47,9 +47,27 @@ services:
       - MAILCUE_ADMIN_PASSWORD=mailcue
       # Leave empty to auto-generate at first boot
       - MAILCUE_SECRET_KEY=
+      # External PostgreSQL is optional. A full URL takes precedence over the
+      # individual values; leaving both URL and host empty keeps SQLite.
+      - MAILCUE_DATABASE_URL=${MAILCUE_DATABASE_URL:-}
+      - MAILCUE_DATABASE_BACKEND=${MAILCUE_DATABASE_BACKEND:-sqlite}
+      - MAILCUE_DATABASE_HOST=${MAILCUE_DATABASE_HOST:-}
+      - MAILCUE_DATABASE_PORT=${MAILCUE_DATABASE_PORT:-5432}
+      - MAILCUE_DATABASE_USER=${MAILCUE_DATABASE_USER:-}
+      - MAILCUE_DATABASE_PASSWORD=${MAILCUE_DATABASE_PASSWORD:-}
+      - MAILCUE_DATABASE_NAME=${MAILCUE_DATABASE_NAME:-mailcue}
+      - MAILCUE_DATABASE_SSLMODE=${MAILCUE_DATABASE_SSLMODE:-prefer}
+      - MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK=${MAILCUE_DATABASE_ALLOW_INSECURE_PRIVATE_NETWORK:-false}
+      - MAILCUE_MIGRATION_DATABASE_URL=${MAILCUE_MIGRATION_DATABASE_URL:-}
+      - MAILCUE_DATABASE_POOL_SIZE=${MAILCUE_DATABASE_POOL_SIZE:-10}
+      - MAILCUE_DATABASE_MAX_OVERFLOW=${MAILCUE_DATABASE_MAX_OVERFLOW:-20}
+      - MAILCUE_DATABASE_POOL_TIMEOUT=${MAILCUE_DATABASE_POOL_TIMEOUT:-30}
+      - MAILCUE_DATABASE_POOL_RECYCLE=${MAILCUE_DATABASE_POOL_RECYCLE:-1800}
+      - MAILCUE_DATABASE_CONNECT_TIMEOUT=${MAILCUE_DATABASE_CONNECT_TIMEOUT:-10}
+      - MAILCUE_DATABASE_STATEMENT_TIMEOUT_MS=${MAILCUE_DATABASE_STATEMENT_TIMEOUT_MS:-30000}
       # Phone-provider TLS interception (port 443).  Set to "false"
       # to skip leaf-cert generation and suppress the Nginx 443 server
-      # blocks — the Mailcue email workflow is unaffected.
+      # blocks. The Mailcue email workflow is unaffected.
       - MAILCUE_PROVIDER_PROXIES_ENABLED=${MAILCUE_PROVIDER_PROXIES_ENABLED:-true}
       # Shared-secret token for the /sandbox/admin/providers/seed API
       # used by consumer project seeders (e.g. fase's seed.py).  Leave
@@ -61,13 +79,13 @@ services:
       # Persistent mail storage (Maildir)
       - mailcue-data:/var/mail/vhosts
       # Persistent SQLite database and application state (also where
-      # provider_leaves/ and provider_ca.crt live — consumer projects
+      # provider_leaves/ and provider_ca.crt live. Consumer projects
       # fetch the CA from here for their ``update-ca-certificates``).
       - mailcue-db:/var/lib/mailcue
       # Persistent CA + server certs.  Without this, rebuilding the
       # image regenerates the Root CA on every boot and invalidates
       # every consumer project's baked-in trust store.  Mount it to
-      # survive rebuilds — the CA cost is only re-paid when the
+      # survive rebuilds. The CA cost is only paid again when the
       # operator explicitly `docker volume rm`s this volume.
       - mailcue-tls:/etc/ssl/mailcue
     networks:

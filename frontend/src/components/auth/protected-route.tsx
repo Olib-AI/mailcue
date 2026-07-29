@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet } from "react-router";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 

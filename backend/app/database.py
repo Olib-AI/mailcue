@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine, session factory, and declarative base.
 
-Uses ``aiosqlite`` for development (zero-config SQLite) and can be switched
-to ``asyncpg`` (PostgreSQL) by changing ``MAILCUE_DATABASE_URL``.
+Uses ``aiosqlite`` for development (zero-config SQLite) and Psycopg 3 for
+asynchronous PostgreSQL access.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -20,25 +21,39 @@ from sqlalchemy.pool import ConnectionPoolEntry
 
 from app.config import settings
 
+_database_backend = make_url(settings.database_url).get_backend_name()
 _connect_args: dict[str, object] = {}
-if settings.database_url.startswith("sqlite"):
+_engine_args: dict[str, object] = {}
+if _database_backend == "sqlite":
     _connect_args["check_same_thread"] = False
+elif _database_backend == "postgresql":
+    _engine_args.update(
+        pool_pre_ping=True,
+        pool_size=settings.database_pool_size,
+        max_overflow=settings.database_max_overflow,
+        pool_timeout=settings.database_pool_timeout,
+        pool_recycle=settings.database_pool_recycle,
+    )
 
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
     connect_args=_connect_args,
+    **_engine_args,
 )
 
-if settings.database_encryption_key:
+if _database_backend == "sqlite":
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _set_sqlcipher_key(
+    def _configure_sqlite_connection(
         dbapi_connection: DBAPIConnection,
         connection_record: ConnectionPoolEntry,
     ) -> None:
         cursor = dbapi_connection.cursor()
-        cursor.execute(f"PRAGMA key='{settings.database_encryption_key}'")
+        if settings.database_encryption_key:
+            escaped_key = settings.database_encryption_key.replace("'", "''")
+            cursor.execute(f"PRAGMA key='{escaped_key}'")
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 

@@ -100,7 +100,9 @@ async def get_single_email(
 ) -> EmailDetail:
     """Fetch a single email by its IMAP UID with full body and headers."""
     await verify_mailbox_access(mailbox, auth, db)
-    return await get_email(mailbox=mailbox, uid=uid, folder=folder, db=db)
+    return await get_email(
+        mailbox=mailbox, uid=uid, folder=folder, db=db, gpg_user_id=auth.user.id
+    )
 
 
 @router.get(
@@ -165,7 +167,13 @@ async def send_new_email(
     """
     await verify_mailbox_access(body.from_address, auth, db)
     try:
-        message_id = await send_email(body, db=db, sign=body.sign, encrypt=body.encrypt)
+        message_id = await send_email(
+            body,
+            db=db,
+            sign=body.sign,
+            encrypt=body.encrypt,
+            gpg_user_id=auth.user.id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"message": "Email accepted for delivery", "message_id": message_id}
@@ -186,7 +194,9 @@ async def inject_single_email(
     **Admin only.** Bypasses SMTP delivery entirely -- the email
     appears in the target mailbox immediately. Ideal for test data setup.
     """
-    uid = await inject_email(body, db=db, sign=body.sign, encrypt=body.encrypt)
+    uid = await inject_email(
+        body, db=db, sign=body.sign, encrypt=body.encrypt, gpg_user_id=_admin.id
+    )
     return {"uid": uid, "mailbox": body.mailbox}
 
 

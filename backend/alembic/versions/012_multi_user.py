@@ -57,7 +57,7 @@ def upgrade() -> None:
     # ── Data migration: assign orphan mailboxes to first admin ──
     bind = op.get_bind()
     result = bind.execute(
-        sa.text("SELECT id FROM users WHERE is_admin = 1 ORDER BY created_at LIMIT 1")
+        sa.text("SELECT id FROM users WHERE is_admin ORDER BY created_at LIMIT 1")
     )
     row = result.fetchone()
     if row is not None:

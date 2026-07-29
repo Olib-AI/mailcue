@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from weakref import WeakSet
 
 from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.sandbox.models import (
     SandboxConversation,
@@ -188,7 +189,18 @@ async def get_or_create_conversation(
         name=name,
         conversation_type=conv_type,
     )
-    db.add(conversation)
+    try:
+        async with db.begin_nested():
+            db.add(conversation)
+            await db.flush()
+    except IntegrityError:
+        # Another worker created the same provider/external conversation after
+        # our initial lookup. The database constraint is the concurrency guard.
+        result = await db.execute(stmt)
+        existing = result.scalar_one_or_none()
+        if existing is None:
+            raise
+        return existing
     await db.commit()
     await db.refresh(conversation)
     return conversation

@@ -13,6 +13,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import cast
 
 from fastapi import Depends, FastAPI, Request
@@ -21,6 +22,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ExceptionHandler
 
 from app.aliases.models import Alias  # noqa: F401 — imported for table creation
@@ -102,6 +104,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
       1. Dispose the async engine to release connection pool resources.
     """
     # ── Startup ──────────────────────────────────────────────────
+    settings.validate_production_security()
     logger.info("MailCue API starting up (domain=%s)", settings.domain)
 
     # Initialize and update disposable domains in background
@@ -111,9 +114,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Alembic migrations are run by the s6 init script before uvicorn
     # starts.  ``create_all`` is a safety net that creates any tables
     # not yet covered by migrations (e.g. new models during development).
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables ensured.")
+    if not settings.is_production:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables ensured.")
 
     # Warmup is deliberately driven by one low-frequency scheduler. Each
     # campaign claims its next slot before performing network I/O, preventing
@@ -177,7 +181,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # but the domains table is what the UI and DNS verification use.
     if settings.is_production:
         async with AsyncSessionLocal() as session:
-            from app.domains.service import add_domain
+            from app.domains.service import add_domain, rebuild_postfix_virtual_mailboxes
 
             domain_stmt = select(Domain).where(Domain.name == settings.domain)
             domain_result = await session.execute(domain_stmt)
@@ -194,6 +198,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
                         "Could not auto-register domain '%s' (may already exist).",
                         settings.domain,
                     )
+
+            # Postfix maps live in the container filesystem while mailbox
+            # ownership lives in the database. Rebuild on every production
+            # start so container replacement cannot drop valid recipients or
+            # authenticated-sender anti-spoof mappings.
+            await rebuild_postfix_virtual_mailboxes(session)
     # One-shot DKIM normalisation across every domain row.  Two legacy
     # shapes get rewritten in place:
     #   1. raw opendkim-genkey zone-file fragments (multi-string with a
@@ -270,9 +280,9 @@ def create_app() -> FastAPI:
         title="MailCue API",
         description="Realistic email testing server REST API",
         version="0.1.0",
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
-        openapi_url="/api/openapi.json",
+        docs_url=None if settings.is_production else "/api/docs",
+        redoc_url=None if settings.is_production else "/api/redoc",
+        openapi_url=None if settings.is_production else "/api/openapi.json",
         lifespan=lifespan,
     )
 
@@ -286,18 +296,18 @@ def create_app() -> FastAPI:
     )
 
     # ── Middleware ────────────────────────────────────────────────
-    if settings.is_production and settings.cors_origins == ["*"]:
-        logger.warning(
-            "Wildcard CORS origins ('*') are configured in production mode. "
-            "Set MAILCUE_CORS_ORIGINS to restrict allowed origins."
-        )
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=[settings.hostname, settings.domain, "localhost", "127.0.0.1"]
+        if settings.is_production
+        else ["*"],
     )
 
     # ── Exception handlers ───────────────────────────────────────
@@ -408,8 +418,6 @@ def create_app() -> FastAPI:
         db: AsyncSession = Depends(get_db),
     ) -> str:
         """Serve MTA-STS policy at the RFC-mandated path."""
-        from pathlib import Path
-
         from app.system.service import get_server_hostname
 
         hostname = await get_server_hostname(db)
@@ -418,8 +426,9 @@ def create_app() -> FastAPI:
         sts_mode = "testing"
         if settings.is_production:
             has_external_cert = bool(settings.tls_cert_path and settings.tls_key_path)
-            has_uploaded_cert = Path("/etc/ssl/mailcue/server.crt").exists()
-            if has_external_cert or has_uploaded_cert:
+            has_acme_cert = Path("/etc/ssl/mailcue/fullchain.pem").exists()
+            uploaded_cert = await db.get(TlsCertificate, 1)
+            if has_external_cert or has_acme_cert or uploaded_cert is not None:
                 sts_mode = "enforce"
 
         return f"version: STSv1\nmode: {sts_mode}\nmx: {hostname}\nmax_age: 86400\n"

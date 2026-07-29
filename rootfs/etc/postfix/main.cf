@@ -71,6 +71,7 @@ smtpd_sasl_auth_enable = yes
 smtpd_sasl_security_options = noanonymous
 smtpd_sasl_local_domain = $mydomain
 broken_sasl_auth_clients = yes
+smtpd_sender_login_maps = hash:/etc/postfix/sender_login_maps
 
 # --- TLS (inbound — port 25) ------------------------------------------------
 smtpd_tls_security_level = may

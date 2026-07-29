@@ -128,7 +128,7 @@ async def test_admin_mailbox_quota_in_production(
         for i in range(5):
             req = MailboxCreateRequest(
                 username=f"user{i}",
-                password="password123",
+                password="password1234",
                 domain="example.com",
             )
             await create_mailbox(req, session, user_id=admin.id)
@@ -136,7 +136,7 @@ async def test_admin_mailbox_quota_in_production(
         # The 6th manual mailbox creation should fail due to quota limit
         req_failed = MailboxCreateRequest(
             username="user5",
-            password="password123",
+            password="password1234",
             domain="example.com",
         )
         with pytest.raises(HTTPException) as exc_info:

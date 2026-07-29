@@ -6,7 +6,7 @@ import logging
 
 from cryptography.fernet import InvalidToken
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import scopes as scopes_mod
@@ -113,13 +113,13 @@ async def login(
     # If TOTP is enabled, return a temp token for the 2FA step
     if user.totp_enabled:
         await reset_failed_login(user, db)
-        temp_token = create_2fa_temp_token(user.id)
+        temp_token = create_2fa_temp_token(user.id, user.token_version)
         return LoginStepResponse(requires_2fa=True, temp_token=temp_token)
 
     # No 2FA -- issue full tokens
     await reset_failed_login(user, db)
-    access = create_access_token(user.id)
-    refresh = create_refresh_token(user.id)
+    access = create_access_token(user.id, user.token_version)
+    refresh = create_refresh_token(user.id, user.token_version)
 
     response.set_cookie(
         key="refresh_token",
@@ -127,13 +127,12 @@ async def login(
         httponly=True,
         samesite="strict" if settings.is_production else "lax",
         secure=settings.is_production,
-        max_age=60 * 60 * 24 * 7,  # 7 days
+        max_age=60 * 60 * 24 * settings.refresh_token_expire_days,
         path="/api/v1/auth/refresh",
     )
 
     return TokenResponse(
         access_token=access,
-        refresh_token=refresh,
         user=UserResponse.model_validate(user, from_attributes=True),
     )
 
@@ -174,6 +173,11 @@ async def login_2fa(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked",
+        )
 
     if is_account_locked(user):
         raise HTTPException(
@@ -190,16 +194,10 @@ async def login_2fa(
     try:
         secret = decrypt_totp_secret(user.totp_secret)
     except InvalidToken:
-        logger.warning(
-            "TOTP secret for user '%s' cannot be decrypted (secret key changed?). Resetting 2FA.",
-            user.username,
-        )
-        user.totp_enabled = False
-        user.totp_secret = None
-        await db.commit()
+        logger.error("TOTP secret for user '%s' cannot be decrypted.", user.username)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="TOTP secret could not be decrypted. 2FA has been reset — please set it up again.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Two-factor authentication is unavailable. Contact an administrator.",
         ) from None
     if not verify_totp_code(secret, body.code):
         await record_failed_login(user, db)
@@ -209,8 +207,8 @@ async def login_2fa(
         )
 
     await reset_failed_login(user, db)
-    access = create_access_token(user.id)
-    refresh = create_refresh_token(user.id)
+    access = create_access_token(user.id, user.token_version)
+    refresh = create_refresh_token(user.id, user.token_version)
 
     response.set_cookie(
         key="refresh_token",
@@ -218,13 +216,12 @@ async def login_2fa(
         httponly=True,
         samesite="strict" if settings.is_production else "lax",
         secure=settings.is_production,
-        max_age=60 * 60 * 24 * 7,
+        max_age=60 * 60 * 24 * settings.refresh_token_expire_days,
         path="/api/v1/auth/refresh",
     )
 
     return TokenResponse(
         access_token=access,
-        refresh_token=refresh,
         user=UserResponse.model_validate(user, from_attributes=True),
     )
 
@@ -295,6 +292,7 @@ async def change_password(
 
     await reset_failed_login(current_user, db)
     current_user.hashed_password = hash_password(body.new_password)
+    current_user.token_version += 1
     await db.commit()
     logger.info("Password changed for user '%s'.", current_user.username)
     return {"status": "ok"}
@@ -321,6 +319,7 @@ async def admin_reset_password(
         )
 
     user.hashed_password = hash_password(body.new_password)
+    user.token_version += 1
     await db.commit()
     logger.info("Password reset for user '%s' by admin '%s'.", body.username, _admin.username)
     return {"message": "Password reset successfully"}
@@ -441,16 +440,10 @@ async def totp_disable(
     try:
         secret = decrypt_totp_secret(current_user.totp_secret)
     except InvalidToken:
-        logger.warning(
-            "TOTP secret for user '%s' cannot be decrypted. Force-disabling 2FA.",
-            current_user.username,
-        )
-        current_user.totp_enabled = False
-        current_user.totp_secret = None
-        await db.commit()
+        logger.error("TOTP secret for user '%s' cannot be decrypted.", current_user.username)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="TOTP secret could not be decrypted. 2FA has been force-disabled.",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Two-factor authentication is unavailable. Contact an administrator.",
         ) from None
     if not verify_totp_code(secret, body.code):
         await record_failed_login(current_user, db)
@@ -482,9 +475,21 @@ async def get_current_user_info(
 
 
 @router.post("/logout")
-async def logout(response: Response) -> dict[str, str]:
-    """Clear the httpOnly refresh_token cookie."""
-    response.delete_cookie("refresh_token", httponly=True, samesite="lax")
+async def logout(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """Revoke the user's active tokens and clear the refresh cookie."""
+    current_user.token_version += 1
+    await db.commit()
+    response.delete_cookie(
+        "refresh_token",
+        path="/api/v1/auth/refresh",
+        secure=settings.is_production,
+        httponly=True,
+        samesite="strict" if settings.is_production else "lax",
+    )
     return {"status": "ok"}
 
 
@@ -504,6 +509,7 @@ async def refresh(
     the ``refresh_token`` httpOnly cookie.
     """
     token: str | None = body.refresh_token if body and body.refresh_token else None
+    using_cookie = token is None
     if token is None:
         token = request.cookies.get("refresh_token")
     if token is None:
@@ -511,6 +517,16 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token required",
         )
+    if using_cookie and settings.is_production:
+        origin = request.headers.get("origin")
+        allowed_origins = set(settings.cors_origins)
+        allowed_origins.add(f"https://{settings.hostname}")
+        allowed_origins.add(f"https://{settings.domain}")
+        if origin is not None and origin not in allowed_origins:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Refresh request origin is not allowed",
+            )
 
     try:
         payload = decode_jwt(token)
@@ -537,8 +553,30 @@ async def refresh(
             detail="User not found or inactive",
         )
 
-    access = create_access_token(user.id)
-    new_refresh = create_refresh_token(user.id)
+    if payload.get("ver") != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked",
+        )
+
+    # Rotate the version so the refresh token cannot be replayed. This also
+    # revokes older access tokens for the account.
+    rotation = await db.execute(
+        update(User)
+        .where(User.id == user.id, User.token_version == user.token_version)
+        .values(token_version=User.token_version + 1)
+        .returning(User.token_version)
+    )
+    new_version = rotation.scalar_one_or_none()
+    if new_version is None:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has already been used",
+        )
+    await db.commit()
+    access = create_access_token(user.id, new_version)
+    new_refresh = create_refresh_token(user.id, new_version)
 
     response.set_cookie(
         key="refresh_token",
@@ -546,13 +584,12 @@ async def refresh(
         httponly=True,
         samesite="strict" if settings.is_production else "lax",
         secure=settings.is_production,
-        max_age=60 * 60 * 24 * 7,
+        max_age=60 * 60 * 24 * settings.refresh_token_expire_days,
         path="/api/v1/auth/refresh",
     )
 
     return TokenResponse(
         access_token=access,
-        refresh_token=new_refresh,
         user=UserResponse.model_validate(user, from_attributes=True),
     )
 

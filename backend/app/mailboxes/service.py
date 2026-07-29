@@ -238,8 +238,10 @@ async def create_mailbox(
         # Check if there are active domains
         from app.domains.models import Domain
 
-        domain_stmt = select(sa_func.count()).select_from(Domain).where(Domain.is_active.is_(True))
-        domain_count = (await db.execute(domain_stmt)).scalar() or 0
+        domain_count_stmt = (
+            select(sa_func.count()).select_from(Domain).where(Domain.is_active.is_(True))
+        )
+        domain_count = (await db.execute(domain_count_stmt)).scalar() or 0
 
         if user is not None and (not user.is_admin or settings.is_production or domain_count > 0):
             count_stmt = (
@@ -364,7 +366,7 @@ async def delete_mailbox(
 
     # 3. Optionally remove Maildir
     if remove_maildir:
-        maildir = Path(settings.mail_storage_path) / domain / local_part
+        maildir = _safe_maildir_path(domain, local_part)
         try:
             await asyncio.to_thread(_remove_directory_tree, maildir)
         except Exception:
@@ -424,7 +426,7 @@ async def _provision_system_mailbox(
     local_part: str,
 ) -> None:
     """Create the Dovecot user entry, Maildir structure, and Postfix maps on disk."""
-    maildir = Path(settings.mail_storage_path) / domain / local_part
+    maildir = _safe_maildir_path(domain, local_part)
 
     # Create Maildir structure
     await asyncio.to_thread(_create_maildir, maildir)
@@ -450,6 +452,21 @@ async def _provision_system_mailbox(
         logger.debug("Postfix virtual_mailboxes update skipped (catch-all is active).")
 
     logger.debug("System mailbox provisioned: %s -> %s", address, maildir)
+
+
+def _safe_maildir_path(domain: str, local_part: str) -> Path:
+    """Build a Maildir path that is guaranteed to remain below the storage root."""
+    if (
+        not domain
+        or not local_part
+        or any(separator in domain or separator in local_part for separator in ("/", "\\", "\0"))
+    ):
+        raise ValueError("Invalid mailbox path component")
+    storage_root = Path(settings.mail_storage_path).resolve()
+    maildir = (storage_root / domain / local_part).resolve()
+    if not maildir.is_relative_to(storage_root) or maildir.parent == storage_root:
+        raise ValueError("Refusing to access a mailbox outside the mail storage root")
+    return maildir
 
 
 def _create_maildir(base: Path) -> None:

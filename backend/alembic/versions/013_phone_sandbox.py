@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("answer_method", sa.String(8), nullable=False, server_default="POST"),
         sa.Column("status_callback", sa.String(1024), nullable=True),
         sa.Column("status_callback_method", sa.String(8), nullable=False, server_default="POST"),
-        sa.Column("record", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("record", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("duration_seconds", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("answered_at", sa.DateTime(), nullable=True),
         sa.Column("ended_at", sa.DateTime(), nullable=True),
@@ -74,7 +74,7 @@ def upgrade() -> None:
         sa.Column("capabilities", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("raw_request", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default="{}"),
-        sa.Column("released", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("released", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
     op.create_index(
@@ -117,7 +117,7 @@ def upgrade() -> None:
         sa.Column("loa_info", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("raw_request", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default="{}"),
-        sa.Column("cancelled", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("cancelled", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("foc_date", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )

@@ -10,8 +10,17 @@ if [ -z "${MAILCUE_SECRET_KEY}" ] && [ -f /var/lib/mailcue/.secret_key ]; then
     MAILCUE_SECRET_KEY=$(cat /var/lib/mailcue/.secret_key)
 fi
 
-# Export DB URL for the backend
-export MAILCUE_DATABASE_URL="sqlite+aiosqlite:///${MAILCUE_DB_PATH:-/var/lib/mailcue/mailcue.db}"
+# Preserve an explicitly configured URL or host-based PostgreSQL settings.
+# Only synthesize the historical SQLite URL for zero-configuration installs.
+case "${MAILCUE_DATABASE_BACKEND:-sqlite}" in
+    postgres|postgresql) USE_CONFIGURED_DATABASE=true ;;
+    *) USE_CONFIGURED_DATABASE=false ;;
+esac
+if [ -z "${MAILCUE_DATABASE_URL:-}" ] \
+    && [ -z "${MAILCUE_DATABASE_HOST:-}" ] \
+    && [ "${USE_CONFIGURED_DATABASE}" = "false" ]; then
+    export MAILCUE_DATABASE_URL="sqlite+aiosqlite:///${MAILCUE_DB_PATH:-/var/lib/mailcue/mailcue.db}"
+fi
 
 cd /opt/mailcue
 

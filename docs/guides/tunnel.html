@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SMTP Tunnel — MailCue Documentation</title>
+<title>SMTP Tunnel - MailCue Documentation</title>
 <meta name="description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
 <link rel="canonical" href="https://olib-ai.github.io/mailcue/guides/tunnel.html" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olib-ai.github.io/mailcue/guides/tunnel.html">
-<meta property="og:title" content="SMTP Tunnel — MailCue Documentation">
+<meta property="og:title" content="SMTP Tunnel - MailCue Documentation">
 <meta property="og:description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
 <meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image">
 <meta property="twitter:url" content="https://olib-ai.github.io/mailcue/guides/tunnel.html">
-<meta property="twitter:title" content="SMTP Tunnel — MailCue Documentation">
+<meta property="twitter:title" content="SMTP Tunnel - MailCue Documentation">
 <meta property="twitter:description" content="Bypass port-25 blocks on cloud providers with a secure, authenticated SMTP egress tunnel.">
 <meta property="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
@@ -478,8 +478,8 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <p>Most cloud and PaaS providers (Hetzner, AWS, Google Cloud, fly.io, Render,
 Railway, Vercel, ...) block outbound TCP/25, which is the only port public
 MX servers accept mail on. The MailCue tunnel works around that by relaying
-SMTP egress through a small VPS that <strong>does</strong> have port-25 access — an OVH
-Eco / Kimsufi / Public Cloud instance is the canonical choice — and by
+SMTP egress through a small VPS that <strong>does</strong> have port-25 access - an OVH
+Eco / Kimsufi / Public Cloud instance is the canonical choice - and by
 making it trivial to add more such VPSes for IP rotation and per-tenant
 egress isolation.</p>
 <p>This crate ships <strong>two</strong> binaries:</p>
@@ -518,7 +518,7 @@ chmod<span class="w"> </span>+x<span class="w"> </span>install-edge.sh
 ./install-edge.sh
 </code></pre></div>
 
-<p>The installer is <strong>idempotent</strong> — re-running it will detect an existing
+<p>The installer is <strong>idempotent</strong> - re-running it will detect an existing
 install and only refresh the binary + unit file. It:</p>
 <ul>
 <li>Detects the host architecture (<code>x86_64</code> or <code>aarch64</code>).</li>
@@ -533,14 +533,14 @@ install and only refresh the binary + unit file. It:</p>
   <code>/etc/systemd/system/mailcue-relay-edge.service</code>.</li>
 <li>Generates a fresh long-term keypair via <code>mailcue-relay-edge keygen</code>.</li>
 <li>Enables and starts the service.</li>
-<li>Prints the <strong>server public key</strong> — copy this. The Mailcue API needs it
+<li>Prints the <strong>server public key</strong> - copy this. The Mailcue API needs it
   to bootstrap a sidecar.</li>
 </ul>
 <p>Useful flags:</p>
 <ul>
-<li><code>--listen-port &lt;port&gt;</code> — change the default <code>7843</code> listen port (the unit
+<li><code>--listen-port &lt;port&gt;</code> - change the default <code>7843</code> listen port (the unit
   file is rewritten with the new port).</li>
-<li><code>--uninstall</code> — stop the service, remove the binary and the unit file.
+<li><code>--uninstall</code> - stop the service, remove the binary and the unit file.
   <strong>Leaves keys and config in place</strong> so accidental re-runs cannot lose
   the long-term identity.</li>
 </ul>
@@ -561,7 +561,7 @@ VPS operator. They then run:</p>
 </code></pre></div>
 
 <p>This appends a line to <code>/etc/mailcue-edge/authorized_clients</code>. The edge
-re-reads the file on every handshake — no restart required.</p>
+re-reads the file on every handshake - no restart required.</p>
 <blockquote>
 <p><strong>Heads-up (pre-<code>tunnel-v0.1.1</code> only):</strong> older edge binaries wrote the
 allow-list as <code>root:root 0640</code>, which the unprivileged daemon
@@ -581,7 +581,7 @@ journalctl<span class="w"> </span>-u<span class="w"> </span>mailcue-relay-edge<s
 
 <p>You should see one log line per accepted handshake and one per relay,
 including the envelope sender, recipient count, and delivery outcome
-(MX hostname + final SMTP code). <strong>Message bodies are never logged</strong> —
+(MX hostname + final SMTP code). <strong>Message bodies are never logged</strong> -
 see <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md"><code>docs/SECURITY.md</code></a> for why.</p>
 <h3>5. Set the EHLO hostname (required for outbound)</h3>
 <p>The edge presents a HELO/EHLO name on every outbound SMTP connection it
@@ -589,12 +589,12 @@ opens to a destination MX. If that name doesn't match the source IP's
 forward-confirmed reverse DNS (FCrDNS), Gmail / Microsoft 365 / Yahoo
 will reject with <code>550 5.7.26 unauthenticated</code>. By default the edge
 uses <code>gethostname()</code>, which on a fresh OVH VPS is something like
-<code>vps-ad9f0b95</code> — almost never what you want.</p>
+<code>vps-ad9f0b95</code> - almost never what you want.</p>
 <p>Set it via env var on the systemd unit:</p>
 <div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>edit<span class="w"> </span>mailcue-relay-edge
 </code></pre></div>
 
-<p>Append (replace with the FQDN you set as rDNS for <strong>this</strong> VPS — see
+<p>Append (replace with the FQDN you set as rDNS for <strong>this</strong> VPS - see
 "DNS prerequisites" below):</p>
 <div class="codehilite"><pre><span></span><code><span class="k">[Service]</span>
 <span class="na">Environment</span><span class="o">=</span><span class="s">MAILCUE_EDGE_HELO_HOSTNAME=relay-us.example.com</span>
@@ -607,7 +607,7 @@ uses <code>gethostname()</code>, which on a fresh OVH VPS is something like
 
 <hr />
 <h2>DNS prerequisites for outbound delivery</h2>
-<p>Outbound SMTP delivery — the whole point of this tunnel — is a DNS
+<p>Outbound SMTP delivery - the whole point of this tunnel - is a DNS
 problem first. To get past Gmail / M365 / Yahoo, every VPS that you
 relay through needs <strong>all five</strong> of the following set up before it can
 deliver mail. Skipping any one of them produces a 5xx rejection that
@@ -633,7 +633,7 @@ looks like a tunnel bug but isn't.</p>
 </tr>
 <tr>
 <td>2</td>
-<td><strong>Forward (AAAA)</strong>: hostname → IPv6 (if the VPS has IPv6 — most do)</td>
+<td><strong>Forward (AAAA)</strong>: hostname → IPv6 (if the VPS has IPv6 - most do)</td>
 <td>Your DNS provider</td>
 <td><code>dig +short AAAA relay-us.example.com</code></td>
 <td></td>
@@ -672,7 +672,7 @@ looks like a tunnel bug but isn't.</p>
   on the apex (<code>example.com</code>).</strong> Gmail's SPF check runs against the
   envelope <code>MAIL FROM</code> domain. Real Mailcue traffic will use
   <code>From: user@example.com</code>, so the apex must authorize <em>every</em> relay
-  IP. Use the <code>a:</code> mechanism — it covers both A and AAAA records:</li>
+  IP. Use the <code>a:</code> mechanism - it covers both A and AAAA records:</li>
 </ul>
 <p><code>text
   example.com.   IN  TXT  "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"</code></p>
@@ -680,7 +680,7 @@ looks like a tunnel bug but isn't.</p>
   don't need to enumerate <code>ip4:</code>/<code>ip6:</code> per address.</p>
 <p>Once published, validate end-to-end against
 <a href="http://www.port25.com/authentication-checker/">port25 verifier</a> by
-sending a message via the tunnel to <code>check-auth@verifier.port25.com</code> —
+sending a message via the tunnel to <code>check-auth@verifier.port25.com</code> -
 its auto-reply grades SPF, DKIM, DMARC, and FCrDNS as seen from your
 relay's IP.</p>
 <hr />
@@ -705,7 +705,7 @@ the main MailCue container, and rewires Postfix's <code>relayhost</code> to
 <h3>2. Provision tunnels</h3>
 <p>The sidecar reads its tunnel list from <code>/etc/mailcue-sidecar/tunnels.json</code>
 inside the container (mounted as the <code>mailcue-sidecar-config</code> volume).
-<strong>You do not edit this file by hand</strong> — the Mailcue API
+<strong>You do not edit this file by hand</strong> - the Mailcue API
 (<code>/api/v1/tunnels</code>) writes it whenever an admin adds, removes, or rotates
 an egress. Each entry contains:</p>
 <ul>
@@ -716,10 +716,10 @@ an egress. Each entry contains:</p>
 </ul>
 <h3>3. One-time bootstrap</h3>
 <p>On a fresh install, the sidecar will start with an empty <code>tunnels.json</code>
-and refuse to relay (Postfix will queue locally — that's the safe default).
+and refuse to relay (Postfix will queue locally - that's the safe default).
 The bootstrap flow is:</p>
 <ol>
-<li><code>docker compose ... up -d</code> — sidecar generates <code>client.key</code> /
+<li><code>docker compose ... up -d</code> - sidecar generates <code>client.key</code> /
    <code>client.pub</code> in <code>/var/lib/mailcue-sidecar/</code>.</li>
 <li>Mailcue admin reads <code>client.pub</code> (the API exposes it at
    <code>GET /api/v1/tunnels/client-pubkey</code>) and sends it to a VPS operator.</li>
@@ -728,7 +728,7 @@ The bootstrap flow is:</p>
    API rewrites <code>tunnels.json</code>; the sidecar reloads it via inotify and
    the next outbound mail goes through.</li>
 </ol>
-<p>Postfix's queue will drain automatically once a tunnel is up — there is
+<p>Postfix's queue will drain automatically once a tunnel is up - there is
 no need to restart the MailCue container.</p>
 <hr />
 <h2>Key rotation</h2>
@@ -745,7 +745,7 @@ cat<span class="w"> </span>/var/lib/mailcue-edge/server.pub
 
 <p>Hand the new pubkey to every Mailcue admin who relays through this VPS.
 They update their tunnel record (<code>PATCH /api/v1/tunnels/{id}</code> with the new
-<code>edge_pubkey</code>) — the sidecar will switch over on the next reconnect. Once
+<code>edge_pubkey</code>) - the sidecar will switch over on the next reconnect. Once
 every consumer has switched, delete <code>server.key.old</code>.</p>
 <h3>Sidecar client key</h3>
 <div class="codehilite"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue-sidecar<span class="w"> </span>mailcue-relay-sidecar<span class="w"> </span>keygen<span class="w"> </span>--rotate
@@ -805,7 +805,7 @@ with the pubkey from <code>GET /api/v1/tunnels/client-pubkey</code>.</p>
 </ul>
 <h3>MX delivery failed (<code>SMTP_DELIVERY_FAILED</code>)</h3>
 <p>The edge couldn't deliver to the recipient's MX. From <code>tunnel-v0.1.1</code>
-onward each per-recipient outcome is logged at info level — you'll see
+onward each per-recipient outcome is logged at info level - you'll see
 a line like:</p>
 <div class="codehilite"><pre><span></span><code>{&quot;level&quot;:&quot;INFO&quot;,&quot;fields&quot;:{&quot;recipient&quot;:&quot;user@gmail.com&quot;,&quot;smtp_code&quot;:&quot;Some(550)&quot;,&quot;reason&quot;:&quot;5.7.26 unauthenticated email...&quot;,&quot;message&quot;:&quot;delivery perm-fail&quot;}}
 </code></pre></div>
@@ -826,9 +826,9 @@ sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class=
   IPv4 and IPv6 of the relay (use the <code>a:</code> mechanism, see "DNS
   prerequisites" above). Then verify with <code>dig +short TXT example.com</code>.</li>
 <li><strong><code>550 5.7.1 ... does not meet IPv6 sending guidelines regarding
-  PTR records</code></strong> — the IPv6 PTR for the source IP is missing or wrong.
+  PTR records</code></strong> - the IPv6 PTR for the source IP is missing or wrong.
   Set it in OVH manager (separate row from the IPv4 PTR), then re-test.</li>
-<li><strong><code>550 5.7.26 ... DKIM = did not pass</code></strong> with SPF passing — the
+<li><strong><code>550 5.7.26 ... DKIM = did not pass</code></strong> with SPF passing - the
   message has no DKIM signature. MailCue signs with OpenDKIM by default;
   if the message is going through the tunnel without being signed first,
   check that the upstream <code>mailcue</code> container has <code>mail._domainkey.&lt;domain&gt;</code>
@@ -841,7 +841,7 @@ sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class=
   the VPS IP if your provider allows it, or fall back to an established
   submission service for that recipient.</li>
 <li><strong>TLS handshake failed</strong>: the destination MX has a broken cert chain.
-  Set <code>require_tls = false</code> on that tunnel (default) — the edge will
+  Set <code>require_tls = false</code> on that tunnel (default) - the edge will
   fall back to plaintext, matching standard MX policy.</li>
 </ul>
 <p>To validate the path independently of the tunnel, run <code>swaks</code> <em>directly
@@ -860,9 +860,9 @@ fail with the same error, it's a DNS / SPF / DKIM / blocklist issue.</p>
 </code></pre></div>
 
 <p>If everything is <code>(deferred: connect to mailcue-sidecar[...]:2525: ...)</code>,
-the sidecar isn't reachable — <code>docker compose ps</code> to confirm it's up.</p>
+the sidecar isn't reachable - <code>docker compose ps</code> to confirm it's up.</p>
 <p>If everything is <code>(deferred: relay temporarily unavailable)</code>, the sidecar
-is up but has no working tunnel — check <code>docker logs mailcue-sidecar</code> for
+is up but has no working tunnel - check <code>docker logs mailcue-sidecar</code> for
 handshake errors and confirm <code>tunnels.json</code> has at least one valid entry.</p>
 <p>To force a flush after fixing the underlying issue:</p>
 <div class="codehilite"><pre><span></span><code>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mailcue<span class="w"> </span>postqueue<span class="w"> </span>-f
@@ -895,7 +895,7 @@ sudo<span class="w"> </span>systemctl<span class="w"> </span>restart<span class=
 
 <hr />
 <h2>Upgrading</h2>
-<p>The install script is idempotent — re-running it replaces the binary
+<p>The install script is idempotent - re-running it replaces the binary
 and the systemd unit, preserving state (<code>/var/lib/mailcue-edge/server.key</code>,
 <code>/etc/mailcue-edge/authorized_clients</code>, env-var drop-ins).</p>
 <div class="codehilite"><pre><span></span><code>sudo<span class="w"> </span><span class="nv">EDGE_RELEASE_URL</span><span class="o">=</span>https://github.com/Olib-AI/mailcue/releases/download/tunnel-v0.1.2<span class="w"> </span><span class="se">\</span>

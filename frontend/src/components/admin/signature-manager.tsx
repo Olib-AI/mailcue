@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, PenLine, Eye } from "lucide-react";
+import DOMPurify from "dompurify";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -64,7 +65,10 @@ function SignatureManager() {
   };
 
   const previewHtml = signature
-    ? `<br><br>--<br>${signature.replace(/\n/g, "<br>")}`
+    ? DOMPurify.sanitize(`<br><br>--<br>${signature.replace(/\n/g, "<br>")}`, {
+        ALLOWED_TAGS: ["br"],
+        ALLOWED_ATTR: [],
+      })
     : "";
 
   return (

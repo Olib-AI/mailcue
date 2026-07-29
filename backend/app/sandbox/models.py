@@ -6,7 +6,17 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +34,7 @@ class SandboxProvider(Base):
     """A messaging provider configuration owned by a user."""
 
     __tablename__ = "sandbox_providers"
+    __table_args__ = (Index("ix_sandbox_providers_user_type", "user_id", "provider_type"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -48,6 +59,11 @@ class SandboxConversation(Base):
     """A conversation thread within a provider."""
 
     __tablename__ = "sandbox_conversations"
+    __table_args__ = (
+        UniqueConstraint(
+            "provider_id", "external_id", name="uq_sandbox_conversations_provider_external"
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -69,6 +85,10 @@ class SandboxMessage(Base):
     """An individual message passing through the sandbox."""
 
     __tablename__ = "sandbox_messages"
+    __table_args__ = (
+        Index("ix_sandbox_messages_provider_created", "provider_id", "created_at", "id"),
+        Index("ix_sandbox_messages_conversation_created", "conversation_id", "created_at", "id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -97,6 +117,9 @@ class SandboxWebhookEndpoint(Base):
     """A webhook URL registered to receive sandbox events."""
 
     __tablename__ = "sandbox_webhook_endpoints"
+    __table_args__ = (
+        Index("ix_sandbox_webhook_endpoints_provider_active", "provider_id", "is_active"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -118,6 +141,9 @@ class SandboxWebhookDelivery(Base):
     """Record of a webhook delivery attempt."""
 
     __tablename__ = "sandbox_webhook_deliveries"
+    __table_args__ = (
+        Index("ix_sandbox_webhook_deliveries_endpoint_created", "endpoint_id", "created_at", "id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     endpoint_id: Mapped[str] = mapped_column(
@@ -145,6 +171,10 @@ class SandboxCall(Base):
     """A simulated voice call."""
 
     __tablename__ = "sandbox_calls"
+    __table_args__ = (
+        Index("ix_sandbox_calls_provider_created", "provider_id", "created_at", "id"),
+        Index("ix_sandbox_calls_provider_external", "provider_id", "external_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -177,6 +207,11 @@ class SandboxPhoneNumber(Base):
     """A phone number that has been purchased in the sandbox."""
 
     __tablename__ = "sandbox_phone_numbers"
+    __table_args__ = (
+        Index("ix_sandbox_phone_numbers_provider_created", "provider_id", "created_at", "id"),
+        Index("ix_sandbox_phone_numbers_provider_external", "provider_id", "external_id"),
+        Index("ix_sandbox_phone_numbers_provider_e164", "provider_id", "e164"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -204,6 +239,9 @@ class SandboxNumberOrder(Base):
     """A request to purchase one or more phone numbers."""
 
     __tablename__ = "sandbox_number_orders"
+    __table_args__ = (
+        Index("ix_sandbox_number_orders_provider_external", "provider_id", "external_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -221,6 +259,9 @@ class SandboxPortRequest(Base):
     """A number porting order."""
 
     __tablename__ = "sandbox_port_requests"
+    __table_args__ = (
+        Index("ix_sandbox_port_requests_provider_external", "provider_id", "external_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -241,6 +282,7 @@ class SandboxBrand(Base):
     """An A2P 10DLC brand registration."""
 
     __tablename__ = "sandbox_brands"
+    __table_args__ = (Index("ix_sandbox_brands_provider_external", "provider_id", "external_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(
@@ -259,6 +301,9 @@ class SandboxCampaign(Base):
     """An A2P 10DLC campaign registration."""
 
     __tablename__ = "sandbox_campaigns"
+    __table_args__ = (
+        Index("ix_sandbox_campaigns_provider_external", "provider_id", "external_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_new_uuid)
     provider_id: Mapped[str] = mapped_column(

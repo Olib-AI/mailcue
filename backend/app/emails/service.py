@@ -44,6 +44,7 @@ from app.emails.schemas import (
 from app.events.bus import event_bus
 from app.exceptions import MailServerError, NotFoundError
 from app.gpg import service as gpg_service
+from app.gpg.schemas import ImportKeyRequest
 
 logger = logging.getLogger("mailcue.emails")
 
@@ -226,6 +227,8 @@ async def get_email(
     uid: str,
     folder: str = "INBOX",
     db: AsyncSession | None = None,
+    *,
+    gpg_user_id: str | None = None,
 ) -> EmailDetail:
     """Fetch the complete email by UID and return a parsed ``EmailDetail``.
 
@@ -274,15 +277,25 @@ async def get_email(
                     detail = await parse_email_async(decrypted_bytes, uid=uid, mailbox=mailbox)
                     detail.is_read = True
                     with contextlib.suppress(Exception):
+                        if gpg_user_id is None:
+                            raise ValueError("GPG owner is required for automatic key import")
                         await gpg_service.extract_and_import_keys_from_email(
-                            decrypted_bytes, detail.from_address, db
+                            decrypted_bytes,
+                            detail.from_address,
+                            db,
+                            user_id=gpg_user_id,
                         )
                 detail.gpg = gpg_info
 
             # Auto-import public key block(s) contained in the email
             with contextlib.suppress(Exception):
+                if gpg_user_id is None:
+                    raise ValueError("GPG owner is required for automatic key import")
                 await gpg_service.extract_and_import_keys_from_email(
-                    raw_bytes, detail.from_address, db
+                    raw_bytes,
+                    detail.from_address,
+                    db,
+                    user_id=gpg_user_id,
                 )
 
             # Auto-import public key from GnuPG keyring if verified signature fingerprint exists
@@ -293,12 +306,15 @@ async def get_email(
                         gpg_inst.export_keys, detail.gpg.signer_fingerprint
                     )
                     if armor:
+                        if gpg_user_id is None:
+                            raise ValueError("GPG owner is required for automatic key import")
                         await gpg_service.import_key(
-                            gpg_service.ImportKeyRequest(
+                            ImportKeyRequest(
                                 armored_key=str(armor),
                                 mailbox_address=detail.from_address,
                             ),
                             db,
+                            user_id=gpg_user_id,
                         )
 
         return detail
@@ -361,6 +377,7 @@ async def send_email(
     *,
     sign: bool = False,
     encrypt: bool = False,
+    gpg_user_id: str | None = None,
 ) -> str:
     """Send an email via the local SMTP server (Postfix).
 
@@ -452,9 +469,17 @@ async def send_email(
     raw_bytes = msg.as_bytes()
     if db is not None:
         if sign:
-            raw_bytes = await gpg_service.sign_message(raw_bytes, request.from_address, db)
+            if gpg_user_id is None:
+                raise ValueError("GPG owner is required for signing")
+            raw_bytes = await gpg_service.sign_message(
+                raw_bytes, request.from_address, db, user_id=gpg_user_id
+            )
         if encrypt:
-            raw_bytes = await gpg_service.encrypt_message(raw_bytes, request.to_addresses, db)
+            if gpg_user_id is None:
+                raise ValueError("GPG owner is required for encryption")
+            raw_bytes = await gpg_service.encrypt_message(
+                raw_bytes, request.to_addresses, db, user_id=gpg_user_id
+            )
 
     # Re-parse the (potentially GPG-wrapped) message for sending
     final_msg = email.message_from_bytes(raw_bytes)
@@ -515,6 +540,7 @@ async def inject_email(
     *,
     sign: bool = False,
     encrypt: bool = False,
+    gpg_user_id: str | None = None,
 ) -> str:
     """Inject an email directly into a mailbox via IMAP APPEND.
 
@@ -530,9 +556,17 @@ async def inject_email(
     # GPG operations (require a database session for key lookup)
     if db is not None:
         if sign:
-            raw = await gpg_service.sign_message(raw, request.from_address, db)
+            if gpg_user_id is None:
+                raise ValueError("GPG owner is required for signing")
+            raw = await gpg_service.sign_message(
+                raw, request.from_address, db, user_id=gpg_user_id
+            )
         if encrypt:
-            raw = await gpg_service.encrypt_message(raw, request.to_addresses, db)
+            if gpg_user_id is None:
+                raise ValueError("GPG owner is required for encryption")
+            raw = await gpg_service.encrypt_message(
+                raw, request.to_addresses, db, user_id=gpg_user_id
+            )
 
     imap = await _imap_connect(request.mailbox)
 

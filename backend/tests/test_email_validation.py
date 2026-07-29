@@ -25,6 +25,17 @@ from app.emails.validation import (
 )
 from app.mailboxes.models import Mailbox
 
+
+@pytest.fixture(autouse=True)
+def _public_smtp_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep SMTP behavior tests independent from live DNS resolution."""
+
+    async def resolve(_host: str) -> list[str]:
+        return ["192.0.2.1"]
+
+    monkeypatch.setattr("app.emails.validation._resolve_public_smtp_addresses", resolve)
+
+
 OWNER_ID = "perm-owner-id-validation"
 MB_A = "a-validation@mailcue.local"
 MB_B = "b-validation@mailcue.local"

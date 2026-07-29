@@ -40,7 +40,7 @@ async def test_extract_and_import_keys_from_email_extracts_armored_blocks(
     email_text = f"From: sender@example.com\nSubject: Key Attached\n\nHere is my public key:\n\n{sample_key}"
     raw_bytes = email_text.encode("utf-8")
 
-    async def fake_import_key(req, db):
+    async def fake_import_key(req, db, *, user_id):
         return GpgKeyResponse(
             id="test-id",
             mailbox_address=req.mailbox_address or "sender@example.com",
@@ -61,7 +61,7 @@ async def test_extract_and_import_keys_from_email_extracts_armored_blocks(
 
     async with factory() as session:
         imported = await gpg_service.extract_and_import_keys_from_email(
-            raw_bytes, "sender@example.com", session
+            raw_bytes, "sender@example.com", session, user_id="test-user"
         )
         assert len(imported) == 1
         assert imported[0].mailbox_address == "sender@example.com"
@@ -84,7 +84,7 @@ async def test_fetch_key_from_keyserver_success(_engine_and_session, monkeypatch
 
     monkeypatch.setattr("urllib.request.urlopen", lambda req, timeout=15: FakeResponse())
 
-    async def fake_import_key(req, db):
+    async def fake_import_key(req, db, *, user_id):
         return GpgKeyResponse(
             id="test-id",
             mailbox_address=req.mailbox_address or "akram@olib.email",
@@ -104,5 +104,7 @@ async def test_fetch_key_from_keyserver_success(_engine_and_session, monkeypatch
     monkeypatch.setattr(gpg_service, "import_key", fake_import_key)
 
     async with factory() as session:
-        res = await gpg_service.fetch_key_from_keyserver("akram@olib.email", session)
+        res = await gpg_service.fetch_key_from_keyserver(
+            "akram@olib.email", session, user_id="test-user"
+        )
         assert res.mailbox_address == "akram@olib.email"

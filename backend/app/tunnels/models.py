@@ -27,7 +27,7 @@ class Tunnel(Base):
     endpoint_host: Mapped[str] = mapped_column(String(255), nullable=False)
     endpoint_port: Mapped[int] = mapped_column(Integer, nullable=False, default=7843)
     server_pubkey: Mapped[str] = mapped_column(String(64), nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, server_default=sa.text("1"), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, server_default=sa.true(), nullable=False)
     weight: Mapped[int] = mapped_column(Integer, server_default=sa.text("1"), nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 

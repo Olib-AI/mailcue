@@ -4,15 +4,12 @@
 
 const BASE_URL = "/api/v1";
 
-let accessToken: string | null = localStorage.getItem("access_token");
+// Access tokens stay in memory. The httpOnly refresh cookie restores a session
+// after reload without exposing a long-lived credential to JavaScript storage.
+let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
-  if (token) {
-    localStorage.setItem("access_token", token);
-  } else {
-    localStorage.removeItem("access_token");
-  }
 }
 
 export function getAccessToken(): string | null {

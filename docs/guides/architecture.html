@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Architecture — MailCue Documentation</title>
+<title>Architecture - MailCue Documentation</title>
 <meta name="description" content="Container layout, request flow, and tech stack.">
 <link rel="canonical" href="https://olib-ai.github.io/mailcue/guides/architecture.html" />
 
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olib-ai.github.io/mailcue/guides/architecture.html">
-<meta property="og:title" content="Architecture — MailCue Documentation">
+<meta property="og:title" content="Architecture - MailCue Documentation">
 <meta property="og:description" content="Container layout, request flow, and tech stack.">
 <meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
 <!-- Twitter -->
 <meta property="twitter:card" content="summary_large_image">
 <meta property="twitter:url" content="https://olib-ai.github.io/mailcue/guides/architecture.html">
-<meta property="twitter:title" content="Architecture — MailCue Documentation">
+<meta property="twitter:title" content="Architecture - MailCue Documentation">
 <meta property="twitter:description" content="Container layout, request flow, and tech stack.">
 <meta property="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
@@ -503,7 +503,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
         end
 
         subgraph storage["Persistent Storage"]
-            sqlite[("SQLite / SQLCipher<br/><sub>/var/lib/mailcue/mailcue.db</sub>")]
+            database[("SQLite / SQLCipher<br/><sub>default</sub><br/>or PostgreSQL<br/><sub>production scale</sub>")]
             maildir[("Maildir<br/><sub>/var/mail/vhosts/</sub>")]
             gpg[("GPG Keyring<br/><sub>/var/lib/mailcue/gpg/</sub>")]
         end
@@ -518,7 +518,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 
     uvicorn -- "IMAP<br/><sub>master-user</sub>" --> dovecot
     uvicorn -- "local SMTP" --> postfix
-    uvicorn --> sqlite
+    uvicorn --> database
     uvicorn --> gpg
 
     postfix -- "LMTP" --> dovecot
@@ -540,7 +540,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <h3>Backend</h3>
 <ul>
 <li><strong>Python 3.12</strong> with <strong>FastAPI</strong> and <strong>Uvicorn</strong> (async)</li>
-<li><strong>SQLAlchemy 2</strong> (async) + <strong>aiosqlite</strong> (SQLite by default, swappable to PostgreSQL)</li>
+<li><strong>SQLAlchemy 2</strong> (async) + <strong>aiosqlite</strong> (SQLite default) or <strong>Psycopg 3</strong> (PostgreSQL)</li>
 <li><strong>Alembic</strong> for database migrations</li>
 <li><strong>Argon2id</strong> password hashing, <strong>JWT</strong> (HS256) authentication</li>
 <li><strong>aioimaplib</strong> and <strong>aiosmtplib</strong> for async IMAP/SMTP operations</li>
@@ -569,6 +569,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <li><strong>Nginx</strong>: Reverse proxy and static file server</li>
 <li><strong>s6-overlay v3</strong>: Process supervisor (PID 1)</li>
 <li><strong>SQLCipher</strong>: Optional AES-256 database encryption (drop-in SQLite replacement)</li>
+<li><strong>PostgreSQL</strong>: Optional external metadata store with pooled async connections and production indexes</li>
 <li><strong>Debian Bookworm</strong> slim base image</li>
 </ul>
     </article>

@@ -6,6 +6,10 @@
 set -eu
 
 MAILCUE_MODE="${MAILCUE_MODE:-test}"
+case "${MAILCUE_MODE}" in
+    test|production) ;;
+    *) echo "[init-mailcue] ERROR: MAILCUE_MODE must be test or production." >&2; exit 1 ;;
+esac
 echo "MailCue mode: ${MAILCUE_MODE}"
 
 DOMAIN="${MAILCUE_DOMAIN:-mailcue.local}"
@@ -15,10 +19,73 @@ ADMIN_PASSWORD="${MAILCUE_ADMIN_PASSWORD:-mailcue}"
 SECRET_KEY="${MAILCUE_SECRET_KEY:-}"
 DB_PATH="${MAILCUE_DB_PATH:-/var/lib/mailcue/mailcue.db}"
 DB_ENCRYPTION_KEY="${MAILCUE_DATABASE_ENCRYPTION_KEY:-}"
+DATABASE_BACKEND="${MAILCUE_DATABASE_BACKEND:-sqlite}"
+DATABASE_URL="${MAILCUE_DATABASE_URL:-}"
+USING_SQLITE=true
+case "${DATABASE_URL}" in
+    postgresql:*|postgresql+*|postgres:*) USING_SQLITE=false ;;
+esac
+case "${DATABASE_BACKEND}" in
+    postgres|postgresql) USING_SQLITE=false ;;
+esac
+if [ -n "${MAILCUE_DATABASE_HOST:-}" ]; then
+    USING_SQLITE=false
+fi
 SSL_DIR="/etc/ssl/mailcue"
 DKIM_DIR="/etc/opendkim/keys/${DOMAIN}"
 VMAIL_BASE="/var/mail/vhosts"
 DOVECOT_USERS="/etc/dovecot/users"
+
+if [ "${MAILCUE_MODE}" = "production" ]; then
+    MASTER_PASSWORD="${MAILCUE_IMAP_MASTER_PASSWORD:-}"
+    if [ "${ADMIN_PASSWORD}" = "mailcue" ] || [ "${ADMIN_PASSWORD}" = "CHANGE_ME_PASSWORD" ] \
+       || [ "${ADMIN_PASSWORD}" = "CHANGE_ME_STRONG_PASSWORD" ] \
+       || [ "${#ADMIN_PASSWORD}" -lt 12 ]; then
+        echo "[init-mailcue] ERROR: set a unique MAILCUE_ADMIN_PASSWORD of at least 12 characters." >&2
+        exit 1
+    fi
+    case "${SECRET_KEY}" in
+        CHANGE_ME*) SECRET_KEY_UNSAFE=true ;;
+        *) SECRET_KEY_UNSAFE=false ;;
+    esac
+    if [ -z "${SECRET_KEY}" ] || [ "${SECRET_KEY_UNSAFE}" = "true" ] \
+       || [ "${#SECRET_KEY}" -lt 32 ]; then
+        echo "[init-mailcue] ERROR: set a unique MAILCUE_SECRET_KEY of at least 32 characters." >&2
+        exit 1
+    fi
+    case "${MASTER_PASSWORD}" in
+        CHANGE_ME*) MASTER_PASSWORD_UNSAFE=true ;;
+        *) MASTER_PASSWORD_UNSAFE=false ;;
+    esac
+    if [ -z "${MASTER_PASSWORD}" ] || [ "${MASTER_PASSWORD}" = "master-secret" ] \
+       || [ "${MASTER_PASSWORD_UNSAFE}" = "true" ] \
+       || [ "${#MASTER_PASSWORD}" -lt 32 ]; then
+        echo "[init-mailcue] ERROR: set a unique MAILCUE_IMAP_MASTER_PASSWORD of at least 32 characters." >&2
+        exit 1
+    fi
+    case "${DOMAIN}" in
+        *.local|*CHANGE_ME*|*change_me*)
+            echo "[init-mailcue] ERROR: set MAILCUE_DOMAIN to a public email domain." >&2
+            exit 1
+            ;;
+    esac
+    case "${HOSTNAME}" in
+        *.local|*CHANGE_ME*|*change_me*)
+            echo "[init-mailcue] ERROR: set MAILCUE_HOSTNAME to a public mail hostname." >&2
+            exit 1
+            ;;
+    esac
+    case "${MAILCUE_ACME_EMAIL:-}" in
+        *CHANGE_ME*) ACME_CONFIGURED=false ;;
+        ?*) ACME_CONFIGURED=true ;;
+        *) ACME_CONFIGURED=false ;;
+    esac
+    if [ "${ACME_CONFIGURED}" = "false" ] \
+       && { [ -z "${MAILCUE_TLS_CERT_PATH:-}" ] || [ -z "${MAILCUE_TLS_KEY_PATH:-}" ]; }; then
+        echo "[init-mailcue] ERROR: configure ACME email or custom TLS certificate paths." >&2
+        exit 1
+    fi
+fi
 
 # Set the container's system hostname so SMTP EHLO uses the correct value
 # instead of the Docker container ID (e.g., "1c7faeb9da74").
@@ -327,6 +394,9 @@ if [ "$MAILCUE_MODE" = "production" ]; then
     # Create empty virtual_mailboxes and postmap it
     touch /etc/postfix/virtual_mailboxes
     postmap /etc/postfix/virtual_mailboxes
+    touch /etc/postfix/sender_login_maps
+    postmap /etc/postfix/sender_login_maps
+    postconf -e "smtpd_sender_login_maps=hash:/etc/postfix/sender_login_maps"
 
     # Add SPF policy check to smtpd_recipient_restrictions
     postconf -e "smtpd_recipient_restrictions=permit_mynetworks, permit_sasl_authenticated, reject_unauth_destination, check_policy_service unix:private/policyd-spf"
@@ -350,6 +420,7 @@ smtps     inet  n       -       n       -       -       smtpd
   -o smtpd_tls_auth_only=yes
   -o smtpd_reject_unlisted_recipient=yes
   -o smtpd_recipient_restrictions=permit_sasl_authenticated,reject
+  -o smtpd_sender_restrictions=reject_authenticated_sender_login_mismatch
   -o milter_macro_daemon_name=ORIGINATING
   -o smtpd_relay_restrictions=permit_sasl_authenticated,reject
   -o smtpd_milters=unix:/var/run/opendkim/opendkim.sock
@@ -409,6 +480,11 @@ SMTPS
         echo "[init-mailcue] [production] Configuring Nginx HTTPS..."
         mkdir -p /etc/nginx/conf.d
 
+        # Move the test-mode HTTP application server off the public listener.
+        # The generated server below becomes the only public port 80 default
+        # and redirects everything except ACME challenges to HTTPS.
+        sed -i 's/listen 80 default_server;/listen 127.0.0.1:8081;/' /etc/nginx/nginx.conf
+
         cat > /etc/nginx/conf.d/https.conf << 'NGINXHTTPS'
 # =============================================================================
 # Nginx HTTPS — MailCue Production Mode (auto-generated by init-mailcue)
@@ -416,7 +492,7 @@ SMTPS
 
 # Redirect HTTP to HTTPS (except ACME challenge)
 server {
-    listen 80;
+    listen 80 default_server;
     server_name _;
 
     # Allow ACME challenge over HTTP for cert renewal
@@ -445,6 +521,7 @@ server {
 
     # HSTS
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    include /etc/nginx/security_headers.conf;
 
     root /var/www/mailcue;
     index index.html;
@@ -505,6 +582,7 @@ server {
         chunked_transfer_encoding off;
         proxy_read_timeout 3600s;
         add_header X-Accel-Buffering no;
+        include /etc/nginx/security_headers.conf;
     }
 
     # --- Well-known paths ---
@@ -530,6 +608,7 @@ server {
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
         expires 7d;
         add_header Cache-Control "public, immutable";
+        include /etc/nginx/security_headers.conf;
         try_files $uri =404;
     }
 }
@@ -650,13 +729,19 @@ MASTER_USER_PASS="${MAILCUE_IMAP_MASTER_PASSWORD:-master-secret}"
 # Hash the master user password
 MASTER_HASH=$(doveadm pw -s SHA512-CRYPT -p "${MASTER_USER_PASS}" 2>/dev/null || true)
 if [ -z "${MASTER_HASH}" ]; then
+    if [ "${MAILCUE_MODE}" = "production" ]; then
+        echo "[init-mailcue] ERROR: could not hash the Dovecot master password." >&2
+        exit 1
+    fi
     MASTER_HASH="{PLAIN}${MASTER_USER_PASS}"
 fi
 
-if [ ! -f "${MASTER_USERS}" ] || ! grep -q "^${MASTER_USER_NAME}:" "${MASTER_USERS}" 2>/dev/null; then
-    touch "${MASTER_USERS}"
-    echo "${MASTER_USER_NAME}:${MASTER_HASH}" >> "${MASTER_USERS}"
-fi
+MASTER_USERS_TMP="${MASTER_USERS}.tmp"
+touch "${MASTER_USERS}"
+awk -F: -v user="${MASTER_USER_NAME}" '$1 != user' "${MASTER_USERS}" > "${MASTER_USERS_TMP}"
+echo "${MASTER_USER_NAME}:${MASTER_HASH}" >> "${MASTER_USERS_TMP}"
+mv "${MASTER_USERS_TMP}" "${MASTER_USERS}"
+chmod 600 "${MASTER_USERS}"
 chmod 640 "${MASTER_USERS}"
 chown root:dovecot "${MASTER_USERS}" 2>/dev/null || chown root:root "${MASTER_USERS}"
 
@@ -697,8 +782,11 @@ chown postfix:postfix /var/spool/postfix/private
 mkdir -p /var/lib/postfix
 chown postfix:postfix /var/lib/postfix
 
-# Ensure the SQLite database directory exists
-mkdir -p "$(dirname "${DB_PATH}")"
+# Ensure local application state exists. The database file itself is only used
+# by SQLite; PostgreSQL deployments still keep keys and generated state here.
+if [ "${USING_SQLITE}" = "true" ]; then
+    mkdir -p "$(dirname "${DB_PATH}")"
+fi
 chown root:root /var/lib/mailcue
 
 # Nginx directories
@@ -717,7 +805,7 @@ mkdir -p /run
 #   - non-SQLite garbage           → corrupt DB; fail loudly with guidance
 #                                    rather than corrupt it further
 # -------------------------------------------------------------------------
-if [ -n "${DB_ENCRYPTION_KEY}" ] && [ -f "${DB_PATH}" ]; then
+if [ "${USING_SQLITE}" = "true" ] && [ -n "${DB_ENCRYPTION_KEY}" ] && [ -f "${DB_PATH}" ]; then
     DB_SIZE=$(stat -c '%s' "${DB_PATH}" 2>/dev/null || echo 0)
     DB_HEADER=$(head -c 16 "${DB_PATH}" 2>/dev/null | tr -d '\0' || true)
 
@@ -762,17 +850,28 @@ fi
 # -------------------------------------------------------------------------
 # 8. Run Alembic migrations (if the application is installed)
 # -------------------------------------------------------------------------
+if [ -n "${MAILCUE_MIGRATION_DATABASE_URL:-}" ]; then
+    export MAILCUE_DATABASE_URL="${MAILCUE_MIGRATION_DATABASE_URL}"
+fi
+
 if command -v alembic >/dev/null 2>&1 && [ -f /opt/mailcue/alembic.ini ]; then
     echo "[init-mailcue] Running database migrations..."
 
-    # Export the database URL so alembic/env.py resolves an absolute path.
-    # The config.py default uses 3 slashes (relative); we need 4 (absolute).
-    export MAILCUE_DATABASE_URL="sqlite+aiosqlite:///${DB_PATH}"
+    if [ "${USING_SQLITE}" = "true" ]; then
+        # Resolve the configurable SQLite path to an absolute SQLAlchemy URL.
+        export MAILCUE_DATABASE_URL="sqlite+aiosqlite:///${DB_PATH}"
+    fi
 
     cd /opt/mailcue
 
-    # Check if alembic_version table exists (i.e. migrations were run before).
-    HAS_VERSION=$(python3 -c "
+    if [ "${USING_SQLITE}" = "false" ]; then
+        # Alembic handles fresh and existing PostgreSQL databases.  The
+        # migration environment serializes concurrent starters with an
+        # advisory lock.
+        alembic upgrade head
+    else
+        # Check if alembic_version table exists (i.e. migrations were run before).
+        HAS_VERSION=$(python3 -c "
 import sqlite3, os
 try:
     conn = sqlite3.connect('${DB_PATH}')
@@ -787,12 +886,12 @@ finally:
     conn.close()
 " 2>/dev/null || echo "no")
 
-    if [ "$HAS_VERSION" = "yes" ]; then
-        # Managed database — apply pending migrations.
-        alembic upgrade head
-    else
-        # Check if this is a legacy pre-migration DB or a fresh one.
-        HAS_USERS=$(python3 -c "
+        if [ "$HAS_VERSION" = "yes" ]; then
+            # Managed database — apply pending migrations.
+            alembic upgrade head
+        else
+            # Check if this is a legacy pre-migration DB or a fresh one.
+            HAS_USERS=$(python3 -c "
 import sqlite3, os
 try:
     conn = sqlite3.connect('${DB_PATH}')
@@ -807,14 +906,15 @@ finally:
     conn.close()
 " 2>/dev/null || echo "no")
 
-        if [ "$HAS_USERS" = "yes" ]; then
-            # Legacy database — stamp at initial migration, then upgrade.
-            echo "[init-mailcue] Legacy database detected, stamping and upgrading..."
-            alembic stamp 001_initial
-            alembic upgrade head
-        else
-            # Fresh database — run all migrations from scratch.
-            alembic upgrade head
+            if [ "$HAS_USERS" = "yes" ]; then
+                # Legacy database — stamp at initial migration, then upgrade.
+                echo "[init-mailcue] Legacy database detected, stamping and upgrading..."
+                alembic stamp 001_initial
+                alembic upgrade head
+            else
+                # Fresh database — run all migrations from scratch.
+                alembic upgrade head
+            fi
         fi
     fi
 

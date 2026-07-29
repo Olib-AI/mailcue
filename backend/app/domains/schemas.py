@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, field_validator
@@ -36,6 +37,14 @@ class DomainCreateRequest(BaseModel):
             if part.startswith("-") or part.endswith("-"):
                 raise ValueError("Domain labels cannot start or end with a hyphen")
         return v
+
+    @field_validator("dkim_selector")
+    @classmethod
+    def validate_dkim_selector(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", value):
+            raise ValueError("DKIM selector must be a valid DNS label")
+        return value
 
 
 # ── Responses ────────────────────────────────────────────────────

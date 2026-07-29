@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MailCue — Realistic Email Testing Server</title>
+<title>MailCue - Realistic Email Testing Server</title>
 <meta name="description" content="A fully-featured email testing server in a single Docker container. SMTP, IMAP, DKIM, DMARC, SpamAssassin, a REST API with Python & Node SDKs, an MCP server for AI agents, and a modern web UI. Run it for tests or as a real production mail server.">
 <meta name="theme-color" content="#0a0f0d">
-<meta property="og:title" content="MailCue — Realistic Email Testing Server">
-<meta property="og:description" content="Postfix, Dovecot, DKIM, DMARC, SpamAssassin, FastAPI, SDKs, and an MCP server for AI agents — in one Docker container. Test email, or deploy it as a real mail server.">
+<meta property="og:title" content="MailCue - Realistic Email Testing Server">
+<meta property="og:description" content="Postfix, Dovecot, DKIM, DMARC, SpamAssassin, FastAPI, SDKs, and an MCP server for AI agents - in one Docker container. Test email, or deploy it as a real mail server.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://olib-ai.github.io/mailcue/">
 <meta property="og:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
@@ -17,7 +17,7 @@
 <!-- Twitter Meta Tags -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://olib-ai.github.io/mailcue/">
-<meta name="twitter:title" content="MailCue — Realistic Email Testing Server">
+<meta name="twitter:title" content="MailCue - Realistic Email Testing Server">
 <meta name="twitter:description" content="A fully-featured email testing server in a single Docker container. SMTP, IMAP, DKIM, DMARC, SpamAssassin, a REST API with Python & Node SDKs, an MCP server for AI agents, and a modern web UI. Run it for tests or as a real production mail server.">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/Olib-AI/mailcue/main/examples/regular-email.png">
 
@@ -672,7 +672,7 @@ footer {
     <div class="reveal">
       <div class="section-label">Features</div>
       <h2 class="section-title">Everything you need.<br>Nothing you don't.</h2>
-      <p class="section-desc">One container replaces an entire email infrastructure. No external databases, no message queues, no configuration headaches.</p>
+      <p class="section-desc">One container replaces an entire email infrastructure. SQLite works out of the box, while PostgreSQL is available for larger production workloads.</p>
     </div>
     <div class="feature-grid reveal">
       <div class="feature-card">
@@ -747,8 +747,8 @@ footer {
       </div>
       <div class="feature-card">
         <div class="feature-icon"><img src="icons/cube.png" alt="" width="22" height="22" loading="lazy"></div>
-        <h3>Single Container</h3>
-        <p>One docker run. No external databases, no Redis, no message queues. SQLite with optional AES-256 encryption.</p>
+        <h3>Flexible Database</h3>
+        <p>Start with SQLite and optional AES-256 encryption, or connect PostgreSQL for concurrent production workloads and larger datasets.</p>
       </div>
     </div>
   </div>
@@ -766,7 +766,8 @@ footer {
       <div class="stack-col">
         <h3>Backend</h3>
         <div class="stack-item"><strong>Python 3.12</strong>&nbsp; FastAPI + Uvicorn</div>
-        <div class="stack-item"><strong>SQLAlchemy 2</strong>&nbsp; async + aiosqlite</div>
+        <div class="stack-item"><strong>SQLAlchemy 2</strong>&nbsp; async database layer</div>
+        <div class="stack-item"><strong>SQLite / PostgreSQL</strong>&nbsp; flexible storage</div>
         <div class="stack-item"><strong>Alembic</strong>&nbsp; database migrations</div>
         <div class="stack-item"><strong>Argon2id</strong>&nbsp; password hashing</div>
         <div class="stack-item"><strong>JWT</strong>&nbsp; HS256 authentication</div>
@@ -877,7 +878,7 @@ footer {
       </div>
       <div class="api-card">
         <h3><a href="guides/configuration.html">Configuration &rarr;</a></h3>
-        <p>Configure MailCue using environment variables, network settings, and exposed ports.</p>
+        <p>Configure MailCue using environment variables, PostgreSQL or SQLite, network settings, and exposed ports.</p>
       </div>
       <div class="api-card">
         <h3><a href="guides/api.html">API Reference &rarr;</a></h3>
@@ -885,7 +886,7 @@ footer {
       </div>
       <div class="api-card">
         <h3><a href="guides/production.html">Production Deployment &rarr;</a></h3>
-        <p>Step-by-step production setup: hardened mail server mode, DNS (MX, SPF, DKIM, DMARC), and SSL certificates.</p>
+        <p>Set up hardened mail server mode, PostgreSQL deployment and migration, DNS records, and TLS certificates.</p>
       </div>
       <div class="api-card">
         <h3><a href="guides/tunnel.html">SMTP Tunnel &rarr;</a></h3>

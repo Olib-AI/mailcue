@@ -22,11 +22,11 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "domains",
-        sa.Column("mta_sts_verified", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("mta_sts_verified", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
     op.add_column(
         "domains",
-        sa.Column("tls_rpt_verified", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("tls_rpt_verified", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
 
 

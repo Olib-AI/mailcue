@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DomainManager } from "@/components/admin/domain-manager";
 import { GpgKeyManager } from "@/components/gpg/gpg-key-manager";

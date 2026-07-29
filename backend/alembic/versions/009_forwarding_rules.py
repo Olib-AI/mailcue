@@ -25,7 +25,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("user_id", sa.String(36), nullable=False, index=True),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("match_from", sa.String(500), nullable=True),
         sa.Column("match_to", sa.String(500), nullable=True),
         sa.Column("match_subject", sa.String(500), nullable=True),

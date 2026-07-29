@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
+from app.addressing import normalize_domain, normalize_local_part
+
 
 class MailboxCreateRequest(BaseModel):
     """Request body for creating a new mailbox.
@@ -19,11 +21,31 @@ class MailboxCreateRequest(BaseModel):
     domain: str | None = None
     display_name: str = ""
 
+    @field_validator("username")
+    @classmethod
+    def valid_username(cls, value: str) -> str:
+        try:
+            return normalize_local_part(value)
+        except ValueError as exc:
+            raise ValueError(
+                "Username must be 1-64 characters using letters, numbers, dot, underscore, "
+                "plus, or hyphen, without consecutive dots"
+            ) from exc
+
+    @field_validator("domain")
+    @classmethod
+    def valid_domain(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return normalize_domain(value)
+
     @field_validator("password")
     @classmethod
     def password_min_length(cls, v: str) -> str:
-        if len(v) < 4:
-            raise ValueError("Password must be at least 4 characters")
+        if len(v) < 12:
+            raise ValueError("Password must be at least 12 characters")
+        if len(v) > 1024:
+            raise ValueError("Password must not exceed 1024 characters")
         return v
 
 

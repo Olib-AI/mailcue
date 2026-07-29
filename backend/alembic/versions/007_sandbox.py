@@ -32,7 +32,7 @@ def upgrade() -> None:
         sa.Column("provider_type", sa.String(50), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
         sa.Column("credentials", sa.JSON(), nullable=False, server_default="{}"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
     )
@@ -76,7 +76,7 @@ def upgrade() -> None:
         sa.Column("raw_request", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("raw_response", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("metadata_json", sa.JSON(), nullable=False, server_default="{}"),
-        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
 
@@ -92,7 +92,7 @@ def upgrade() -> None:
         sa.Column("url", sa.String(500), nullable=False),
         sa.Column("secret", sa.String(255), nullable=True),
         sa.Column("event_types", sa.JSON(), nullable=False, server_default="[]"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(), nullable=False),
     )
 

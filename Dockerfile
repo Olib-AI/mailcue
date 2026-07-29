@@ -8,7 +8,7 @@
 FROM node:26-slim AS frontend-builder
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps
 COPY frontend/ .
 RUN npm run build
 
@@ -20,6 +20,7 @@ LABEL org.opencontainers.image.description="Realistic email testing server — P
 LABEL org.opencontainers.image.licenses="MIT"
 
 ARG S6_OVERLAY_VERSION=3.2.0.2
+ARG S6_OVERLAY_NOARCH_SHA256=6dbcde158a3e78b9bb141d7bcb5ccb421e563523babbe2c64470e76f4fd02dae
 ARG TARGETARCH
 
 # Environment defaults (overridable at runtime)
@@ -27,13 +28,9 @@ ENV MAILCUE_MODE=test \
     MAILCUE_DOMAIN=mailcue.local \
     MAILCUE_HOSTNAME=mail.mailcue.local \
     MAILCUE_ADMIN_USER=admin \
-    MAILCUE_ADMIN_PASSWORD=mailcue \
-    MAILCUE_SECRET_KEY="" \
     MAILCUE_DB_PATH=/var/lib/mailcue/mailcue.db \
-    MAILCUE_DATABASE_ENCRYPTION_KEY="" \
     MAILCUE_ACME_EMAIL="" \
     MAILCUE_TLS_CERT_PATH="" \
-    MAILCUE_TLS_KEY_PATH="" \
     S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     # First-boot init does heavy work synchronously: 4096-bit CA + server
     # cert generation, 2048-bit DKIM key generation, OpenDMARC config,
@@ -115,15 +112,20 @@ RUN case "${TARGETARCH}" in \
     && ln -sf /usr/local/lib/libsqlcipher.so.0 "${LIBDIR}/libsqlite3.so.0"
 
 # s6-overlay v3 installation (multi-arch)
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp/
-RUN tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz && rm -f /tmp/s6-overlay-noarch.tar.xz
+RUN curl -fsSL \
+        "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz" \
+        -o /tmp/s6-overlay-noarch.tar.xz \
+    && echo "${S6_OVERLAY_NOARCH_SHA256}  /tmp/s6-overlay-noarch.tar.xz" | sha256sum -c - \
+    && tar -C / -Jxpf /tmp/s6-overlay-noarch.tar.xz \
+    && rm -f /tmp/s6-overlay-noarch.tar.xz
 # Map Docker TARGETARCH to s6-overlay arch names
 RUN case "${TARGETARCH}" in \
-        amd64) S6_ARCH="x86_64" ;; \
-        arm64) S6_ARCH="aarch64" ;; \
+        amd64) S6_ARCH="x86_64"; S6_SHA256="59289456ab1761e277bd456a95e737c06b03ede99158beb24f12b165a904f478" ;; \
+        arm64) S6_ARCH="aarch64"; S6_SHA256="8b22a2eaca4bf0b27a43d36e65c89d2701738f628d1abd0cea5569619f66f785" ;; \
         *) echo "Unsupported arch: ${TARGETARCH}" && exit 1 ;; \
     esac \
     && curl -fsSL "https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" -o /tmp/s6-overlay-arch.tar.xz \
+    && echo "${S6_SHA256}  /tmp/s6-overlay-arch.tar.xz" | sha256sum -c - \
     && tar -C / -Jxpf /tmp/s6-overlay-arch.tar.xz \
     && rm -f /tmp/s6-overlay-arch.tar.xz
 
@@ -155,7 +157,8 @@ ENV PATH="/opt/mailcue/venv/bin:${PATH}" \
 # Install backend: copy everything and install in one step
 COPY backend/ /opt/mailcue/
 WORKDIR /opt/mailcue
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir .
 
 # Copy rootfs overlay — s6 services, mail configs, nginx config
 COPY rootfs/ /
@@ -173,7 +176,7 @@ EXPOSE 25 587 143 993 110 995 80 443 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -sf http://127.0.0.1:80/api/v1/health || exit 1
+    CMD curl -sf http://127.0.0.1:8000/api/v1/health || exit 1
 
 # Entrypoint — s6-overlay init
 ENTRYPOINT ["/init"]
