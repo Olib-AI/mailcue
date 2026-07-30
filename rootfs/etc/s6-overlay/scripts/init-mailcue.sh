@@ -350,14 +350,11 @@ if [ -n "${RELAY_HOST}" ]; then
         # Authenticated smarthost (SendGrid / Mailgun / AWS SES / Postmark / ...).
         # Enforce TLS — SASL credentials must never traverse plaintext.
         echo "[init-mailcue] Configuring authenticated smarthost relay: ${RELAY_HOST}:${RELAY_PORT}"
-        cat >> /etc/postfix/main.cf << RELAY
-# --- Smarthost relay (auto-configured, SASL + TLS) ---
-relayhost = [${RELAY_HOST}]:${RELAY_PORT}
-smtp_sasl_auth_enable = yes
-smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
-smtp_sasl_security_options = noanonymous
-smtp_tls_security_level = encrypt
-RELAY
+        postconf -e "relayhost=[${RELAY_HOST}]:${RELAY_PORT}"
+        postconf -e "smtp_sasl_auth_enable=yes"
+        postconf -e "smtp_sasl_password_maps=hash:/etc/postfix/sasl_passwd"
+        postconf -e "smtp_sasl_security_options=noanonymous"
+        postconf -e "smtp_tls_security_level=encrypt"
         echo "[${RELAY_HOST}]:${RELAY_PORT} ${RELAY_USER}:${RELAY_PASSWORD}" > /etc/postfix/sasl_passwd
         postmap /etc/postfix/sasl_passwd
         chmod 600 /etc/postfix/sasl_passwd /etc/postfix/sasl_passwd.db
@@ -369,12 +366,9 @@ RELAY
         # confidentiality is provided by the Noise IK tunnel between
         # the sidecar and the remote edge, not by the loopback hop.
         echo "[init-mailcue] Configuring trusted relay (no SASL, no TLS): ${RELAY_HOST}:${RELAY_PORT}"
-        cat >> /etc/postfix/main.cf << RELAY
-# --- Trusted relay (auto-configured, plain TCP) ---
-relayhost = [${RELAY_HOST}]:${RELAY_PORT}
-smtp_sasl_auth_enable = no
-smtp_tls_security_level = none
-RELAY
+        postconf -e "relayhost=[${RELAY_HOST}]:${RELAY_PORT}"
+        postconf -e "smtp_sasl_auth_enable=no"
+        postconf -e "smtp_tls_security_level=none"
         echo "[init-mailcue] Trusted relay configured."
     fi
 fi
@@ -705,8 +699,8 @@ awk -F: '
         latest[$1] = $0
     }
     END {
-        for (index = 1; index <= count; index++) {
-            print latest[order[index]]
+        for (entry_number = 1; entry_number <= count; entry_number++) {
+            print latest[order[entry_number]]
         }
     }
 ' "${DOVECOT_USERS}" > "${DOVECOT_USERS_TMP}"
