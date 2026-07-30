@@ -689,6 +689,7 @@ async def test_validate_mailbox_via_tunnel_accept_all() -> None:
     assert result.is_valid is True
     assert result.catch_all is True
     assert result.transport == "mailcue_tunnel"
+    assert smtp.execute_command.await_args.kwargs["timeout"] == 22.0
 
 
 @pytest.mark.asyncio

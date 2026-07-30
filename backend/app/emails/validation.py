@@ -565,6 +565,10 @@ async def validate_mailbox_via_tunnel(
             b"XMAILCUEPROBE",
             target_email.encode("utf-8"),
             sender_email.encode("utf-8"),
+            timeout=max(
+                settings.validation_smtp_timeout_seconds,
+                settings.validation_total_timeout_seconds - 3,
+            ),
         )
         text = _smtp_text(message)
         match = re.search(r"upstream_code=(\d{3})", text)

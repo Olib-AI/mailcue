@@ -118,7 +118,7 @@ class Settings(BaseSettings):
     # ── Email Validation ──────────────────────────────────────────
     validation_smtp_probe_enabled: bool = True
     validation_smtp_timeout_seconds: float = 8.0
-    validation_total_timeout_seconds: float = 20.0
+    validation_total_timeout_seconds: float = 25.0
     validation_probe_relay_host: str = ""
     validation_probe_relay_port: int = 2525
     validation_rate_limit: str = "30/minute"

@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use anyhow::{Context, anyhow};
 use bytes::Bytes;
+use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tracing::{info, warn};
 
@@ -25,7 +26,9 @@ use mailcue_relay_proto::{Frame, ProbeStatus, RelayOpts, RelayStatus};
 use crate::config::{PartialFailurePolicy, SidecarConfig};
 use crate::pool::Pool;
 use crate::selector::Selector;
-use crate::tunnels::TunnelRegistry;
+use crate::tunnels::{Tunnel, TunnelRegistry};
+
+const PROBE_REQUEST_TIMEOUT_SECS: u64 = 20;
 
 /// SMTP response with explicit code (for metrics) and full reply line.
 #[derive(Debug, Clone)]
@@ -192,78 +195,127 @@ impl SmtpRelay {
         if candidates.is_empty() {
             return SmtpReply::new(451, "451 4.4.1 no healthy validation tunnel");
         }
-        for tunnel in candidates {
-            let request_id = self.request_seq.fetch_add(1, Ordering::Relaxed);
-            let mut conn = match self.pool.lease(tunnel).await {
-                Ok(value) => value,
-                Err(_) => continue,
-            };
-            let frame = Frame::Probe {
-                request_id,
-                envelope_from: envelope_from.clone(),
-                recipient: recipient.clone(),
-                control_recipient: control_recipient.clone(),
-                opts: RelayOpts::default(),
-            };
-            let req_to = Duration::from_secs(self.cfg.request_timeout_secs);
-            match timeout(req_to, conn.channel.send_frame(&frame)).await {
-                Ok(Ok(())) => {}
-                Ok(Err(error)) => {
-                    self.pool.discard(conn, &format!("probe write: {error}"));
-                    continue;
+        // Probe every healthy relay concurrently. Normal delivery uses ordered
+        // failover, but recipient validation has a short synchronous API
+        // budget: one slow edge must not prevent a second edge from answering.
+        let (result_tx, mut result_rx) = mpsc::channel(candidates.len());
+        for tunnel in candidates.into_iter().cloned() {
+            let relay = self.clone();
+            let result_tx = result_tx.clone();
+            let envelope_from = envelope_from.clone();
+            let recipient = recipient.clone();
+            let control_recipient = control_recipient.clone();
+            tokio::spawn(async move {
+                let result = relay
+                    .probe_one(tunnel, envelope_from, recipient, control_recipient)
+                    .await;
+                let _ = result_tx.send(result).await;
+            });
+        }
+        drop(result_tx);
+
+        let definitive = timeout(
+            Duration::from_secs(PROBE_REQUEST_TIMEOUT_SECS),
+            async move {
+                while let Some(result) = result_rx.recv().await {
+                    if result.is_some() {
+                        return result;
+                    }
                 }
-                Err(_) => {
-                    self.pool.discard(conn, "probe write timeout");
-                    continue;
-                }
-            }
-            let received = timeout(req_to, conn.channel.recv_frame()).await;
-            match received {
-                Ok(Ok(Frame::ProbeResult {
-                    request_id: got_id,
-                    target,
-                    control,
-                })) if got_id == request_id => {
-                    self.pool.release(conn);
-                    let upstream_code = target.smtp_code.unwrap_or(0);
-                    let mx = smtp_safe(&target.mx);
-                    return match target.status {
-                        ProbeStatus::Accepted
-                            if control
-                                .as_ref()
-                                .is_some_and(|value| value.status == ProbeStatus::Accepted) =>
-                        {
-                            SmtpReply::new(
-                                252,
-                                format!(
-                                    "252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"
-                                ),
-                            )
-                        }
-                        ProbeStatus::Accepted => SmtpReply::new(
-                            250,
-                            format!(
-                                "250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"
-                            ),
-                        ),
-                        ProbeStatus::Rejected => SmtpReply::new(
-                            550,
-                            format!(
-                                "550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"
-                            ),
-                        ),
-                        ProbeStatus::Unknown => continue,
-                    };
-                }
-                Ok(Ok(other)) => {
-                    self.pool
-                        .discard(conn, &format!("unexpected probe frame: {other:?}"));
-                }
-                Ok(Err(error)) => self.pool.discard(conn, &format!("probe receive: {error}")),
-                Err(_) => self.pool.discard(conn, "probe receive timeout"),
-            }
+                None
+            },
+        )
+        .await
+        .ok()
+        .flatten();
+        if let Some(reply) = definitive {
+            return reply;
         }
         SmtpReply::new(451, "451 4.4.1 validation inconclusive across all tunnels")
+    }
+
+    async fn probe_one(
+        &self,
+        tunnel: Tunnel,
+        envelope_from: String,
+        recipient: String,
+        control_recipient: String,
+    ) -> Option<SmtpReply> {
+        let request_id = self.request_seq.fetch_add(1, Ordering::Relaxed);
+        let mut conn = self.pool.lease(&tunnel).await.ok()?;
+        let frame = Frame::Probe {
+            request_id,
+            envelope_from,
+            recipient,
+            control_recipient,
+            opts: RelayOpts::default(),
+        };
+        let req_to = Duration::from_secs(
+            self.cfg
+                .request_timeout_secs
+                .min(PROBE_REQUEST_TIMEOUT_SECS),
+        );
+        match timeout(req_to, conn.channel.send_frame(&frame)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                self.pool.discard(conn, &format!("probe write: {error}"));
+                return None;
+            }
+            Err(_) => {
+                self.pool.discard(conn, "probe write timeout");
+                return None;
+            }
+        }
+        let received = timeout(req_to, conn.channel.recv_frame()).await;
+        match received {
+            Ok(Ok(Frame::ProbeResult {
+                request_id: got_id,
+                target,
+                control,
+            })) if got_id == request_id => {
+                self.pool.release(conn);
+                let upstream_code = target.smtp_code.unwrap_or(0);
+                let mx = smtp_safe(&target.mx);
+                match target.status {
+                    ProbeStatus::Accepted
+                        if control
+                            .as_ref()
+                            .is_some_and(|value| value.status == ProbeStatus::Accepted) =>
+                    {
+                        Some(SmtpReply::new(
+                            252,
+                            format!("252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"),
+                        ))
+                    }
+                    ProbeStatus::Accepted => Some(SmtpReply::new(
+                        250,
+                        format!(
+                            "250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"
+                        ),
+                    )),
+                    ProbeStatus::Rejected => Some(SmtpReply::new(
+                        550,
+                        format!(
+                            "550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"
+                        ),
+                    )),
+                    ProbeStatus::Unknown => None,
+                }
+            }
+            Ok(Ok(other)) => {
+                self.pool
+                    .discard(conn, &format!("unexpected probe frame: {other:?}"));
+                None
+            }
+            Ok(Err(error)) => {
+                self.pool.discard(conn, &format!("probe receive: {error}"));
+                None
+            }
+            Err(_) => {
+                self.pool.discard(conn, "probe receive timeout");
+                None
+            }
+        }
     }
 
     /// Single-tunnel send: lease a conn, frame Relay, await RelayResult.
