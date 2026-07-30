@@ -193,8 +193,19 @@ impl SmtpRelay {
         let healthy = self.pool.healthy_ids();
         let candidates = self.selector.pick_all(&view, &healthy);
         if candidates.is_empty() {
+            warn!(
+                configured_tunnels = view.tunnels.len(),
+                healthy_tunnels = healthy.len(),
+                "recipient probe has no healthy tunnel",
+            );
             return SmtpReply::new(451, "451 4.4.1 no healthy validation tunnel");
         }
+        let recipient_domain = recipient.rsplit_once('@').map_or("-", |(_, domain)| domain);
+        info!(
+            recipient_domain,
+            candidate_tunnels = candidates.len(),
+            "starting recipient probe across tunnels",
+        );
         // Probe every healthy relay concurrently. Normal delivery uses ordered
         // failover, but recipient validation has a short synchronous API
         // budget: one slow edge must not prevent a second edge from answering.
@@ -231,6 +242,11 @@ impl SmtpRelay {
         if let Some(reply) = definitive {
             return reply;
         }
+        warn!(
+            recipient_domain,
+            timeout_seconds = PROBE_REQUEST_TIMEOUT_SECS,
+            "recipient probe inconclusive across all tunnels",
+        );
         SmtpReply::new(451, "451 4.4.1 validation inconclusive across all tunnels")
     }
 
@@ -242,7 +258,23 @@ impl SmtpRelay {
         control_recipient: String,
     ) -> Option<SmtpReply> {
         let request_id = self.request_seq.fetch_add(1, Ordering::Relaxed);
-        let mut conn = self.pool.lease(&tunnel).await.ok()?;
+        let req_to = Duration::from_secs(
+            self.cfg
+                .request_timeout_secs
+                .min(PROBE_REQUEST_TIMEOUT_SECS),
+        );
+        info!(tunnel = %tunnel.id, request_id, "starting tunnel recipient probe");
+        let mut conn = match timeout(req_to, self.pool.lease(&tunnel)).await {
+            Ok(Ok(conn)) => conn,
+            Ok(Err(error)) => {
+                warn!(tunnel = %tunnel.id, request_id, %error, "recipient probe tunnel lease failed");
+                return None;
+            }
+            Err(_) => {
+                warn!(tunnel = %tunnel.id, request_id, "recipient probe tunnel lease timed out");
+                return None;
+            }
+        };
         let frame = Frame::Probe {
             request_id,
             envelope_from,
@@ -250,18 +282,15 @@ impl SmtpRelay {
             control_recipient,
             opts: RelayOpts::default(),
         };
-        let req_to = Duration::from_secs(
-            self.cfg
-                .request_timeout_secs
-                .min(PROBE_REQUEST_TIMEOUT_SECS),
-        );
         match timeout(req_to, conn.channel.send_frame(&frame)).await {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
+                warn!(tunnel = %tunnel.id, request_id, %error, "recipient probe write failed");
                 self.pool.discard(conn, &format!("probe write: {error}"));
                 return None;
             }
             Err(_) => {
+                warn!(tunnel = %tunnel.id, request_id, "recipient probe write timed out");
                 self.pool.discard(conn, "probe write timeout");
                 return None;
             }
@@ -274,6 +303,13 @@ impl SmtpRelay {
                 control,
             })) if got_id == request_id => {
                 self.pool.release(conn);
+                info!(
+                    tunnel = %tunnel.id,
+                    request_id,
+                    target_status = ?target.status,
+                    control_status = ?control.as_ref().map(|value| &value.status),
+                    "tunnel recipient probe completed",
+                );
                 let upstream_code = target.smtp_code.unwrap_or(0);
                 let mx = smtp_safe(&target.mx);
                 match target.status {
@@ -303,15 +339,18 @@ impl SmtpRelay {
                 }
             }
             Ok(Ok(other)) => {
+                warn!(tunnel = %tunnel.id, request_id, frame = ?other, "unexpected recipient probe frame");
                 self.pool
                     .discard(conn, &format!("unexpected probe frame: {other:?}"));
                 None
             }
             Ok(Err(error)) => {
+                warn!(tunnel = %tunnel.id, request_id, %error, "recipient probe receive failed");
                 self.pool.discard(conn, &format!("probe receive: {error}"));
                 None
             }
             Err(_) => {
+                warn!(tunnel = %tunnel.id, request_id, "recipient probe receive timed out");
                 self.pool.discard(conn, "probe receive timeout");
                 None
             }

@@ -677,6 +677,7 @@ async def test_validate_email_unknown_fails_closed() -> None:
 async def test_validate_mailbox_via_tunnel_accept_all() -> None:
     smtp = AsyncMock()
     smtp.is_connected = True
+    smtp.supports_extension = MagicMock(return_value=True)
     smtp.execute_command.return_value = (
         252,
         "2.1.5 accept-all upstream_code=250 mx=mx.example.net",
@@ -690,6 +691,22 @@ async def test_validate_mailbox_via_tunnel_accept_all() -> None:
     assert result.catch_all is True
     assert result.transport == "mailcue_tunnel"
     assert smtp.execute_command.await_args.kwargs["timeout"] == 22.0
+
+
+@pytest.mark.asyncio
+async def test_validate_mailbox_via_tunnel_requires_probe_extension() -> None:
+    smtp = AsyncMock()
+    smtp.is_connected = True
+    smtp.supports_extension = MagicMock(return_value=False)
+    with (
+        patch("aiosmtplib.SMTP", return_value=smtp),
+        patch("app.emails.validation.settings.validation_probe_relay_host", "sidecar"),
+    ):
+        result = await validate_mailbox_via_tunnel("person@example.net", "probe@mailcue.test")
+
+    assert result.is_valid is None
+    assert result.reason_code == "probe_extension_unavailable"
+    smtp.execute_command.assert_not_awaited()
 
 
 @pytest.mark.asyncio

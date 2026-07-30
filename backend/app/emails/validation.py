@@ -12,6 +12,7 @@ import ipaddress
 import logging
 import re
 import socket
+import time
 import uuid
 from typing import Literal
 
@@ -558,9 +559,29 @@ async def validate_mailbox_via_tunnel(
         port=settings.validation_probe_relay_port,
         timeout=settings.validation_smtp_timeout_seconds,
     )
+    domain = target_email.rsplit("@", 1)[-1]
+    started = time.monotonic()
+    logger.info(
+        "Starting mailbox probe through MailCue tunnel: domain=%s relay=%s:%s",
+        domain,
+        settings.validation_probe_relay_host,
+        settings.validation_probe_relay_port,
+    )
     try:
         await smtp.connect()
         await smtp.ehlo()
+        if not smtp.supports_extension("XMAILCUEPROBE"):
+            logger.error(
+                "Validation relay does not advertise XMAILCUEPROBE: relay=%s:%s",
+                settings.validation_probe_relay_host,
+                settings.validation_probe_relay_port,
+            )
+            return EmailValidationMailbox(
+                is_valid=None,
+                transport="mailcue_tunnel",
+                reason_code="probe_extension_unavailable",
+                error="Configured validation relay does not support XMAILCUEPROBE",
+            )
         code, message = await smtp.execute_command(
             b"XMAILCUEPROBE",
             target_email.encode("utf-8"),
@@ -571,6 +592,12 @@ async def validate_mailbox_via_tunnel(
             ),
         )
         text = _smtp_text(message)
+        logger.info(
+            "Mailbox tunnel probe completed: domain=%s code=%s duration_ms=%d",
+            domain,
+            code,
+            round((time.monotonic() - started) * 1000),
+        )
         match = re.search(r"upstream_code=(\d{3})", text)
         upstream_code = int(match.group(1)) if match else None
         if code == 250:
@@ -610,6 +637,13 @@ async def validate_mailbox_via_tunnel(
             error=text,
         )
     except Exception as exc:
+        logger.exception(
+            "Mailbox tunnel probe failed: domain=%s relay=%s:%s duration_ms=%d",
+            domain,
+            settings.validation_probe_relay_host,
+            settings.validation_probe_relay_port,
+            round((time.monotonic() - started) * 1000),
+        )
         return EmailValidationMailbox(
             is_valid=None,
             transport="mailcue_tunnel",
@@ -649,6 +683,7 @@ async def validate_email(email: str) -> EmailValidationResponse:
         )
 
     domain = syntax.domain
+    logger.info("Email validation started: domain=%s", domain)
 
     # 2. Disposable check (Fast offline check)
     is_disposable = is_disposable_domain(domain)
@@ -659,6 +694,12 @@ async def validate_email(email: str) -> EmailValidationResponse:
 
     # 3. DNS check
     dns_res = await validate_dns(domain)
+    logger.info(
+        "Email validation DNS stage completed: domain=%s status=%s mx_count=%d",
+        domain,
+        dns_res.status,
+        len(dns_res.mx_records),
+    )
     if not dns_res.is_valid:
         return EmailValidationResponse(
             email=normalized_email,
@@ -695,6 +736,12 @@ async def validate_email(email: str) -> EmailValidationResponse:
     # trying every direct MX/IP first can exceed the caller's request timeout.
     # The total budget also bounds multi-address direct probes.
     sender_email = f"validate-probe@{settings.domain}"
+    probe_transport = "mailcue_tunnel" if settings.validation_probe_relay_host else "direct"
+    logger.info(
+        "Starting email mailbox validation: domain=%s transport=%s",
+        domain,
+        probe_transport,
+    )
     try:
         async with asyncio.timeout(settings.validation_total_timeout_seconds):
             if settings.validation_probe_relay_host:
@@ -707,9 +754,15 @@ async def validate_email(email: str) -> EmailValidationResponse:
                     sender_email,
                 )
     except TimeoutError:
+        logger.warning(
+            "Email mailbox validation timed out: domain=%s transport=%s budget_seconds=%s",
+            domain,
+            probe_transport,
+            settings.validation_total_timeout_seconds,
+        )
         mailbox = EmailValidationMailbox(
             is_valid=None,
-            transport=("mailcue_tunnel" if settings.validation_probe_relay_host else "direct"),
+            transport=probe_transport,
             reason_code="smtp_probe_timeout",
             error=(
                 "Mailbox validation exceeded the "

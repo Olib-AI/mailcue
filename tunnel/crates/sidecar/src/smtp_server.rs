@@ -247,10 +247,21 @@ async fn handle_session(
                     write_line(&mut write_half, "501 5.1.3 invalid probe arguments").await?;
                     continue;
                 }
+                info!(
+                    peer = %peer_ip,
+                    recipient_domain = %domain,
+                    "recipient probe requested",
+                );
                 let control = format!("mailcue-probe-{}@{domain}", uuid::Uuid::new_v4().simple());
                 let reply = relay
                     .probe(sender.to_string(), recipient.to_string(), control)
                     .await;
+                info!(
+                    peer = %peer_ip,
+                    recipient_domain = %domain,
+                    smtp_code = reply.code,
+                    "recipient probe completed",
+                );
                 write_line(&mut write_half, &reply.line).await?;
             }
             "VRFY" => {
