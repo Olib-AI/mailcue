@@ -21,7 +21,7 @@ from app.mailboxes.service import (
     list_mailboxes,
 )
 from app.system.models import ServerSettings
-from app.system.service import update_dovecot_catchall_config
+from app.system.service import ensure_dovecot_catchall_delivery_config
 
 
 def _make_maildir(root: Path, address: str) -> None:
@@ -46,16 +46,25 @@ def test_dovecot_catchall_config_restores_production_commented_block(tmp_path: P
         encoding="utf-8",
     )
 
-    update_dovecot_catchall_config(True, config_path)
+    ensure_dovecot_catchall_delivery_config(config_path)
 
     enabled = config_path.read_text(encoding="utf-8")
     assert "\nuserdb {\n  driver = static\n" in enabled
     assert "allow_all_users=yes\n}" in enabled
 
-    update_dovecot_catchall_config(False, config_path)
+    ensure_dovecot_catchall_delivery_config(config_path)
+    assert config_path.read_text(encoding="utf-8") == enabled
 
-    disabled = config_path.read_text(encoding="utf-8")
-    assert "\n#userdb {\n#  driver = static\n" in disabled
+
+def test_production_keeps_delivery_userdb_but_disables_unknown_auth() -> None:
+    project_root = Path(__file__).parents[2]
+    dovecot_config = (project_root / "rootfs/etc/dovecot/dovecot.conf").read_text()
+    init_script = (project_root / "rootfs/etc/s6-overlay/scripts/init-mailcue.sh").read_text()
+
+    assert "result_failure = continue" in dovecot_config
+    assert "allow_all_users=yes" in dovecot_config
+    assert "sed -i '/^# Catch-all fallback userdb:" not in init_script
+    assert "sed -i '/^# Catch-all passdb:" in init_script
 
 
 async def test_production_catchall_visibility_gating(

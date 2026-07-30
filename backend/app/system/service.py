@@ -82,28 +82,29 @@ async def update_server_settings(
         db.add(row)
     await db.commit()
 
-    # 1. Update Dovecot config
-    update_dovecot_catchall_config(catch_all_enabled)
+    # Dovecot must resolve every recipient Postfix has already accepted.
+    # Postfix's virtual mailbox maps remain the authoritative catch-all gate.
+    ensure_dovecot_catchall_delivery_config()
 
-    # 2. Rebuild Postfix virtual mailboxes/catchall
+    # Rebuild Postfix virtual mailboxes/catchall.
     from app.domains.service import rebuild_postfix_virtual_mailboxes
 
     await rebuild_postfix_virtual_mailboxes(db)
 
-    # 3. Reload services (Postfix and Dovecot)
+    # Reload services so the new recipient policy takes effect immediately.
     await _reload_tls_services()
 
     return {"hostname": hostname, "catch_all_enabled": catch_all_enabled}
 
 
-def update_dovecot_catchall_config(
-    enabled: bool, path: Path = Path("/etc/dovecot/dovecot.conf")
+def ensure_dovecot_catchall_delivery_config(
+    path: Path = Path("/etc/dovecot/dovecot.conf"),
 ) -> None:
-    """Enable or disable Dovecot delivery lookup for unknown mailbox users.
+    """Ensure Dovecot can deliver recipients already accepted by Postfix.
 
-    Production hardening comments this block during every container start.
-    The application startup path calls this function again with the persisted
-    server setting so catch-all delivery survives a restart.
+    The fallback is a userdb only and cannot authenticate unknown users.
+    Catch-all enablement is controlled exclusively by Postfix, avoiding a
+    Dovecot startup/configuration race.
     """
     if not path.exists():
         logger.debug("Dovecot config file not found at %s. Skipping update.", path)
@@ -123,28 +124,17 @@ def update_dovecot_catchall_config(
             re.MULTILINE,
         )
 
-        if enabled:
-            replacement = (
-                "userdb {\n"
-                "  driver = static\n"
-                "  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes\n"
-                "}"
-            )
-        else:
-            replacement = (
-                "#userdb {\n"
-                "#  driver = static\n"
-                "#  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes\n"
-                "#}"
-            )
+        replacement = (
+            "userdb {\n"
+            "  driver = static\n"
+            "  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes\n"
+            "}"
+        )
 
         new_content, count = pattern.subn(replacement, content)
         if count > 0:
             path.write_text(new_content, encoding="utf-8")
-            logger.info(
-                "Successfully updated Dovecot dovecot.conf catch-all userdb block (enabled=%s).",
-                enabled,
-            )
+            logger.info("Ensured Dovecot catch-all delivery userdb is enabled.")
         else:
             logger.warning(
                 "Could not find the catch-all fallback userdb block in /etc/dovecot/dovecot.conf to update."

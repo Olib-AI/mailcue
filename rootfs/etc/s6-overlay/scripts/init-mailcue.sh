@@ -433,9 +433,6 @@ SMTPS
     # Remove/comment out the catch-all static passdb (nopassword=y)
     sed -i '/^# Catch-all passdb:/,/^}/ s/^/#/' /etc/dovecot/dovecot.conf
 
-    # Remove/comment out the catch-all fallback userdb (allow_all_users=yes)
-    sed -i '/^# Catch-all fallback userdb:/,/^}/ s/^/#/' /etc/dovecot/dovecot.conf
-
     # Set ssl = required instead of ssl = yes
     sed -i 's/^ssl = yes$/ssl = required/' /etc/dovecot/dovecot.conf
 

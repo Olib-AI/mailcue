@@ -882,9 +882,9 @@ def _record_matches(slot: str, expected: str, current: str) -> bool:
     - ``mta_sts``: the ``id=`` tag is operator-chosen and only needs to
       change when the policy file does.  Any well-formed ``v=STSv1; id=…``
       is treated as matching.
-    - ``spf``: compare MailCue's simple pass mechanisms without regard to
-      order. ``mx a:relay-us a:relay-de -all`` and the same mechanisms in a
-      different order authorize the same senders. Complex policies retain
+    - ``spf``: accept a simple policy that covers MailCue's required senders
+      plus additional relay hosts. A published ``-all`` is also a safe,
+      stricter replacement for an expected ``~all``. Complex policies retain
       exact ordered comparison because SPF evaluation order can matter there.
     """
     if slot == "dkim":
@@ -899,7 +899,22 @@ def _record_matches(slot: str, expected: str, current: str) -> bool:
         expected_simple = _simple_spf_parts(expected_normalized)
         current_simple = _simple_spf_parts(current_normalized)
         if expected_simple is not None and current_simple is not None:
-            return expected_simple == current_simple
+            expected_mechanisms, expected_terminal = expected_simple
+            current_mechanisms, current_terminal = current_simple
+
+            # The single-host recommendation contains both ``mx`` and
+            # ``a:<mail-host>``. The latter is redundant when the MX already
+            # points at that host, so relay deployments may replace it with
+            # their actual egress ``a:`` mechanisms without being marked as
+            # drifted.
+            required = expected_mechanisms
+            if "mx" in required and expected_terminal == "~all":
+                required = frozenset(m for m in required if not m.startswith("a:"))
+
+            terminal_is_compatible = current_terminal == expected_terminal or (
+                expected_terminal == "~all" and current_terminal == "-all"
+            )
+            return required.issubset(current_mechanisms) and terminal_is_compatible
         return expected_normalized == current_normalized
     return expected == current
 

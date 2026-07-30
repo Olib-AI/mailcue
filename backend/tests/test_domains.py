@@ -433,6 +433,14 @@ def test_spf_relay_mechanism_order_is_semantically_equivalent() -> None:
     assert _record_matches("spf", expected, published.replace("-all", "~all")) is False
 
 
+def test_spf_strict_relay_policy_satisfies_single_host_recommendation() -> None:
+    expected = "v=spf1 mx a:mail.olib.email ~all"
+    published = "v=spf1 mx a:relay-us.olib.email a:relay-de.olib.email -all"
+
+    assert _record_matches("spf", expected, published) is True
+    assert _record_matches("spf", expected, "v=spf1 -all") is False
+
+
 async def test_spf_expected_includes_every_enabled_tunnel(
     client: AsyncClient,
     seed_domain: Domain,
