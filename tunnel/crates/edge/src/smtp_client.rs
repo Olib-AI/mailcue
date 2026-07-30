@@ -63,6 +63,8 @@ pub struct SmtpDelivery<'a> {
     pub io_timeout: Duration,
     /// If `true`, fail closed when STARTTLS is not offered or fails.
     pub require_tls: bool,
+    /// Stop after RCPT TO and QUIT without issuing DATA.
+    pub probe_only: bool,
 }
 
 /// Outcome of an attempted SMTP delivery against one MX.
@@ -286,6 +288,13 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
     if accepted_indices.is_empty() {
         // No recipients accepted; close cleanly and return the per-RCPT
         // verdicts as-is.
+        let _ = send_cmd(&mut session, "QUIT\r\n", delivery.io_timeout).await;
+        return Ok(SmtpAttempt::Reached(outcomes));
+    }
+
+    if delivery.probe_only {
+        // Recipient validation must never transmit message content. RCPT TO is
+        // the final command; QUIT cleanly discards the envelope.
         let _ = send_cmd(&mut session, "QUIT\r\n", delivery.io_timeout).await;
         return Ok(SmtpAttempt::Reached(outcomes));
     }

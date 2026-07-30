@@ -30,8 +30,8 @@ pub mod keypair;
 pub use authorized::{AuthorizedClients, AuthorizedError, ClientEntry};
 pub use channel::{Channel, ChannelError, expect_hello};
 pub use frame::{
-    ErrorCode, Frame, MAX_PLAINTEXT_FRAME_BYTES, ProtoError, RecipientResult, RelayChunkPayload,
-    RelayOpts, RelayStatus, decode_frame, encode_frame,
+    ErrorCode, Frame, MAX_PLAINTEXT_FRAME_BYTES, ProbeOutcome, ProbeStatus, ProtoError,
+    RecipientResult, RelayChunkPayload, RelayOpts, RelayStatus, decode_frame, encode_frame,
 };
 pub use handshake::{HandshakeError, HandshakeRole, perform_handshake};
 pub use keypair::{KeyPair, KeyPairError, pub_path};
@@ -40,7 +40,7 @@ pub use keypair::{KeyPair, KeyPairError, pub_path};
 ///
 /// Any mismatch is rejected with [`ErrorCode::ProtocolViolation`] before any
 /// `Relay` frame is processed.
-pub const PROTO_VERSION: u16 = 1;
+pub const PROTO_VERSION: u16 = 2;
 
 /// Noise pattern handled by this crate.
 pub const NOISE_PATTERN: &str = "Noise_IK_25519_ChaChaPoly_BLAKE2s";

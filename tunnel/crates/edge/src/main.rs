@@ -619,6 +619,72 @@ async fn handle_connection(
                     }
                 }
             }
+            Frame::Probe {
+                request_id,
+                envelope_from,
+                recipient,
+                control_recipient,
+                opts,
+            } => {
+                let permit = sem.clone().acquire_owned().await;
+                let Ok(_permit) = permit else {
+                    let _ = channel
+                        .send_frame(&Frame::Error {
+                            request_id: Some(request_id),
+                            code: ErrorCode::Internal,
+                            message: "concurrency semaphore closed".into(),
+                        })
+                        .await;
+                    return Ok(());
+                };
+                let helo = opts
+                    .helo_name
+                    .clone()
+                    .unwrap_or_else(|| helo_name.to_string());
+                match relay::handle_probe(
+                    cfg,
+                    resolver.as_ref(),
+                    &helo,
+                    &envelope_from,
+                    &recipient,
+                    &control_recipient,
+                    &opts,
+                )
+                .await
+                {
+                    Ok((target, control)) => {
+                        info!(
+                            peer = %peer,
+                            client_pubkey = %pubkey_short,
+                            request_id,
+                            recipient_domain = %recipient.rsplit_once('@').map(|(_, d)| d).unwrap_or("-"),
+                            target_status = ?target.status,
+                            "recipient probe complete",
+                        );
+                        if channel
+                            .send_frame(&Frame::ProbeResult {
+                                request_id,
+                                target,
+                                control,
+                            })
+                            .await
+                            .is_err()
+                        {
+                            return Ok(());
+                        }
+                    }
+                    Err(rej) => {
+                        let _ = channel
+                            .send_frame(&Frame::Error {
+                                request_id: Some(request_id),
+                                code: ErrorCode::ProtocolViolation,
+                                message: format!("probe rejected: {rej:?}"),
+                            })
+                            .await;
+                        return Ok(());
+                    }
+                }
+            }
             Frame::Ping { ts_unix: _, nonce } => {
                 if let Err(e) = channel
                     .send_frame(&Frame::Pong {
@@ -635,6 +701,7 @@ async fn handle_connection(
             Frame::Hello { .. }
             | Frame::HelloAck { .. }
             | Frame::RelayResult { .. }
+            | Frame::ProbeResult { .. }
             | Frame::Pong { .. }
             | Frame::Error { .. }
             | Frame::RelayChunk(_) => {

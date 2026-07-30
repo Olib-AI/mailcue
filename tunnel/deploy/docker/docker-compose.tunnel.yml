@@ -58,9 +58,12 @@ services:
       # Mailcue API. Must live on the config volume.
       - MAILCUE_SIDECAR_TUNNELS_PATH=/etc/mailcue-sidecar/tunnels.json
       # Loopback SMTP listener — Postfix relays into this.
-      - MAILCUE_SIDECAR_LISTEN_ADDR=0.0.0.0:2525
+      - MAILCUE_SIDECAR_SMTP_LISTEN=0.0.0.0:2525
+      # Permit peers on Docker's standard private bridge range. The port is
+      # exposed only to mailcue-net and is never published to the host.
+      - MAILCUE_SIDECAR_SMTP_TRUSTED_NETWORKS=${MAILCUE_SIDECAR_SMTP_TRUSTED_NETWORKS:-172.16.0.0/12}
       # Health / metrics HTTP listener.
-      - MAILCUE_SIDECAR_HEALTH_ADDR=0.0.0.0:9325
+      - MAILCUE_SIDECAR_METRICS_LISTEN=0.0.0.0:9325
       - MAILCUE_SIDECAR_LOG_LEVEL=${MAILCUE_SIDECAR_LOG_LEVEL:-info}
     volumes:
       - mailcue-sidecar-config:/etc/mailcue-sidecar
@@ -93,6 +96,10 @@ services:
     environment:
       - MAILCUE_RELAY_HOST=mailcue-sidecar
       - MAILCUE_RELAY_PORT=2525
+      # The validation API uses the sidecar's no-DATA XMAILCUEPROBE RPC
+      # when this host cannot reach destination MX servers on port 25.
+      - MAILCUE_VALIDATION_PROBE_RELAY_HOST=mailcue-sidecar
+      - MAILCUE_VALIDATION_PROBE_RELAY_PORT=2525
       # Sidecar listener is unauthenticated (loopback-only via mailcue-net).
       # Auth happens at the Noise IK layer between sidecar and edge.
       - MAILCUE_RELAY_USER=
@@ -100,6 +107,10 @@ services:
     depends_on:
       mailcue-sidecar:
         condition: service_started
+    volumes:
+      # Shared source of truth: the API writes tunnels.json and both the
+      # sidecar and relay-aware DNS/SPF guidance read the same file.
+      - mailcue-sidecar-config:/etc/mailcue-sidecar
 
 volumes:
   mailcue-sidecar-config:

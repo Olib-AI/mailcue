@@ -120,6 +120,7 @@ async fn handle_session(
                 .await?;
                 write_line(&mut write_half, "250-8BITMIME").await?;
                 write_line(&mut write_half, "250-PIPELINING").await?;
+                write_line(&mut write_half, "250-XMAILCUEPROBE").await?;
                 write_line(&mut write_half, "250 ENHANCEDSTATUSCODES").await?;
             }
             "HELO" => {
@@ -221,6 +222,36 @@ async fn handle_session(
             }
             "NOOP" => {
                 write_line(&mut write_half, "250 2.0.0 ok").await?;
+            }
+            "XMAILCUEPROBE" => {
+                if state.helo.is_none() {
+                    write_line(&mut write_half, "503 5.5.1 send EHLO first").await?;
+                    continue;
+                }
+                let args: Vec<&str> = trimmed.split_ascii_whitespace().collect();
+                if args.len() != 3 {
+                    write_line(
+                        &mut write_half,
+                        "501 5.5.4 syntax: XMAILCUEPROBE recipient envelope-sender",
+                    )
+                    .await?;
+                    continue;
+                }
+                let recipient = args[1];
+                let sender = args[2];
+                let Some((_, domain)) = recipient.rsplit_once('@') else {
+                    write_line(&mut write_half, "501 5.1.3 invalid recipient").await?;
+                    continue;
+                };
+                if domain.is_empty() || sender.contains(char::is_whitespace) {
+                    write_line(&mut write_half, "501 5.1.3 invalid probe arguments").await?;
+                    continue;
+                }
+                let control = format!("mailcue-probe-{}@{domain}", uuid::Uuid::new_v4().simple());
+                let reply = relay
+                    .probe(sender.to_string(), recipient.to_string(), control)
+                    .await;
+                write_line(&mut write_half, &reply.line).await?;
             }
             "VRFY" => {
                 write_line(&mut write_half, "502 5.5.1 VRFY not implemented").await?;

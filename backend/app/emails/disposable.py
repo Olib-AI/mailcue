@@ -64,10 +64,6 @@ FALLBACK_DOMAINS = {
     "mailcatch.com",
     "tempail.com",
     "fastmail.wtf",
-    "anonaddy.com",
-    "anonaddy.me",
-    "duck.com",
-    "mozmail.com",
     "spam4.me",
     "grr.la",
     "mailnull.com",
@@ -85,6 +81,16 @@ FALLBACK_DOMAINS = {
     "disposablemail.com",
     "emailondeck.com",
     "burnermail.io",
+}
+
+# Privacy forwarding services provide stable, deliverable aliases. Treating
+# them as throwaway inboxes creates false negatives even if a third-party
+# blocklist happens to include them.
+FORWARDING_ALIAS_DOMAINS = {
+    "anonaddy.com",
+    "anonaddy.me",
+    "duck.com",
+    "mozmail.com",
 }
 
 # In-memory storage of all loaded disposable domains
@@ -180,7 +186,7 @@ def _check_cache_age_and_trigger_update() -> None:
             mtime = os.path.getmtime(cache_path)
             age_seconds = time.time() - mtime
             # 24 hours = 86400 seconds
-            if age_seconds > 86400:
+            if age_seconds > 86400 and (_update_task is None or _update_task.done()):
                 logger.info(
                     "Disposable domains cache is older than 24 hours. Triggering background update..."
                 )
@@ -192,4 +198,10 @@ def _check_cache_age_and_trigger_update() -> None:
 def is_disposable_domain(domain: str) -> bool:
     """Check if the given domain is in the set of disposable domains."""
     _check_cache_age_and_trigger_update()
-    return domain.strip().lower() in _loaded_domains
+    normalized = domain.strip().lower()
+    return normalized not in FORWARDING_ALIAS_DOMAINS and normalized in _loaded_domains
+
+
+def is_forwarding_alias_domain(domain: str) -> bool:
+    """Return whether the domain is a known privacy-forwarding alias service."""
+    return domain.strip().lower() in FORWARDING_ALIAS_DOMAINS

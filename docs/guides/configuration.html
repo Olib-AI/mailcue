@@ -673,6 +673,31 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <td>Smarthost SASL password</td>
 </tr>
 <tr>
+<td><code>MAILCUE_VALIDATION_SMTP_PROBE_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Enable no-DATA SMTP recipient probing</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_SMTP_TIMEOUT_SECONDS</code></td>
+<td><code>8</code></td>
+<td>Timeout for each SMTP validation attempt</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_PROBE_RELAY_HOST</code></td>
+<td><em>(empty)</em></td>
+<td>MailCue tunnel sidecar used when direct port 25 is unavailable</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_PROBE_RELAY_PORT</code></td>
+<td><code>2525</code></td>
+<td>MailCue tunnel sidecar SMTP RPC port</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_RATE_LIMIT</code></td>
+<td><code>30/minute</code></td>
+<td>Per-client-IP validation API limit</td>
+</tr>
+<tr>
 <td><code>MAILCUE_ACME_EMAIL</code></td>
 <td><em>(empty)</em></td>
 <td>Email for Let's Encrypt certificate provisioning (production mode)</td>

@@ -25,6 +25,7 @@ from app.domains.schemas import (
 )
 from app.domains.service import (
     _build_dns_records,
+    _list_active_tunnel_hosts,
     add_domain,
     compute_dns_state,
     get_domain_detail,
@@ -129,6 +130,7 @@ async def get_domain(
         ) from exc
 
     hostname = await get_server_hostname(db)
+    tunnel_hosts = await _list_active_tunnel_hosts(db)
 
     # Run quick checks for records not persisted in the domain model
     from app.domains.service import _check_bimi, _check_helo_spf
@@ -142,6 +144,7 @@ async def get_domain(
         hostname,
         helo_spf_verified=helo_result[0],
         bimi_verified=bimi_result[0],
+        tunnel_hosts=tunnel_hosts,
     )
 
     return DomainDetailResponse(

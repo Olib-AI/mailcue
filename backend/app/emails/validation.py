@@ -12,14 +12,14 @@ import ipaddress
 import logging
 import re
 import socket
-import time
+import uuid
 from typing import Literal
 
 import aiosmtplib
 import dns.resolver
 
 from app.config import settings
-from app.emails.disposable import is_disposable_domain
+from app.emails.disposable import is_disposable_domain, is_forwarding_alias_domain
 from app.emails.schemas import (
     EmailValidationDisposable,
     EmailValidationDns,
@@ -34,6 +34,8 @@ logger = logging.getLogger("mailcue.validation")
 EMAIL_REGEX = re.compile(
     r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
 )
+
+ENHANCED_STATUS_REGEX = re.compile(r"\b([245])\.(\d{1,3})\.(\d{1,3})\b")
 
 # RFC 2606 reserved domains and common internal-only TLDs
 RESERVED_TLDS = {
@@ -67,6 +69,7 @@ async def _resolve_public_smtp_addresses(host: str) -> list[str]:
 
 def validate_syntax(email: str) -> EmailValidationSyntax:
     """Validate the syntax of an email address, rejecting reserved/internal domains."""
+    email = email.strip()
     if not email or "@" not in email:
         return EmailValidationSyntax(
             is_valid=False,
@@ -104,7 +107,18 @@ def validate_syntax(email: str) -> EmailValidationSyntax:
             error="Domain part exceeds maximum length of 255 characters",
         )
 
-    if not EMAIL_REGEX.match(email):
+    try:
+        ascii_domain = domain.encode("idna").decode("ascii")
+    except Exception as exc:
+        return EmailValidationSyntax(
+            is_valid=False,
+            local_part=local_part,
+            domain=domain,
+            error=f"Invalid IDN domain: {exc}",
+        )
+
+    ascii_email = f"{local_part}@{ascii_domain}"
+    if not EMAIL_REGEX.match(ascii_email):
         return EmailValidationSyntax(
             is_valid=False,
             local_part=local_part,
@@ -113,7 +127,15 @@ def validate_syntax(email: str) -> EmailValidationSyntax:
         )
 
     # Check domain label lengths and hyphens
-    domain_labels = domain.split(".")
+    if local_part.startswith(".") or local_part.endswith(".") or ".." in local_part:
+        return EmailValidationSyntax(
+            is_valid=False,
+            local_part=local_part,
+            domain=domain,
+            error="Local part cannot start or end with a dot or contain consecutive dots",
+        )
+
+    domain_labels = ascii_domain.split(".")
     if len(domain_labels) < 2:
         return EmailValidationSyntax(
             is_valid=False,
@@ -188,32 +210,29 @@ def validate_syntax(email: str) -> EmailValidationSyntax:
             error="Domain is reserved for testing/examples",
         )
 
-    # Validate Punycode compatibility for IDNs
-    try:
-        domain.encode("idna").decode("ascii")
-    except Exception as exc:
-        return EmailValidationSyntax(
-            is_valid=False,
-            local_part=local_part,
-            domain=domain,
-            error=f"Invalid IDN punycode encoding: {exc}",
-        )
-
     return EmailValidationSyntax(
         is_valid=True,
         local_part=local_part,
-        domain=domain,
+        domain=ascii_domain.lower(),
     )
 
 
 async def validate_dns(domain: str) -> EmailValidationDns:
-    """Verify NS, MX, and A records for a domain using custom cached resolver."""
+    """Resolve the records that SMTP delivery actually uses.
+
+    NXDOMAIN/null-MX are definitive failures. Resolver timeouts and SERVFAIL
+    remain undetermined so a temporary DNS incident never labels a mailbox dead.
+    """
     has_mx = False
     has_ns = False
     has_a = False
+    has_aaaa = False
+    null_mx = False
     mx_records: list[tuple[int, str]] = []
     ns_records: list[str] = []
     a_records: list[str] = []
+    aaaa_records: list[str] = []
+    errors: list[Exception] = []
 
     # IDNA encoding for domains
     try:
@@ -222,64 +241,103 @@ async def validate_dns(domain: str) -> EmailValidationDns:
         ascii_domain = domain
 
     async def resolve_mx() -> None:
-        nonlocal has_mx, mx_records
+        nonlocal has_mx, null_mx, mx_records
         try:
             answers = await asyncio.to_thread(_resolver.resolve, ascii_domain, "MX")
             for rdata in answers:
                 pref = getattr(rdata, "preference", 0)
-                exchange = str(getattr(rdata, "exchange", "")).rstrip(".")
+                raw_exchange = str(getattr(rdata, "exchange", ""))
+                if raw_exchange == ".":
+                    null_mx = True
+                    continue
+                exchange = raw_exchange.rstrip(".")
                 if exchange:
                     mx_records.append((pref, exchange))
             mx_records.sort()
             has_mx = len(mx_records) > 0
-        except Exception:
-            pass
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            return
+        except Exception as exc:
+            errors.append(exc)
 
     async def resolve_ns() -> None:
         nonlocal has_ns, ns_records
         try:
             answers = await asyncio.to_thread(_resolver.resolve, ascii_domain, "NS")
             for rdata in answers:
-                ns_host = str(rdata.target).rstrip(".")
+                ns_host = str(getattr(rdata, "target", "")).rstrip(".")
                 if ns_host:
                     ns_records.append(ns_host)
             has_ns = len(ns_records) > 0
-        except Exception:
-            pass
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            return
+        except Exception as exc:
+            errors.append(exc)
 
     async def resolve_a() -> None:
         nonlocal has_a, a_records
         try:
             answers = await asyncio.to_thread(_resolver.resolve, ascii_domain, "A")
             for rdata in answers:
-                a_records.append(str(rdata.address))
+                address = str(getattr(rdata, "address", ""))
+                if address:
+                    a_records.append(address)
             has_a = len(a_records) > 0
-        except Exception:
-            pass
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            return
+        except Exception as exc:
+            errors.append(exc)
 
-    await asyncio.gather(resolve_mx(), resolve_ns(), resolve_a())
+    async def resolve_aaaa() -> None:
+        nonlocal has_aaaa, aaaa_records
+        try:
+            answers = await asyncio.to_thread(_resolver.resolve, ascii_domain, "AAAA")
+            for rdata in answers:
+                address = str(getattr(rdata, "address", ""))
+                if address:
+                    aaaa_records.append(address)
+            has_aaaa = len(aaaa_records) > 0
+        except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN):
+            return
+        except Exception as exc:
+            errors.append(exc)
 
-    # Overall DNS validity: needs name servers and (MX or A/AAAA fallback for delivery)
-    is_valid = has_ns and (has_mx or has_a)
+    await asyncio.gather(resolve_mx(), resolve_ns(), resolve_a(), resolve_aaaa())
+
+    # RFC 5321 implicit MX permits A or AAAA when no MX exists. A separate
+    # NS lookup is diagnostic only and is not a delivery prerequisite.
+    is_valid = not null_mx and (has_mx or has_a or has_aaaa)
 
     formatted_mx = [f"{pref} {host}." for pref, host in mx_records]
     formatted_ns = [f"{host}." for host in ns_records]
 
+    status: Literal["valid", "invalid", "undetermined"] = "valid" if is_valid else "invalid"
     error = None
-    if not is_valid:
-        if not has_ns:
-            error = "No Name Servers (NS) found; domain may not exist"
-        elif not has_mx and not has_a:
-            error = "No MX or A records found; domain cannot receive mail"
+    error_code = None
+    if null_mx:
+        error_code = "null_mx"
+        error = "Domain publishes a null MX and does not accept email"
+    elif not is_valid and errors:
+        status = "undetermined"
+        error_code = "dns_temporary_failure"
+        error = f"DNS lookup temporarily failed: {errors[0]}"
+    elif not is_valid:
+        error_code = "no_mail_route"
+        error = "No MX, A, or AAAA records found; domain cannot receive mail"
 
     return EmailValidationDns(
         is_valid=is_valid,
         has_mx=has_mx,
         has_ns=has_ns,
         has_a=has_a,
+        has_aaaa=has_aaaa,
+        null_mx=null_mx,
         mx_records=formatted_mx,
         ns_records=formatted_ns,
         a_records=a_records,
+        aaaa_records=aaaa_records,
+        status=status,
+        error_code=error_code,
         error=error,
     )
 
@@ -290,11 +348,13 @@ async def validate_mailbox(
     target_email: str,
     sender_email: str,
 ) -> EmailValidationMailbox:
-    """Connect to the MX server and run SMTP RCPT TO handshake probe, handling greylisting."""
+    """Run a direct, non-delivery SMTP envelope probe against destination MXs."""
     # Check if SMTP checks are enabled by setting configurations
     if not settings.validation_smtp_probe_enabled:
         return EmailValidationMailbox(
             is_valid=None,
+            transport="none",
+            reason_code="smtp_probe_disabled",
             error="SMTP probe disabled by configuration",
         )
 
@@ -311,6 +371,7 @@ async def validate_mailbox(
         hosts.append(domain)
 
     last_error = None
+    last_inconclusive: EmailValidationMailbox | None = None
     for host in hosts:
         try:
             public_addresses = await _resolve_public_smtp_addresses(host)
@@ -318,103 +379,259 @@ async def validate_mailbox(
                 logger.warning("Blocked SMTP probe to non-public destination %s", host)
                 last_error = "MX host does not resolve to a public IP address"
                 continue
-
-            # Connect to the validated address directly to avoid a second DNS
-            # lookup changing the destination between validation and use.
-            smtp = aiosmtplib.SMTP(hostname=public_addresses[0], port=25, timeout=5.0)
-            await smtp.connect()
-            try:
+            for address in public_addresses:
+                smtp = aiosmtplib.SMTP(
+                    hostname=address,
+                    port=25,
+                    timeout=settings.validation_smtp_timeout_seconds,
+                )
                 try:
-                    await smtp.ehlo()
-                except Exception:
-                    with contextlib.suppress(Exception):
+                    await smtp.connect()
+                    try:
+                        await smtp.ehlo()
+                    except Exception:
                         await smtp.helo()
 
-                # Send MAIL FROM: system probe address or null sender fallback
-                try:
-                    code, msg = await smtp.mail(sender_email)
-                    if code != 250:
-                        code, msg = await smtp.mail("<>")
-                except Exception:
-                    code, msg = await smtp.mail("<>")
+                    sender_ok = False
+                    for sender in (sender_email, ""):
+                        try:
+                            code, _ = await smtp.mail(sender)
+                            if 200 <= code < 300:
+                                sender_ok = True
+                                break
+                            with contextlib.suppress(Exception):
+                                await smtp.rset()
+                        except aiosmtplib.SMTPResponseException:
+                            with contextlib.suppress(Exception):
+                                await smtp.rset()
+                    if not sender_ok:
+                        last_error = "Destination rejected the probe envelope sender"
+                        continue
 
-                # Send RCPT TO
-                code, msg = await smtp.rcpt(target_email)
+                    try:
+                        code, msg = await smtp.rcpt(target_email)
+                    except aiosmtplib.SMTPResponseException as exc:
+                        code, msg = int(exc.code or 0), exc.message
+                    msg_text = _smtp_text(msg)
 
-                # Check if it was greylisted (4xx temporary failure)
-                if 400 <= code < 500:
-                    await smtp.quit()
-                    return EmailValidationMailbox(
-                        is_valid=None,
-                        smtp_code=code,
-                        smtp_response=msg,
-                        catch_all=False,
-                        error=f"Greylisted or temporary SMTP failure: {msg}",
-                    )
+                    if 400 <= code < 500:
+                        last_inconclusive = EmailValidationMailbox(
+                            is_valid=None,
+                            smtp_code=code,
+                            smtp_response=msg_text,
+                            catch_all=None,
+                            transport="direct",
+                            reason_code="smtp_temporary_failure",
+                            error=f"Temporary SMTP failure: {msg_text}",
+                        )
+                        continue
 
-                # Check for catch-all domain status if the target mailbox is accepted
-                catch_all = False
-                if code in (250, 251):
-                    random_mailbox = f"mailcue-catchall-probe-{int(time.time())}@{domain}"
+                    if code not in (250, 251):
+                        if _is_mailbox_rejection(code, msg_text):
+                            return EmailValidationMailbox(
+                                is_valid=False,
+                                smtp_code=code,
+                                smtp_response=msg_text,
+                                catch_all=False,
+                                transport="direct",
+                                reason_code="mailbox_rejected",
+                            )
+                        last_inconclusive = EmailValidationMailbox(
+                            is_valid=None,
+                            smtp_code=code,
+                            smtp_response=msg_text,
+                            catch_all=None,
+                            transport="direct",
+                            reason_code="smtp_policy_rejection",
+                            error="SMTP policy rejection did not prove that the mailbox is absent",
+                        )
+                        continue
+
+                    catch_all: bool | None = None
+                    random_mailbox = f"mailcue-probe-{uuid.uuid4().hex}@{domain}"
                     try:
                         await smtp.rset()
-                        try:
-                            await smtp.mail(sender_email)
-                        except Exception:
-                            await smtp.mail("<>")
-
-                        rand_code, _ = await smtp.rcpt(random_mailbox)
-                        if rand_code in (250, 251):
-                            catch_all = True
+                        for sender in (sender_email, ""):
+                            try:
+                                sender_code, _ = await smtp.mail(sender)
+                                if 200 <= sender_code < 300:
+                                    rand_code, _ = await smtp.rcpt(random_mailbox)
+                                    catch_all = rand_code in (250, 251)
+                                    break
+                            except aiosmtplib.SMTPResponseException:
+                                with contextlib.suppress(Exception):
+                                    await smtp.rset()
                     except Exception as catchall_exc:
                         logger.debug("Failed catch-all probe on host %s: %s", host, catchall_exc)
 
-                await smtp.quit()
-                return EmailValidationMailbox(
-                    is_valid=code in (250, 251),
-                    smtp_code=code,
-                    smtp_response=msg,
-                    catch_all=catch_all,
-                )
-            finally:
-                if smtp.is_connected:
-                    smtp.close()
-        except aiosmtplib.SMTPResponseException as exc:
-            # Handle temporary / greylisting codes raised as SMTPResponseException
-            if exc.code is not None and 400 <= exc.code < 500:
-                return EmailValidationMailbox(
-                    is_valid=None,
-                    smtp_code=exc.code,
-                    smtp_response=exc.message,
-                    catch_all=False,
-                    error=f"Greylisted or temporary SMTP failure: {exc.message}",
-                )
-            # Mailbox explicitly rejected by host (5xx)
-            return EmailValidationMailbox(
-                is_valid=False,
-                smtp_code=exc.code,
-                smtp_response=exc.message,
-                catch_all=False,
-            )
+                    return EmailValidationMailbox(
+                        is_valid=True,
+                        smtp_code=code,
+                        smtp_response=msg_text,
+                        catch_all=catch_all,
+                        transport="direct",
+                        reason_code="mailbox_accepted",
+                    )
+                except Exception as exc:
+                    last_error = str(exc)
+                    if isinstance(exc, aiosmtplib.SMTPResponseException):
+                        last_inconclusive = EmailValidationMailbox(
+                            is_valid=None,
+                            smtp_code=exc.code,
+                            smtp_response=_smtp_text(exc.message),
+                            catch_all=None,
+                            transport="direct",
+                            reason_code="smtp_session_rejected",
+                            error="SMTP session was rejected before recipient validation",
+                        )
+                    logger.debug("SMTP probe failed on %s (%s): %s", host, address, exc)
+                finally:
+                    if smtp.is_connected:
+                        with contextlib.suppress(Exception):
+                            await smtp.quit()
+                        if smtp.is_connected:
+                            smtp.close()
         except Exception as exc:
             last_error = str(exc)
             logger.debug("SMTP probe failed on host %s: %s", host, exc)
 
-    return EmailValidationMailbox(
+    return last_inconclusive or EmailValidationMailbox(
         is_valid=None,
+        transport="direct",
+        reason_code="smtp_unreachable",
         error=f"SMTP connection failed: {last_error or 'No hosts resolved'}",
     )
+
+
+def _smtp_text(message: object) -> str:
+    if isinstance(message, bytes):
+        return message.decode("utf-8", errors="replace")
+    return str(message)
+
+
+def _is_mailbox_rejection(code: int, message: str) -> bool:
+    """Return true only for recipient-stage evidence that the address is absent."""
+    if not 500 <= code < 600:
+        return False
+    enhanced = ENHANCED_STATUS_REGEX.search(message)
+    if enhanced:
+        return (
+            enhanced.group(1) == "5"
+            and enhanced.group(2) == "1"
+            and enhanced.group(3)
+            in {
+                "0",
+                "1",
+                "3",
+                "6",
+            }
+        )
+    lowered = message.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "no such user",
+            "user unknown",
+            "unknown recipient",
+            "recipient not found",
+            "mailbox does not exist",
+            "invalid recipient",
+        )
+    )
+
+
+async def validate_mailbox_via_tunnel(
+    target_email: str,
+    sender_email: str,
+) -> EmailValidationMailbox:
+    """Ask a MailCue sidecar to probe through its authenticated edge tunnel."""
+    if not settings.validation_probe_relay_host:
+        return EmailValidationMailbox(
+            is_valid=None,
+            transport="none",
+            reason_code="probe_relay_not_configured",
+            error="MailCue validation relay is not configured",
+        )
+
+    smtp = aiosmtplib.SMTP(
+        hostname=settings.validation_probe_relay_host,
+        port=settings.validation_probe_relay_port,
+        timeout=settings.validation_smtp_timeout_seconds,
+    )
+    try:
+        await smtp.connect()
+        await smtp.ehlo()
+        code, message = await smtp.execute_command(
+            b"XMAILCUEPROBE",
+            target_email.encode("utf-8"),
+            sender_email.encode("utf-8"),
+        )
+        text = _smtp_text(message)
+        match = re.search(r"upstream_code=(\d{3})", text)
+        upstream_code = int(match.group(1)) if match else None
+        if code == 250:
+            return EmailValidationMailbox(
+                is_valid=True,
+                smtp_code=upstream_code,
+                smtp_response=text,
+                catch_all=False,
+                transport="mailcue_tunnel",
+                reason_code="mailbox_accepted",
+            )
+        if code == 252:
+            return EmailValidationMailbox(
+                is_valid=True,
+                smtp_code=upstream_code,
+                smtp_response=text,
+                catch_all=True,
+                transport="mailcue_tunnel",
+                reason_code="accept_all_domain",
+            )
+        if code == 550:
+            return EmailValidationMailbox(
+                is_valid=False,
+                smtp_code=upstream_code,
+                smtp_response=text,
+                catch_all=False,
+                transport="mailcue_tunnel",
+                reason_code="mailbox_rejected",
+            )
+        return EmailValidationMailbox(
+            is_valid=None,
+            smtp_code=upstream_code,
+            smtp_response=text,
+            catch_all=None,
+            transport="mailcue_tunnel",
+            reason_code="smtp_temporary_failure",
+            error=text,
+        )
+    except Exception as exc:
+        return EmailValidationMailbox(
+            is_valid=None,
+            transport="mailcue_tunnel",
+            reason_code="probe_relay_unreachable",
+            error=f"MailCue validation relay failed: {exc}",
+        )
+    finally:
+        if smtp.is_connected:
+            with contextlib.suppress(Exception):
+                await smtp.quit()
 
 
 async def validate_email(email: str) -> EmailValidationResponse:
     """Validate email address syntax, DNS configuration, mailbox availability, and disposable status."""
     # 1. Syntax Check
-    syntax = validate_syntax(email)
+    normalized_email = email.strip()
+    syntax = validate_syntax(normalized_email)
     if not syntax.is_valid or not syntax.domain:
         return EmailValidationResponse(
-            email=email,
+            email=normalized_email,
             is_valid=False,
             status="invalid",
+            verdict="undeliverable",
+            deliverable=False,
+            confidence=1.0,
+            reason="invalid_syntax",
             syntax=syntax,
             dns=EmailValidationDns(
                 is_valid=False,
@@ -431,19 +648,38 @@ async def validate_email(email: str) -> EmailValidationResponse:
 
     # 2. Disposable check (Fast offline check)
     is_disposable = is_disposable_domain(domain)
-    disposable = EmailValidationDisposable(is_disposable=is_disposable)
+    disposable = EmailValidationDisposable(
+        is_disposable=is_disposable,
+        is_forwarding_alias=is_forwarding_alias_domain(domain),
+    )
 
     # 3. DNS check
     dns_res = await validate_dns(domain)
     if not dns_res.is_valid:
         return EmailValidationResponse(
-            email=email,
+            email=normalized_email,
             is_valid=False,
             # A known disposable provider remains disposable even when its
             # DNS is temporarily unavailable (or DNS access is restricted in
             # the running environment). This classification is more specific
             # and does not depend on a live network lookup.
-            status="disposable" if is_disposable else "invalid",
+            status=(
+                "disposable"
+                if is_disposable
+                else "undetermined"
+                if dns_res.status == "undetermined"
+                else "invalid"
+            ),
+            verdict=(
+                "risky"
+                if is_disposable
+                else "unknown"
+                if dns_res.status == "undetermined"
+                else "undeliverable"
+            ),
+            deliverable=None if dns_res.status == "undetermined" else False,
+            confidence=0.95 if dns_res.status == "invalid" else 0.2,
+            reason=dns_res.error_code or "dns_validation_failed",
             syntax=syntax,
             dns=dns_res,
             mailbox=EmailValidationMailbox(is_valid=None, error="DNS validation failed"),
@@ -453,30 +689,55 @@ async def validate_email(email: str) -> EmailValidationResponse:
     # 4. Mailbox Check (SMTP probe)
     # Using a sender email belonging to mailcue system domain
     sender_email = f"validate-probe@{settings.domain}"
-    mailbox = await validate_mailbox(domain, dns_res.mx_records, email, sender_email)
+    mailbox = await validate_mailbox(domain, dns_res.mx_records, normalized_email, sender_email)
+    if mailbox.is_valid is None and settings.validation_probe_relay_host:
+        mailbox = await validate_mailbox_via_tunnel(normalized_email, sender_email)
 
     # 5. Calculate overall status
     is_valid = True
     status: Literal["valid", "invalid", "undetermined", "disposable", "catch_all"] = "valid"
+    verdict: Literal["deliverable", "undeliverable", "risky", "unknown"] = "deliverable"
+    deliverable: bool | None = True
+    confidence = 0.95
+    reason = mailbox.reason_code or "mailbox_accepted"
 
     if is_disposable:
         status = "disposable"
         is_valid = False
+        verdict = "risky"
+        deliverable = mailbox.is_valid
+        confidence = 0.8
+        reason = "disposable_domain"
     elif mailbox.is_valid is False:
         status = "invalid"
         is_valid = False
+        verdict = "undeliverable"
+        deliverable = False
+        confidence = 0.98
     elif mailbox.catch_all is True:
         status = "catch_all"
         is_valid = True
+        verdict = "risky"
+        deliverable = None
+        confidence = 0.5
+        reason = "accept_all_domain"
     elif mailbox.is_valid is None:
         # If DNS is correct but SMTP connection is blocked/timed out, or greylisted
         status = "undetermined"
-        is_valid = True  # Treat as valid if domain is correct and syntax is valid, but SMTP check is blocked/greylisted
+        is_valid = False
+        verdict = "unknown"
+        deliverable = None
+        confidence = 0.2
+        reason = mailbox.reason_code or "smtp_unknown"
 
     return EmailValidationResponse(
-        email=email,
+        email=normalized_email,
         is_valid=is_valid,
         status=status,
+        verdict=verdict,
+        deliverable=deliverable,
+        confidence=confidence,
+        reason=reason,
         syntax=syntax,
         dns=dns_res,
         mailbox=mailbox,

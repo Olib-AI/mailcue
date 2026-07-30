@@ -8,7 +8,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use tracing::{debug, info, warn};
 
-use mailcue_relay_proto::{RecipientResult, RelayOpts, RelayStatus};
+use mailcue_relay_proto::{ProbeOutcome, ProbeStatus, RecipientResult, RelayOpts, RelayStatus};
 
 use crate::config::EdgeConfig;
 use crate::dns::MxResolver;
@@ -121,6 +121,7 @@ pub async fn handle_relay(
                     connect_timeout: Duration::from_secs(cfg.connect_timeout_secs),
                     io_timeout: Duration::from_secs(timeout_secs),
                     require_tls: opts.require_tls,
+                    probe_only: false,
                 })
                 .await
                 {
@@ -218,6 +219,157 @@ pub async fn handle_relay(
     }
 
     Ok(final_results)
+}
+
+/// Probe one recipient plus a random control address, stopping before DATA.
+pub async fn handle_probe(
+    cfg: &EdgeConfig,
+    resolver: &MxResolver,
+    helo_name: &str,
+    envelope_from: &str,
+    recipient: &str,
+    control_recipient: &str,
+    opts: &RelayOpts,
+) -> Result<(ProbeOutcome, Option<ProbeOutcome>), RelayReject> {
+    if !is_valid_mailbox_or_empty(envelope_from) {
+        return Err(RelayReject::BadSender("invalid probe sender".to_string()));
+    }
+    if !is_valid_mailbox(recipient) || !is_valid_mailbox(control_recipient) {
+        return Err(RelayReject::BadRecipients(
+            "invalid probe recipient".to_string(),
+        ));
+    }
+    let domain = recipient
+        .rsplit_once('@')
+        .map(|(_, value)| value.to_ascii_lowercase())
+        .ok_or_else(|| RelayReject::BadRecipients("recipient missing @".to_string()))?;
+    let control_domain = control_recipient
+        .rsplit_once('@')
+        .map(|(_, value)| value.to_ascii_lowercase())
+        .ok_or_else(|| RelayReject::BadRecipients("control recipient missing @".to_string()))?;
+    if domain != control_domain {
+        return Err(RelayReject::BadRecipients(
+            "probe recipients must share a domain".to_string(),
+        ));
+    }
+
+    let mxs = resolver
+        .resolve_mx(&domain)
+        .await
+        .map_err(|e| RelayReject::BadRecipients(format!("MX lookup for {domain} failed: {e}")))?;
+    let recipients = vec![recipient.to_string(), control_recipient.to_string()];
+    let timeout_secs = if opts.timeout_secs == 0 {
+        cfg.smtp_io_timeout_secs
+    } else {
+        u64::from(opts.timeout_secs)
+    };
+    let mut last_reason = "no reachable MX".to_string();
+
+    for mx in &mxs {
+        for (sender_index, probe_sender) in [envelope_from, ""].into_iter().enumerate() {
+            if sender_index == 1 && envelope_from.is_empty() {
+                break;
+            }
+            let attempt = deliver(SmtpDelivery {
+                mx_host: &mx.host,
+                port: 25,
+                helo_name,
+                envelope_from: probe_sender,
+                recipients: &recipients,
+                raw_message: &[],
+                connect_timeout: Duration::from_secs(cfg.connect_timeout_secs),
+                io_timeout: Duration::from_secs(timeout_secs),
+                require_tls: opts.require_tls,
+                probe_only: true,
+            })
+            .await;
+            match attempt {
+                Ok(SmtpAttempt::Reached(outcomes)) => {
+                    let mut values = outcomes
+                        .into_iter()
+                        .map(|value| probe_outcome(&mx.host, value.status));
+                    let target = values
+                        .next()
+                        .unwrap_or_else(|| unknown_probe(&mx.host, "missing target outcome"));
+                    return Ok((target, values.next()));
+                }
+                Ok(SmtpAttempt::Skipped { reason, .. }) => {
+                    let sender_rejected = reason.starts_with("MAIL FROM:");
+                    last_reason = reason;
+                    if sender_index == 0 && sender_rejected {
+                        continue;
+                    }
+                    break;
+                }
+                Err(error) => {
+                    last_reason = error.to_string();
+                    break;
+                }
+            }
+        }
+    }
+    Ok((unknown_probe("", &last_reason), None))
+}
+
+fn probe_outcome(mx: &str, status: RelayStatus) -> ProbeOutcome {
+    match status {
+        RelayStatus::Delivered {
+            smtp_code,
+            smtp_msg,
+            ..
+        } => ProbeOutcome {
+            mx: mx.to_string(),
+            smtp_code: Some(smtp_code),
+            smtp_msg,
+            status: ProbeStatus::Accepted,
+        },
+        RelayStatus::TempFail { reason, smtp_code } => ProbeOutcome {
+            mx: mx.to_string(),
+            smtp_code,
+            smtp_msg: reason,
+            status: ProbeStatus::Unknown,
+        },
+        RelayStatus::PermFail { reason, smtp_code } => {
+            let status = if definitive_recipient_rejection(&reason) {
+                ProbeStatus::Rejected
+            } else {
+                ProbeStatus::Unknown
+            };
+            ProbeOutcome {
+                mx: mx.to_string(),
+                smtp_code,
+                smtp_msg: reason,
+                status,
+            }
+        }
+    }
+}
+
+fn unknown_probe(mx: &str, reason: &str) -> ProbeOutcome {
+    ProbeOutcome {
+        mx: mx.to_string(),
+        smtp_code: None,
+        smtp_msg: reason.chars().take(300).collect(),
+        status: ProbeStatus::Unknown,
+    }
+}
+
+fn definitive_recipient_rejection(message: &str) -> bool {
+    let lower = message.to_ascii_lowercase();
+    [
+        "5.1.0",
+        "5.1.1",
+        "5.1.3",
+        "5.1.6",
+        "no such user",
+        "user unknown",
+        "unknown recipient",
+        "recipient not found",
+        "mailbox does not exist",
+        "invalid recipient",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
 }
 
 #[derive(Debug, Default)]

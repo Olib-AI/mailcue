@@ -66,7 +66,7 @@ from app.sandbox.models import (  # noqa: F401 — imported for table creation
     SandboxWebhookEndpoint,
 )
 from app.sandbox.router import router as sandbox_router
-from app.system.models import (  # noqa: F401 — imported for table creation
+from app.system.models import (
     ServerSettings,
     TlsCertificate,
 )
@@ -182,6 +182,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if settings.is_production:
         async with AsyncSessionLocal() as session:
             from app.domains.service import add_domain, rebuild_postfix_virtual_mailboxes
+            from app.system.service import update_dovecot_catchall_config
+
+            server_settings_result = await session.execute(
+                select(ServerSettings).where(ServerSettings.id == 1)
+            )
+            server_settings = server_settings_result.scalar_one_or_none()
+            update_dovecot_catchall_config(
+                server_settings.catch_all_enabled if server_settings else False
+            )
 
             domain_stmt = select(Domain).where(Domain.name == settings.domain)
             domain_result = await session.execute(domain_stmt)

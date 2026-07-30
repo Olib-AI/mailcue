@@ -506,6 +506,10 @@ egress isolation.</p>
 </table>
 <p>Wire format and threat model are specified in <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md"><code>docs/PROTOCOL.md</code></a>
 and <a href="https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md"><code>docs/SECURITY.md</code></a>.</p>
+<p>Protocol v2 also supports recipient probes for MailCue's validation API. The
+edge tests <code>RCPT TO</code> for the target and a random accept-all control and always
+quits before <code>DATA</code>, so validation never sends a message. Sidecars and edges
+must be upgraded together when moving from protocol v1 to v2.</p>
 <hr />
 <h2>Edge install (on the VPS)</h2>
 <p>The edge is a single static binary with no runtime dependencies beyond a

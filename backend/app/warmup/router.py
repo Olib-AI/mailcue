@@ -129,6 +129,7 @@ async def test_account(
 @router.delete(
     "/accounts/{account_id}",
     status_code=204,
+    response_model=None,
     dependencies=[Depends(require_scope(scopes.WARMUP_MANAGE))],
 )
 async def remove_account(
@@ -273,6 +274,7 @@ async def control_campaign(
 @router.delete(
     "/campaigns/{campaign_id}",
     status_code=204,
+    response_model=None,
     dependencies=[Depends(require_scope(scopes.WARMUP_MANAGE))],
 )
 async def remove_campaign(

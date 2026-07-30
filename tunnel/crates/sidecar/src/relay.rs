@@ -20,7 +20,7 @@ use bytes::Bytes;
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use mailcue_relay_proto::{Frame, RelayOpts, RelayStatus};
+use mailcue_relay_proto::{Frame, ProbeStatus, RelayOpts, RelayStatus};
 
 use crate::config::{PartialFailurePolicy, SidecarConfig};
 use crate::pool::Pool;
@@ -179,6 +179,93 @@ impl SmtpRelay {
         reply
     }
 
+    /// Probe a recipient through an edge without transmitting DATA.
+    pub async fn probe(
+        &self,
+        envelope_from: String,
+        recipient: String,
+        control_recipient: String,
+    ) -> SmtpReply {
+        let view = self.registry.snapshot();
+        let healthy = self.pool.healthy_ids();
+        let candidates = self.selector.pick_all(&view, &healthy);
+        if candidates.is_empty() {
+            return SmtpReply::new(451, "451 4.4.1 no healthy validation tunnel");
+        }
+        for tunnel in candidates {
+            let request_id = self.request_seq.fetch_add(1, Ordering::Relaxed);
+            let mut conn = match self.pool.lease(tunnel).await {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            let frame = Frame::Probe {
+                request_id,
+                envelope_from: envelope_from.clone(),
+                recipient: recipient.clone(),
+                control_recipient: control_recipient.clone(),
+                opts: RelayOpts::default(),
+            };
+            let req_to = Duration::from_secs(self.cfg.request_timeout_secs);
+            match timeout(req_to, conn.channel.send_frame(&frame)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    self.pool.discard(conn, &format!("probe write: {error}"));
+                    continue;
+                }
+                Err(_) => {
+                    self.pool.discard(conn, "probe write timeout");
+                    continue;
+                }
+            }
+            let received = timeout(req_to, conn.channel.recv_frame()).await;
+            match received {
+                Ok(Ok(Frame::ProbeResult {
+                    request_id: got_id,
+                    target,
+                    control,
+                })) if got_id == request_id => {
+                    self.pool.release(conn);
+                    let upstream_code = target.smtp_code.unwrap_or(0);
+                    let mx = smtp_safe(&target.mx);
+                    return match target.status {
+                        ProbeStatus::Accepted
+                            if control
+                                .as_ref()
+                                .is_some_and(|value| value.status == ProbeStatus::Accepted) =>
+                        {
+                            SmtpReply::new(
+                                252,
+                                format!(
+                                    "252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"
+                                ),
+                            )
+                        }
+                        ProbeStatus::Accepted => SmtpReply::new(
+                            250,
+                            format!(
+                                "250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"
+                            ),
+                        ),
+                        ProbeStatus::Rejected => SmtpReply::new(
+                            550,
+                            format!(
+                                "550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"
+                            ),
+                        ),
+                        ProbeStatus::Unknown => continue,
+                    };
+                }
+                Ok(Ok(other)) => {
+                    self.pool
+                        .discard(conn, &format!("unexpected probe frame: {other:?}"));
+                }
+                Ok(Err(error)) => self.pool.discard(conn, &format!("probe receive: {error}")),
+                Err(_) => self.pool.discard(conn, "probe receive timeout"),
+            }
+        }
+        SmtpReply::new(451, "451 4.4.1 validation inconclusive across all tunnels")
+    }
+
     /// Single-tunnel send: lease a conn, frame Relay, await RelayResult.
     /// Returns `Result(per_recipient)` on application-level outcome
     /// (whether deliveries succeeded or not), or `TunnelError(reply)`
@@ -286,6 +373,14 @@ impl SmtpRelay {
             }
         }
     }
+}
+
+fn smtp_safe(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !matches!(c, '\r' | '\n' | ' '))
+        .take(200)
+        .collect()
 }
 
 /// Outcome of attempting one tunnel: either an application-level

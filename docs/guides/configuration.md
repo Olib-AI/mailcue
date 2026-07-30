@@ -45,6 +45,11 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_RELAY_PORT` | `587` | Smarthost relay port |
 | `MAILCUE_RELAY_USER` | *(empty)* | Smarthost SASL username |
 | `MAILCUE_RELAY_PASSWORD` | *(empty)* | Smarthost SASL password |
+| `MAILCUE_VALIDATION_SMTP_PROBE_ENABLED` | `true` | Enable no-DATA SMTP recipient probing |
+| `MAILCUE_VALIDATION_SMTP_TIMEOUT_SECONDS` | `8` | Timeout for each SMTP validation attempt |
+| `MAILCUE_VALIDATION_PROBE_RELAY_HOST` | *(empty)* | MailCue tunnel sidecar used when direct port 25 is unavailable |
+| `MAILCUE_VALIDATION_PROBE_RELAY_PORT` | `2525` | MailCue tunnel sidecar SMTP RPC port |
+| `MAILCUE_VALIDATION_RATE_LIMIT` | `30/minute` | Per-client-IP validation API limit |
 | `MAILCUE_ACME_EMAIL` | *(empty)* | Email for Let's Encrypt certificate provisioning (production mode) |
 | `MAILCUE_TLS_CERT_PATH` | *(empty)* | Path to externally mounted TLS certificate (PEM) |
 | `MAILCUE_TLS_KEY_PATH` | *(empty)* | Path to externally mounted TLS private key (PEM) |

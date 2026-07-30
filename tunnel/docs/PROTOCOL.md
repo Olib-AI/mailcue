@@ -7,7 +7,7 @@ implementation needs to interoperate with the reference Rust
 implementation in `tunnel/crates/proto/`.
 
 The current protocol version, exchanged in `Hello` / `HelloAck`, is
-`PROTO_VERSION = 1`.
+`PROTO_VERSION = 2`.
 
 ## 1. Transport
 
@@ -109,6 +109,8 @@ positionally — order matters):
 | 5   | `Ping`          | sidecar → edge | Liveness probe (`ts_unix`, `nonce`). |
 | 6   | `Pong`          | edge → sidecar | Liveness response (`ts_unix`, `nonce`). |
 | 7   | `Error`         | either         | Fatal protocol error; connection closes after send/receive. |
+| 8   | `Probe`         | sidecar → edge | Tests a target and random control recipient; never sends DATA. |
+| 9   | `ProbeResult`   | edge → sidecar | Conservative target/control recipient outcomes. |
 
 `RelayOpts`:
 

@@ -15,12 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.models import User
 from app.emails.disposable import (
     is_disposable_domain,
+    is_forwarding_alias_domain,
     load_cached_domains,
     update_disposable_domains,
 )
+from app.emails.schemas import EmailValidationDns, EmailValidationMailbox
 from app.emails.validation import (
     validate_dns,
+    validate_email,
     validate_mailbox,
+    validate_mailbox_via_tunnel,
     validate_syntax,
 )
 from app.mailboxes.models import Mailbox
@@ -104,6 +108,10 @@ def test_syntax_validation() -> None:
     assert validate_syntax("user@domain..com").is_valid is False
     assert validate_syntax("user@domain.-com").is_valid is False
     assert validate_syntax("user@domain.c").is_valid is False  # TLD too short
+    assert validate_syntax(".user@domain.com").is_valid is False
+    assert validate_syntax("user.@domain.com").is_valid is False
+    assert validate_syntax("first..last@domain.com").is_valid is False
+    assert validate_syntax("user@bücher.de").is_valid is True
 
     # Length restrictions
     assert validate_syntax("a" * 65 + "@mailcue.io").is_valid is False  # Local part > 64
@@ -177,7 +185,27 @@ async def test_dns_validation_nxdomain() -> None:
         assert res.has_mx is False
         assert res.has_ns is False
         assert res.has_a is False
-        assert "No Name Servers" in (res.error or "")
+        assert res.status == "invalid"
+        assert res.error_code == "no_mail_route"
+
+
+@pytest.mark.asyncio
+async def test_dns_validation_null_mx_overrides_a_fallback() -> None:
+    mock_null_mx = [MagicMock(preference=0, exchange=dns.name.from_text("."))]
+    mock_a = [MagicMock(address="192.0.2.1")]
+
+    def mock_resolve(_qname: str, rdtype: str) -> list[MagicMock]:
+        if rdtype == "MX":
+            return mock_null_mx
+        if rdtype == "A":
+            return mock_a
+        raise dns.resolver.NoAnswer()
+
+    with patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve):
+        res = await validate_dns("no-mail.example")
+    assert res.is_valid is False
+    assert res.null_mx is True
+    assert res.error_code == "null_mx"
 
 
 # ── 3. SMTP Mailbox Probe Tests ─────────────────────────────────
@@ -244,7 +272,8 @@ async def test_validate_mailbox_rejected(mock_smtp_class: MagicMock) -> None:
     mock_smtp.close = MagicMock()
     mock_smtp_class.return_value = mock_smtp
 
-    mock_smtp.connect.side_effect = aiosmtplib.SMTPResponseException(550, "No such mailbox here")
+    mock_smtp.mail.return_value = (250, "Sender OK")
+    mock_smtp.rcpt.return_value = (550, "5.1.1 No such mailbox here")
 
     res = await validate_mailbox(
         domain="example.com",
@@ -256,6 +285,27 @@ async def test_validate_mailbox_rejected(mock_smtp_class: MagicMock) -> None:
     assert res.is_valid is False
     assert res.smtp_code == 550
     assert "No such mailbox" in (res.smtp_response or "")
+
+
+@pytest.mark.asyncio
+@patch("aiosmtplib.SMTP")
+async def test_validate_mailbox_policy_rejection_is_unknown(mock_smtp_class: MagicMock) -> None:
+    mock_smtp = AsyncMock()
+    mock_smtp.is_connected = True
+    mock_smtp.close = MagicMock()
+    mock_smtp.mail.return_value = (250, "Sender OK")
+    mock_smtp.rcpt.return_value = (550, "5.7.1 Message rejected by policy")
+    mock_smtp_class.return_value = mock_smtp
+
+    res = await validate_mailbox(
+        domain="example.com",
+        mx_records=["10 mail.example.com."],
+        target_email="test@example.com",
+        sender_email="sender@mailcue.local",
+    )
+
+    assert res.is_valid is None
+    assert res.reason_code == "smtp_policy_rejection"
 
 
 @pytest.mark.asyncio
@@ -286,6 +336,8 @@ def test_disposable_domain_check() -> None:
     assert is_disposable_domain("yopmail.com") is True
     assert is_disposable_domain("gmail.com") is False
     assert is_disposable_domain("mailcue.io") is False
+    assert is_disposable_domain("duck.com") is False
+    assert is_forwarding_alias_domain("duck.com") is True
 
 
 @pytest.mark.asyncio
@@ -513,8 +565,8 @@ async def test_validate_mailbox_greylisting(mock_smtp_class: MagicMock) -> None:
 
     assert res.is_valid is None
     assert res.smtp_code == 450
-    assert res.catch_all is False
-    assert "Greylisted" in (res.error or "")
+    assert res.catch_all is None
+    assert "greylisted" in (res.error or "").lower()
 
 
 @pytest.mark.asyncio
@@ -539,8 +591,8 @@ async def test_validate_mailbox_greylisting_exception(mock_smtp_class: MagicMock
 
     assert res.is_valid is None
     assert res.smtp_code == 451
-    assert res.catch_all is False
-    assert "Greylisted" in (res.error or "")
+    assert res.catch_all is None
+    assert res.reason_code == "smtp_session_rejected"
 
 
 @pytest.mark.asyncio
@@ -583,8 +635,6 @@ async def test_validate_email_catch_all_mapping() -> None:
         (250, "Recipient OK"),  # Random email also accepted (catch-all!)
     ]
 
-    from app.emails.validation import validate_email
-
     with (
         patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
         patch("aiosmtplib.SMTP", return_value=mock_smtp),
@@ -593,6 +643,51 @@ async def test_validate_email_catch_all_mapping() -> None:
         assert res.is_valid is True
         assert res.status == "catch_all"
         assert res.mailbox.catch_all is True
+
+
+@pytest.mark.asyncio
+async def test_validate_email_unknown_fails_closed() -> None:
+    dns_result = EmailValidationDns(
+        is_valid=True,
+        status="valid",
+        has_mx=True,
+        has_ns=True,
+        has_a=False,
+        mx_records=["10 mx.example.net."],
+    )
+    mailbox_result = EmailValidationMailbox(
+        is_valid=None,
+        catch_all=None,
+        reason_code="smtp_unreachable",
+    )
+    with (
+        patch("app.emails.validation.validate_dns", return_value=dns_result),
+        patch("app.emails.validation.validate_mailbox", return_value=mailbox_result),
+        patch("app.emails.validation.settings.validation_probe_relay_host", ""),
+    ):
+        result = await validate_email("person@sample-mail-domain.com")
+    assert result.is_valid is False
+    assert result.deliverable is None
+    assert result.verdict == "unknown"
+    assert result.status == "undetermined"
+
+
+@pytest.mark.asyncio
+async def test_validate_mailbox_via_tunnel_accept_all() -> None:
+    smtp = AsyncMock()
+    smtp.is_connected = True
+    smtp.execute_command.return_value = (
+        252,
+        "2.1.5 accept-all upstream_code=250 mx=mx.example.net",
+    )
+    with (
+        patch("aiosmtplib.SMTP", return_value=smtp),
+        patch("app.emails.validation.settings.validation_probe_relay_host", "sidecar"),
+    ):
+        result = await validate_mailbox_via_tunnel("person@example.net", "probe@mailcue.test")
+    assert result.is_valid is True
+    assert result.catch_all is True
+    assert result.transport == "mailcue_tunnel"
 
 
 @patch("app.emails.disposable.get_cache_file_path")

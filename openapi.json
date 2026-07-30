@@ -14,16 +14,6 @@
         "summary": "Login",
         "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``.",
         "operationId": "login_api_v1_auth_login_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -42,16 +32,6 @@
                 }
               }
             }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
           }
         }
       }
@@ -64,16 +44,6 @@
         "summary": "Login 2Fa",
         "description": "Complete login by verifying a TOTP code after step 1.",
         "operationId": "login_2fa_api_v1_auth_login_2fa_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TwoFactorVerifyRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -81,16 +51,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -106,16 +66,6 @@
         "summary": "Register",
         "description": "Create a new user account. **Admin only.**",
         "operationId": "register_api_v1_auth_register_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "201": {
             "description": "Successful Response",
@@ -123,16 +73,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -156,16 +96,6 @@
         "summary": "Change Password",
         "description": "Change the current user's password.",
         "operationId": "change_password_api_v1_auth_password_put",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangePasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -177,16 +107,6 @@
                   },
                   "type": "object",
                   "title": "Response Change Password Api V1 Auth Password Put"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -294,16 +214,6 @@
         "summary": "Totp Confirm",
         "description": "Verify a TOTP code from the authenticator app and enable 2FA.",
         "operationId": "totp_confirm_api_v1_auth_totp_confirm_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TOTPConfirmRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -315,16 +225,6 @@
                   },
                   "type": "object",
                   "title": "Response Totp Confirm Api V1 Auth Totp Confirm Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -348,16 +248,6 @@
         "summary": "Totp Disable",
         "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code.",
         "operationId": "totp_disable_api_v1_auth_totp_disable_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TOTPDisableRequest"
-              }
-            }
-          },
-          "required": true
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -369,16 +259,6 @@
                   },
                   "type": "object",
                   "title": "Response Totp Disable Api V1 Auth Totp Disable Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -430,7 +310,7 @@
           "Auth"
         ],
         "summary": "Logout",
-        "description": "Clear the httpOnly refresh_token cookie.",
+        "description": "Revoke the user's active tokens and clear the refresh cookie.",
         "operationId": "logout_api_v1_auth_logout_post",
         "responses": {
           "200": {
@@ -447,7 +327,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/auth/refresh": {
@@ -2461,7 +2349,7 @@
           "GPG"
         ],
         "summary": "List Keys",
-        "description": "List GPG keys for the current user's mailboxes only.",
+        "description": "List GPG keys for owned mailboxes and all imported public keys.",
         "operationId": "list_keys_api_v1_gpg_keys_get",
         "responses": {
           "200": {
@@ -2735,13 +2623,63 @@
           "GPG"
         ],
         "summary": "Import Key",
-        "description": "Import an armored PGP public key.\n\nIf ``mailbox_address`` is specified, the user must own that mailbox.",
+        "description": "Import an armored PGP public key.",
         "operationId": "import_key_api_v1_gpg_keys_import_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ImportKeyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpgKeyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/gpg/keys/fetch": {
+      "post": {
+        "tags": [
+          "GPG"
+        ],
+        "summary": "Fetch Key",
+        "description": "Search and import a GPG public key from keys.openpgp.org by email address.",
+        "operationId": "fetch_key_api_v1_gpg_keys_fetch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FetchKeyRequest"
               }
             }
           },
@@ -4234,6 +4172,749 @@
         }
       }
     },
+    "/api/v1/warmup/providers": {
+      "get": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Providers",
+        "operationId": "providers_api_v1_warmup_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "object",
+                  "title": "Response Providers Api V1 Warmup Providers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/warmup/accounts": {
+      "get": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "List Accounts",
+        "operationId": "list_accounts_api_v1_warmup_accounts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WarmupAccountResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Accounts Api V1 Warmup Accounts Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Add Account",
+        "operationId": "add_account_api_v1_warmup_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmupAccountCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupAccountResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/warmup/accounts/{account_id}": {
+      "patch": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Update Account",
+        "operationId": "update_account_api_v1_warmup_accounts__account_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmupAccountUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupAccountResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Remove Account",
+        "operationId": "remove_account_api_v1_warmup_accounts__account_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/accounts/{account_id}/check": {
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Test Account",
+        "operationId": "test_account_api_v1_warmup_accounts__account_id__check_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Test Account Api V1 Warmup Accounts  Account Id  Check Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/campaigns": {
+      "get": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "List Campaigns",
+        "operationId": "list_campaigns_api_v1_warmup_campaigns_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WarmupCampaignResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List Campaigns Api V1 Warmup Campaigns Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Add Campaign",
+        "operationId": "add_campaign_api_v1_warmup_campaigns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmupCampaignCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupCampaignResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/warmup/campaigns/{campaign_id}": {
+      "put": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Edit Campaign",
+        "operationId": "edit_campaign_api_v1_warmup_campaigns__campaign_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmupCampaignCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupCampaignResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Remove Campaign",
+        "operationId": "remove_campaign_api_v1_warmup_campaigns__campaign_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/campaigns/{campaign_id}/clear-mailbox": {
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Clear Campaign Mailbox",
+        "operationId": "clear_campaign_mailbox_api_v1_warmup_campaigns__campaign_id__clear_mailbox_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Clear Campaign Mailbox Api V1 Warmup Campaigns  Campaign Id  Clear Mailbox Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/campaigns/{campaign_id}/{action}": {
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Control Campaign",
+        "operationId": "control_campaign_api_v1_warmup_campaigns__campaign_id___action__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupCampaignResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/provider-states": {
+      "get": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "List Provider States",
+        "operationId": "list_provider_states_api_v1_warmup_provider_states_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Campaign Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WarmupProviderStateResponse"
+                  },
+                  "title": "Response List Provider States Api V1 Warmup Provider States Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/provider-states/{state_id}/resume": {
+      "post": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "Resume Provider",
+        "operationId": "resume_provider_api_v1_warmup_provider_states__state_id__resume_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "state_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "State Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmupProviderStateResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warmup/events": {
+      "get": {
+        "tags": [
+          "Warmup"
+        ],
+        "summary": "List Events",
+        "operationId": "list_events_api_v1_warmup_events_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WarmupEventResponse"
+                  },
+                  "title": "Response List Events Api V1 Warmup Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/httpbin/bins": {
       "get": {
         "tags": [
@@ -4621,88 +5302,12 @@
       }
     },
     "/httpbin/{bin_id}": {
-      "get": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
+        "operationId": "capture_root_httpbin__bin_id__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -4740,7 +5345,83 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
+        "operationId": "capture_root_httpbin__bin_id__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -4778,45 +5459,7 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "head": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
+        "operationId": "capture_root_httpbin__bin_id__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -4854,7 +5497,45 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__get",
+        "operationId": "capture_root_httpbin__bin_id__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -4889,106 +5570,12 @@
       }
     },
     "/httpbin/{bin_id}/{path}": {
-      "get": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -5035,7 +5622,101 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -5082,54 +5763,7 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "head": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -5176,7 +5810,54 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__get",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__post",
         "parameters": [
           {
             "name": "bin_id",
@@ -6009,25 +6690,6 @@
         ],
         "title": "CapturedRequestResponse"
       },
-      "ChangePasswordRequest": {
-        "properties": {
-          "current_password": {
-            "type": "string",
-            "title": "Current Password"
-          },
-          "new_password": {
-            "type": "string",
-            "title": "New Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "current_password",
-          "new_password"
-        ],
-        "title": "ChangePasswordRequest",
-        "description": "Change the current user's password."
-      },
       "DisplayNameUpdateRequest": {
         "properties": {
           "display_name": {
@@ -6772,6 +7434,11 @@
             "type": "boolean",
             "title": "Is Disposable"
           },
+          "is_forwarding_alias": {
+            "type": "boolean",
+            "title": "Is Forwarding Alias",
+            "default": false
+          },
           "error": {
             "anyOf": [
               {
@@ -6809,6 +7476,16 @@
             "type": "boolean",
             "title": "Has A"
           },
+          "has_aaaa": {
+            "type": "boolean",
+            "title": "Has Aaaa",
+            "default": false
+          },
+          "null_mx": {
+            "type": "boolean",
+            "title": "Null Mx",
+            "default": false
+          },
           "mx_records": {
             "items": {
               "type": "string"
@@ -6832,6 +7509,35 @@
             "type": "array",
             "title": "A Records",
             "default": []
+          },
+          "aaaa_records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aaaa Records",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid",
+              "undetermined"
+            ],
+            "title": "Status",
+            "default": "invalid"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
           },
           "error": {
             "anyOf": [
@@ -6901,6 +7607,27 @@
             ],
             "title": "Catch All"
           },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "mailcue_tunnel",
+              "none"
+            ],
+            "title": "Transport",
+            "default": "none"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
           "error": {
             "anyOf": [
               {
@@ -6921,6 +7648,8 @@
         "properties": {
           "email": {
             "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
             "title": "Email"
           }
         },
@@ -6952,6 +7681,35 @@
             ],
             "title": "Status"
           },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "deliverable",
+              "undeliverable",
+              "risky",
+              "unknown"
+            ],
+            "title": "Verdict"
+          },
+          "deliverable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliverable"
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
           "syntax": {
             "$ref": "#/components/schemas/EmailValidationSyntax"
           },
@@ -6970,6 +7728,10 @@
           "email",
           "is_valid",
           "status",
+          "verdict",
+          "deliverable",
+          "confidence",
+          "reason",
           "syntax",
           "dns",
           "mailbox",
@@ -7047,6 +7809,20 @@
           "httpbin"
         ],
         "title": "FeatureFlags"
+      },
+      "FetchKeyRequest": {
+        "properties": {
+          "address": {
+            "type": "string",
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": [
+          "address"
+        ],
+        "title": "FetchKeyRequest",
+        "description": "Request body for searching and fetching a key from keyserver by email address."
       },
       "FolderInfo": {
         "properties": {
@@ -7836,25 +8612,6 @@
         "title": "KeyserverPublishResponse",
         "description": "Result of publishing a key to keys.openpgp.org."
       },
-      "LoginRequest": {
-        "properties": {
-          "username": {
-            "type": "string",
-            "title": "Username"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "LoginRequest",
-        "description": "Credentials for username + password login."
-      },
       "LoginStepResponse": {
         "properties": {
           "requires_2fa": {
@@ -7957,6 +8714,11 @@
           "is_active": {
             "type": "boolean",
             "title": "Is Active"
+          },
+          "is_catchall": {
+            "type": "boolean",
+            "title": "Is Catchall",
+            "default": false
           },
           "created_at": {
             "type": "string",
@@ -8120,40 +8882,6 @@
         "title": "RefreshRequest",
         "description": "Explicitly pass a refresh token (alternative to cookie)."
       },
-      "RegisterRequest": {
-        "properties": {
-          "username": {
-            "type": "string",
-            "title": "Username"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "is_admin": {
-            "type": "boolean",
-            "title": "Is Admin",
-            "default": false
-          },
-          "max_mailboxes": {
-            "type": "integer",
-            "title": "Max Mailboxes",
-            "default": 5
-          }
-        },
-        "type": "object",
-        "required": [
-          "username",
-          "email",
-          "password"
-        ],
-        "title": "RegisterRequest",
-        "description": "Create a new user (admin only)."
-      },
       "ScopeCatalogResponse": {
         "properties": {
           "scopes": {
@@ -8253,6 +8981,14 @@
             },
             "type": "array",
             "title": "Cc Addresses",
+            "default": []
+          },
+          "bcc_addresses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Bcc Addresses",
             "default": []
           },
           "subject": {
@@ -8359,11 +9095,16 @@
           "hostname": {
             "type": "string",
             "title": "Hostname"
+          },
+          "catch_all_enabled": {
+            "type": "boolean",
+            "title": "Catch All Enabled"
           }
         },
         "type": "object",
         "required": [
-          "hostname"
+          "hostname",
+          "catch_all_enabled"
         ],
         "title": "ServerSettingsResponse"
       },
@@ -8402,39 +9143,6 @@
         "type": "object",
         "title": "SpamActionRequest",
         "description": "Request body for spam / not-spam actions (source folder)."
-      },
-      "TOTPConfirmRequest": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "code"
-        ],
-        "title": "TOTPConfirmRequest",
-        "description": "Confirm TOTP setup by verifying a code from the authenticator app."
-      },
-      "TOTPDisableRequest": {
-        "properties": {
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          }
-        },
-        "type": "object",
-        "required": [
-          "password",
-          "code"
-        ],
-        "title": "TOTPDisableRequest",
-        "description": "Disable TOTP -- requires password + valid TOTP code for confirmation."
       },
       "TOTPSetupResponse": {
         "properties": {
@@ -8602,7 +9310,14 @@
             "title": "Access Token"
           },
           "refresh_token": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Refresh Token"
           },
           "token_type": {
@@ -8617,7 +9332,6 @@
         "type": "object",
         "required": [
           "access_token",
-          "refresh_token",
           "user"
         ],
         "title": "TokenResponse",
@@ -8990,25 +9704,6 @@
         "title": "TunnelUpdate",
         "description": "Partial PATCH body for updating a tunnel.  All fields optional."
       },
-      "TwoFactorVerifyRequest": {
-        "properties": {
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "temp_token": {
-            "type": "string",
-            "title": "Temp Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "code",
-          "temp_token"
-        ],
-        "title": "TwoFactorVerifyRequest",
-        "description": "Verify 2FA code during login."
-      },
       "UpdateFlagsRequest": {
         "properties": {
           "seen": {
@@ -9028,11 +9723,16 @@
           "hostname": {
             "type": "string",
             "title": "Hostname"
+          },
+          "catch_all_enabled": {
+            "type": "boolean",
+            "title": "Catch All Enabled"
           }
         },
         "type": "object",
         "required": [
-          "hostname"
+          "hostname",
+          "catch_all_enabled"
         ],
         "title": "UpdateServerSettingsRequest"
       },
@@ -9200,13 +9900,6 @@
           "type": {
             "type": "string",
             "title": "Error Type"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "ctx": {
-            "type": "object",
-            "title": "Context"
           }
         },
         "type": "object",
@@ -9216,6 +9909,745 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WarmupAccountCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "provider": {
+            "type": "string",
+            "maxLength": 40,
+            "title": "Provider",
+            "default": "custom"
+          },
+          "smtp_host": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Smtp Host"
+          },
+          "smtp_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Smtp Port",
+            "default": 587
+          },
+          "smtp_security": {
+            "type": "string",
+            "enum": [
+              "ssl",
+              "starttls",
+              "plain"
+            ],
+            "title": "Smtp Security",
+            "default": "starttls"
+          },
+          "imap_host": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Imap Host"
+          },
+          "imap_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Imap Port",
+            "default": 993
+          },
+          "imap_security": {
+            "type": "string",
+            "enum": [
+              "ssl",
+              "starttls",
+              "plain"
+            ],
+            "title": "Imap Security",
+            "default": "ssl"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "ownership_confirmed": {
+            "type": "boolean",
+            "title": "Ownership Confirmed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "email",
+          "smtp_host",
+          "imap_host",
+          "username",
+          "password",
+          "ownership_confirmed"
+        ],
+        "title": "WarmupAccountCreate"
+      },
+      "WarmupAccountResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "smtp_host": {
+            "type": "string",
+            "title": "Smtp Host"
+          },
+          "smtp_port": {
+            "type": "integer",
+            "title": "Smtp Port"
+          },
+          "smtp_security": {
+            "type": "string",
+            "title": "Smtp Security"
+          },
+          "imap_host": {
+            "type": "string",
+            "title": "Imap Host"
+          },
+          "imap_port": {
+            "type": "integer",
+            "title": "Imap Port"
+          },
+          "imap_security": {
+            "type": "string",
+            "title": "Imap Security"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "email",
+          "provider",
+          "smtp_host",
+          "smtp_port",
+          "smtp_security",
+          "imap_host",
+          "imap_port",
+          "imap_security",
+          "username",
+          "enabled",
+          "verified",
+          "last_checked_at",
+          "last_error",
+          "created_at"
+        ],
+        "title": "WarmupAccountResponse"
+      },
+      "WarmupAccountUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1024,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "title": "WarmupAccountUpdate"
+      },
+      "WarmupCampaignCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "local_address": {
+            "type": "string",
+            "title": "Local Address"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Account Ids"
+          },
+          "start_daily_volume": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Start Daily Volume",
+            "default": 3
+          },
+          "daily_ramp": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 0.0,
+            "title": "Daily Ramp",
+            "default": 1
+          },
+          "max_daily_volume": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Max Daily Volume",
+            "default": 20
+          },
+          "min_delay_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Min Delay Minutes",
+            "default": 30
+          },
+          "max_delay_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 5.0,
+            "title": "Max Delay Minutes",
+            "default": 120
+          },
+          "reply_rate": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Reply Rate",
+            "default": 70
+          },
+          "active_hour_start": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Active Hour Start",
+            "default": 8
+          },
+          "active_hour_end": {
+            "type": "integer",
+            "maximum": 24.0,
+            "minimum": 1.0,
+            "title": "Active Hour End",
+            "default": 20
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Timezone",
+            "default": "UTC"
+          },
+          "auto_clean_local_mailbox": {
+            "type": "boolean",
+            "title": "Auto Clean Local Mailbox",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "local_address",
+          "account_ids"
+        ],
+        "title": "WarmupCampaignCreate"
+      },
+      "WarmupCampaignResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "local_address": {
+            "type": "string",
+            "title": "Local Address"
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Account Ids"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "start_daily_volume": {
+            "type": "integer",
+            "title": "Start Daily Volume"
+          },
+          "daily_ramp": {
+            "type": "integer",
+            "title": "Daily Ramp"
+          },
+          "max_daily_volume": {
+            "type": "integer",
+            "title": "Max Daily Volume"
+          },
+          "min_delay_minutes": {
+            "type": "integer",
+            "title": "Min Delay Minutes"
+          },
+          "max_delay_minutes": {
+            "type": "integer",
+            "title": "Max Delay Minutes"
+          },
+          "reply_rate": {
+            "type": "integer",
+            "title": "Reply Rate"
+          },
+          "active_hour_start": {
+            "type": "integer",
+            "title": "Active Hour Start"
+          },
+          "active_hour_end": {
+            "type": "integer",
+            "title": "Active Hour End"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "auto_clean_local_mailbox": {
+            "type": "boolean",
+            "title": "Auto Clean Local Mailbox"
+          },
+          "messages_sent_today": {
+            "type": "integer",
+            "title": "Messages Sent Today"
+          },
+          "total_sent": {
+            "type": "integer",
+            "title": "Total Sent"
+          },
+          "total_failed": {
+            "type": "integer",
+            "title": "Total Failed"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "stopped_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped At"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "local_address",
+          "account_ids",
+          "status",
+          "start_daily_volume",
+          "daily_ramp",
+          "max_daily_volume",
+          "min_delay_minutes",
+          "max_delay_minutes",
+          "reply_rate",
+          "active_hour_start",
+          "active_hour_end",
+          "timezone",
+          "auto_clean_local_mailbox",
+          "messages_sent_today",
+          "total_sent",
+          "total_failed",
+          "started_at",
+          "stopped_at",
+          "next_run_at",
+          "created_at"
+        ],
+        "title": "WarmupCampaignResponse"
+      },
+      "WarmupEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Code"
+          },
+          "enhanced_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enhanced Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "campaign_id",
+          "account_id",
+          "provider",
+          "direction",
+          "status",
+          "subject",
+          "message_id",
+          "error",
+          "smtp_code",
+          "enhanced_status",
+          "created_at"
+        ],
+        "title": "WarmupEventResponse"
+      },
+      "WarmupProviderStateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "campaign_id": {
+            "type": "string",
+            "title": "Campaign Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "sent_today": {
+            "type": "integer",
+            "title": "Sent Today"
+          },
+          "failed_today": {
+            "type": "integer",
+            "title": "Failed Today"
+          },
+          "total_sent": {
+            "type": "integer",
+            "title": "Total Sent"
+          },
+          "total_failed": {
+            "type": "integer",
+            "title": "Total Failed"
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "title": "Consecutive Failures"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          },
+          "last_sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sent At"
+          },
+          "last_failure_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Failure At"
+          },
+          "last_smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Smtp Code"
+          },
+          "last_enhanced_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Enhanced Status"
+          },
+          "last_response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Response"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "campaign_id",
+          "provider",
+          "status",
+          "sent_today",
+          "failed_today",
+          "total_sent",
+          "total_failed",
+          "consecutive_failures",
+          "next_attempt_at",
+          "paused_until",
+          "last_sent_at",
+          "last_failure_at",
+          "last_smtp_code",
+          "last_enhanced_status",
+          "last_response"
+        ],
+        "title": "WarmupProviderStateResponse"
       }
     },
     "securitySchemes": {

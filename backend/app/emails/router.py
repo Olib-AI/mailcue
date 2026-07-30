@@ -1,8 +1,6 @@
 """Email CRUD router -- list, get, raw, attachments, send, inject, delete."""
 
-from __future__ import annotations
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +31,7 @@ from app.emails.service import (
 )
 from app.emails.validation import validate_email
 from app.mailboxes.router import verify_mailbox_access
+from app.rate_limit import limiter
 
 
 def _require_non_production() -> None:
@@ -242,8 +241,10 @@ async def delete_single_email(
     response_model=EmailValidationResponse,
     dependencies=[Depends(require_scope(scopes.EMAIL_VALIDATE))],
 )
+@limiter.limit(settings.validation_rate_limit)
 async def validate_email_endpoint(
-    body: EmailValidationRequest,
+    request: Request,
+    body: EmailValidationRequest = Body(...),
 ) -> EmailValidationResponse:
     """Validate email address format, DNS domain MX/NS, SMTP availability, and disposable status."""
     return await validate_email(body.email)

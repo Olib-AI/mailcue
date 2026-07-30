@@ -96,9 +96,15 @@ async def update_server_settings(
     return {"hostname": hostname, "catch_all_enabled": catch_all_enabled}
 
 
-def update_dovecot_catchall_config(enabled: bool) -> None:
-    """Comment/uncomment the catch-all fallback userdb block in /etc/dovecot/dovecot.conf."""
-    path = Path("/etc/dovecot/dovecot.conf")
+def update_dovecot_catchall_config(
+    enabled: bool, path: Path = Path("/etc/dovecot/dovecot.conf")
+) -> None:
+    """Enable or disable Dovecot delivery lookup for unknown mailbox users.
+
+    Production hardening comments this block during every container start.
+    The application startup path calls this function again with the persisted
+    server setting so catch-all delivery survives a restart.
+    """
     if not path.exists():
         logger.debug("Dovecot config file not found at %s. Skipping update.", path)
         return
@@ -109,10 +115,11 @@ def update_dovecot_catchall_config(enabled: bool) -> None:
         import re
 
         pattern = re.compile(
-            r"(?:#\s*)?userdb\s*\{\s*\r?\n"
-            r"(?:#\s*)?driver\s*=\s*static\s*\r?\n"
-            r"(?:#\s*)?args\s*=\s*uid=5000\s+gid=5000\s+home=/var/mail/vhosts/%d/%n\s+allow_all_users=yes\s*\r?\n"
-            r"(?:#\s*)?\}",
+            r"^[ \t]*#?[ \t]*userdb\s*\{[ \t]*\r?\n"
+            r"^[ \t]*#?[ \t]*driver\s*=\s*static[ \t]*\r?\n"
+            r"^[ \t]*#?[ \t]*args\s*=\s*uid=5000\s+gid=5000\s+"
+            r"home=/var/mail/vhosts/%d/%n\s+allow_all_users=yes[ \t]*\r?\n"
+            r"^[ \t]*#?[ \t]*\}",
             re.MULTILINE,
         )
 

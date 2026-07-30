@@ -94,6 +94,52 @@ pub enum Frame {
         /// Human-readable detail. Never contains message content.
         message: String,
     },
+    /// Sidecar → edge: test recipient acceptance without sending DATA.
+    Probe {
+        /// Sidecar-chosen request id.
+        request_id: u64,
+        /// Envelope sender used for the SMTP conversation.
+        envelope_from: String,
+        /// Mailbox being tested.
+        recipient: String,
+        /// Random nonexistent mailbox used to detect accept-all domains.
+        control_recipient: String,
+        /// SMTP connection options.
+        opts: RelayOpts,
+    },
+    /// Edge → sidecar: no-DATA SMTP probe result.
+    ProbeResult {
+        /// Echoes the matching probe request id.
+        request_id: u64,
+        /// Outcome for the requested recipient.
+        target: ProbeOutcome,
+        /// Outcome for the random accept-all control address.
+        control: Option<ProbeOutcome>,
+    },
+}
+
+/// One recipient outcome from a no-DATA SMTP probe.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbeOutcome {
+    /// MX hostname contacted, or empty when no MX was reachable.
+    pub mx: String,
+    /// SMTP response code observed at RCPT TO, if available.
+    pub smtp_code: Option<u16>,
+    /// First response line, bounded and safe for diagnostics.
+    pub smtp_msg: String,
+    /// Conservative recipient classification.
+    pub status: ProbeStatus,
+}
+
+/// Conservative interpretation of an SMTP recipient response.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProbeStatus {
+    /// Destination accepted RCPT TO.
+    Accepted,
+    /// Destination explicitly reported that the recipient does not exist.
+    Rejected,
+    /// Temporary, policy, network, or otherwise inconclusive response.
+    Unknown,
 }
 
 /// Continuation payload for a multi-frame [`Frame::Relay`].
@@ -257,6 +303,31 @@ mod tests {
             } => {
                 assert_eq!(request_id, 42);
                 assert_eq!(recipients, vec!["c@d".to_string()]);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn probe_roundtrip() {
+        let frame = Frame::Probe {
+            request_id: 99,
+            envelope_from: "probe@example.test".into(),
+            recipient: "person@example.net".into(),
+            control_recipient: "random@example.net".into(),
+            opts: RelayOpts::default(),
+        };
+        let encoded = encode_frame(&frame).unwrap();
+        match decode_frame(&encoded).unwrap() {
+            Frame::Probe {
+                request_id,
+                recipient,
+                control_recipient,
+                ..
+            } => {
+                assert_eq!(request_id, 99);
+                assert_eq!(recipient, "person@example.net");
+                assert_eq!(control_recipient, "random@example.net");
             }
             _ => panic!("wrong variant"),
         }

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.gpg.schemas import GpgEmailInfo
 
@@ -162,7 +162,7 @@ class SpamActionRequest(BaseModel):
 class EmailValidationRequest(BaseModel):
     """Request body for email address validation."""
 
-    email: str
+    email: str = Field(min_length=1, max_length=320)
 
 
 class EmailValidationSyntax(BaseModel):
@@ -181,9 +181,14 @@ class EmailValidationDns(BaseModel):
     has_mx: bool
     has_ns: bool
     has_a: bool
+    has_aaaa: bool = False
+    null_mx: bool = False
     mx_records: list[str] = []
     ns_records: list[str] = []
     a_records: list[str] = []
+    aaaa_records: list[str] = []
+    status: Literal["valid", "invalid", "undetermined"] = "invalid"
+    error_code: str | None = None
     error: str | None = None
 
 
@@ -194,6 +199,8 @@ class EmailValidationMailbox(BaseModel):
     smtp_code: int | None = None
     smtp_response: str | None = None
     catch_all: bool | None = None
+    transport: Literal["direct", "mailcue_tunnel", "none"] = "none"
+    reason_code: str | None = None
     error: str | None = None
 
 
@@ -201,6 +208,7 @@ class EmailValidationDisposable(BaseModel):
     """Result of temporary/disposable domain check."""
 
     is_disposable: bool
+    is_forwarding_alias: bool = False
     error: str | None = None
 
 
@@ -210,6 +218,10 @@ class EmailValidationResponse(BaseModel):
     email: str
     is_valid: bool
     status: Literal["valid", "invalid", "undetermined", "disposable", "catch_all"]
+    verdict: Literal["deliverable", "undeliverable", "risky", "unknown"]
+    deliverable: bool | None
+    confidence: float
+    reason: str
     syntax: EmailValidationSyntax
     dns: EmailValidationDns
     mailbox: EmailValidationMailbox

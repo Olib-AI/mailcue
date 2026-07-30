@@ -21,6 +21,7 @@ from app.mailboxes.service import (
     list_mailboxes,
 )
 from app.system.models import ServerSettings
+from app.system.service import update_dovecot_catchall_config
 
 
 def _make_maildir(root: Path, address: str) -> None:
@@ -28,6 +29,33 @@ def _make_maildir(root: Path, address: str) -> None:
     base = root / domain / local_part
     for subdir in ("cur", "new", "tmp"):
         (base / subdir).mkdir(parents=True, exist_ok=True)
+
+
+def test_dovecot_catchall_config_restores_production_commented_block(tmp_path: Path) -> None:
+    config_path = tmp_path / "dovecot.conf"
+    config_path.write_text(
+        """passdb {
+  driver = passwd-file
+}
+## Catch-all fallback userdb: disabled by production startup
+#userdb {
+#  driver = static
+#  args = uid=5000 gid=5000 home=/var/mail/vhosts/%d/%n allow_all_users=yes
+#}
+""",
+        encoding="utf-8",
+    )
+
+    update_dovecot_catchall_config(True, config_path)
+
+    enabled = config_path.read_text(encoding="utf-8")
+    assert "\nuserdb {\n  driver = static\n" in enabled
+    assert "allow_all_users=yes\n}" in enabled
+
+    update_dovecot_catchall_config(False, config_path)
+
+    disabled = config_path.read_text(encoding="utf-8")
+    assert "\n#userdb {\n#  driver = static\n" in disabled
 
 
 async def test_production_catchall_visibility_gating(

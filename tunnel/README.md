@@ -18,6 +18,11 @@ This crate ships **two** binaries:
 Wire format and threat model are specified in [`docs/PROTOCOL.md`](docs/PROTOCOL.md)
 and [`docs/SECURITY.md`](docs/SECURITY.md).
 
+Protocol v2 also supports recipient probes for MailCue's validation API. The
+edge tests `RCPT TO` for the target and a random accept-all control and always
+quits before `DATA`, so validation never sends a message. Sidecars and edges
+must be upgraded together when moving from protocol v1 to v2.
+
 ---
 
 ## Edge install (on the VPS)

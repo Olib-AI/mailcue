@@ -117,6 +117,10 @@ class Settings(BaseSettings):
 
     # ── Email Validation ──────────────────────────────────────────
     validation_smtp_probe_enabled: bool = True
+    validation_smtp_timeout_seconds: float = 8.0
+    validation_probe_relay_host: str = ""
+    validation_probe_relay_port: int = 2525
+    validation_rate_limit: str = "30/minute"
 
     # ── Tunnels (optional outbound relay through remote VPS edges) ─
     tunnels_config_path: str = "/etc/mailcue-sidecar/tunnels.json"
@@ -143,6 +147,10 @@ class Settings(BaseSettings):
             raise ValueError("database pool timeout must be positive and recycle non-negative")
         if self.database_connect_timeout <= 0 or self.database_statement_timeout_ms < 0:
             raise ValueError("database timeouts must be non-negative")
+        if self.validation_smtp_timeout_seconds <= 0:
+            raise ValueError("validation SMTP timeout must be positive")
+        if not 1 <= self.validation_probe_relay_port <= 65_535:
+            raise ValueError("validation probe relay port must be between 1 and 65535")
         if self.database_url:
             url = make_url(self.database_url)
             # Bare PostgreSQL URLs are common in hosting-provider secrets.  Use

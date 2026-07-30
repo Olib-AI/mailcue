@@ -29,6 +29,7 @@ from app.domains.service import (
     _normalize_dkim_txt,
     _parse_zonefile_txt,
     _read_tunnel_hosts_from_json,
+    _record_matches,
 )
 from app.tunnels.models import Tunnel
 
@@ -425,6 +426,13 @@ def test_normalize_dkim_passes_through_value_with_no_p_tag() -> None:
 # ── Tests: tunnel-aware SPF expected ─────────────────────────────
 
 
+def test_spf_relay_mechanism_order_is_semantically_equivalent() -> None:
+    expected = "v=spf1 mx a:relay-de.example.com a:relay-us.example.com -all"
+    published = "v=spf1 a:relay-us.example.com mx a:relay-de.example.com -all"
+    assert _record_matches("spf", expected, published) is True
+    assert _record_matches("spf", expected, published.replace("-all", "~all")) is False
+
+
 async def test_spf_expected_includes_every_enabled_tunnel(
     client: AsyncClient,
     seed_domain: Domain,
@@ -497,6 +505,64 @@ async def test_spf_expected_includes_every_enabled_tunnel(
     assert spf_rec["current_value"] == expected_spf
     assert spf_rec["drift"] is False
     assert body["has_drift"] is False
+
+
+async def test_domain_detail_uses_relay_aware_spf_expected_value(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """The initial detail response must agree with the polled dns-state response.
+
+    Previously the UI first rendered the single-host SPF recommendation even
+    though dns-state correctly knew about active relay tunnels.
+    """
+    _engine, factory = _engine_and_session
+    async with factory() as session:
+        session.add(
+            Tunnel(
+                id="detail-us",
+                name="us",
+                endpoint_host="relay-us.example.com",
+                endpoint_port=7843,
+                server_pubkey="D" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        session.add(
+            Tunnel(
+                id="detail-de",
+                name="de",
+                endpoint_host="relay-de.example.com",
+                endpoint_port=7843,
+                server_pubkey="E" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        await session.commit()
+
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.get(f"/api/v1/domains/{seed_domain.name}")
+    assert resp.status_code == 200, resp.text
+    spf_rec = next(
+        record
+        for record in resp.json()["dns_records"]
+        if record["record_type"] == "TXT" and record["hostname"] == seed_domain.name
+    )
+    assert (
+        spf_rec["expected_value"] == "v=spf1 mx a:relay-de.example.com a:relay-us.example.com -all"
+    )
 
 
 # ── Tests: tunnels.json fallback for externally-managed sidecars ─
