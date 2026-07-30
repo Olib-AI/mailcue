@@ -686,12 +686,32 @@ async def validate_email(email: str) -> EmailValidationResponse:
             disposable=disposable,
         )
 
-    # 4. Mailbox Check (SMTP probe)
-    # Using a sender email belonging to mailcue system domain
+    # 4. Mailbox check. A configured tunnel is the authoritative path for a
+    # deployment whose host cannot reach destination MX servers on port 25;
+    # trying every direct MX/IP first can exceed the caller's request timeout.
+    # The total budget also bounds multi-address direct probes.
     sender_email = f"validate-probe@{settings.domain}"
-    mailbox = await validate_mailbox(domain, dns_res.mx_records, normalized_email, sender_email)
-    if mailbox.is_valid is None and settings.validation_probe_relay_host:
-        mailbox = await validate_mailbox_via_tunnel(normalized_email, sender_email)
+    try:
+        async with asyncio.timeout(settings.validation_total_timeout_seconds):
+            if settings.validation_probe_relay_host:
+                mailbox = await validate_mailbox_via_tunnel(normalized_email, sender_email)
+            else:
+                mailbox = await validate_mailbox(
+                    domain,
+                    dns_res.mx_records,
+                    normalized_email,
+                    sender_email,
+                )
+    except TimeoutError:
+        mailbox = EmailValidationMailbox(
+            is_valid=None,
+            transport=("mailcue_tunnel" if settings.validation_probe_relay_host else "direct"),
+            reason_code="smtp_probe_timeout",
+            error=(
+                "Mailbox validation exceeded the "
+                f"{settings.validation_total_timeout_seconds:g}-second probe budget"
+            ),
+        )
 
     # 5. Calculate overall status
     is_valid = True

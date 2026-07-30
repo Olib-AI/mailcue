@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -688,6 +689,66 @@ async def test_validate_mailbox_via_tunnel_accept_all() -> None:
     assert result.is_valid is True
     assert result.catch_all is True
     assert result.transport == "mailcue_tunnel"
+
+
+@pytest.mark.asyncio
+async def test_validate_email_prefers_configured_tunnel_over_direct_probe() -> None:
+    dns_result = EmailValidationDns(
+        is_valid=True,
+        has_mx=True,
+        has_ns=True,
+        has_a=False,
+        mx_records=["10 mx.example.net."],
+    )
+    tunnel_result = EmailValidationMailbox(
+        is_valid=True,
+        transport="mailcue_tunnel",
+        reason_code="mailbox_accepted",
+    )
+    direct_probe = AsyncMock()
+    with (
+        patch("app.emails.validation.validate_dns", return_value=dns_result),
+        patch("app.emails.validation.validate_mailbox", direct_probe),
+        patch(
+            "app.emails.validation.validate_mailbox_via_tunnel",
+            return_value=tunnel_result,
+        ) as tunnel_probe,
+        patch("app.emails.validation.settings.validation_probe_relay_host", "sidecar"),
+    ):
+        result = await validate_email("person@sample-mail-domain.com")
+
+    assert result.is_valid is True
+    assert result.mailbox.transport == "mailcue_tunnel"
+    tunnel_probe.assert_awaited_once()
+    direct_probe.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_validate_email_returns_unknown_within_total_probe_budget() -> None:
+    dns_result = EmailValidationDns(
+        is_valid=True,
+        has_mx=True,
+        has_ns=True,
+        has_a=False,
+        mx_records=["10 mx.example.net."],
+    )
+
+    async def stalled_probe(*_args: object) -> EmailValidationMailbox:
+        await asyncio.sleep(1)
+        raise AssertionError("probe should have been cancelled by the total budget")
+
+    with (
+        patch("app.emails.validation.validate_dns", return_value=dns_result),
+        patch("app.emails.validation.validate_mailbox_via_tunnel", side_effect=stalled_probe),
+        patch("app.emails.validation.settings.validation_probe_relay_host", "sidecar"),
+        patch("app.emails.validation.settings.validation_total_timeout_seconds", 0.01),
+    ):
+        result = await validate_email("person@sample-mail-domain.com")
+
+    assert result.status == "undetermined"
+    assert result.verdict == "unknown"
+    assert result.mailbox.reason_code == "smtp_probe_timeout"
+    assert result.mailbox.transport == "mailcue_tunnel"
 
 
 @patch("app.emails.disposable.get_cache_file_path")

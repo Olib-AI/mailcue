@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
@@ -15,6 +17,7 @@ from app.domains.models import Domain
 from app.mailboxes.models import Mailbox
 from app.mailboxes.schemas import MailboxCreateRequest
 from app.mailboxes.service import (
+    _upsert_dovecot_user,
     create_mailbox,
     get_mailbox,
     get_mailbox_by_address,
@@ -65,6 +68,45 @@ def test_production_keeps_delivery_userdb_but_disables_unknown_auth() -> None:
     assert "allow_all_users=yes" in dovecot_config
     assert "sed -i '/^# Catch-all fallback userdb:" not in init_script
     assert "sed -i '/^# Catch-all passdb:" in init_script
+
+
+def test_dovecot_user_upsert_deduplicates_persisted_symlink(tmp_path: Path) -> None:
+    persisted = tmp_path / "state" / "users"
+    persisted.parent.mkdir()
+    persisted.write_text(
+        "userone@example.com:{OLD}:5000:5000::/old::\n"
+        "other@example.com:{HASH}:5000:5000::/other::\n"
+        "userone@example.com:{DUPLICATE}:5000:5000::/duplicate::\n",
+        encoding="utf-8",
+    )
+    users_link = tmp_path / "users"
+    users_link.symlink_to(persisted)
+    replacement = "userone@example.com:{NEW}:5000:5000::/new::\n"
+
+    _upsert_dovecot_user(users_link, "userone@example.com", replacement)
+
+    assert users_link.is_symlink()
+    lines = persisted.read_text(encoding="utf-8").splitlines()
+    assert [line for line in lines if line.startswith("userone@example.com:")] == [
+        replacement.rstrip()
+    ]
+    assert any(line.startswith("other@example.com:") for line in lines)
+
+
+async def test_imap_connect_rejects_failed_authentication(monkeypatch: Any) -> None:
+    from app.emails import service as email_service
+    from app.exceptions import MailServerError
+
+    imap = MagicMock()
+    imap.wait_hello_from_server = AsyncMock()
+    imap.login = AsyncMock(
+        return_value=SimpleNamespace(result="NO", lines=["authentication failed"])
+    )
+    monkeypatch.setattr(email_service, "_ensure_dovecot_user", AsyncMock())
+    monkeypatch.setattr(email_service.aioimaplib, "IMAP4", MagicMock(return_value=imap))
+
+    with pytest.raises(MailServerError, match="Mail server unavailable"):
+        await email_service._imap_connect("userone@example.com")
 
 
 async def test_production_catchall_visibility_gating(

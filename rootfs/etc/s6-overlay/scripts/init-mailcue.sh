@@ -692,6 +692,28 @@ for src in "${DOVECOT_USERS}" /etc/dovecot/master-users; do
     chown root:dovecot "${target}" 2>/dev/null || chown root:root "${target}"
 done
 
+# Heal duplicate passwd-file identities left by concurrent mailbox discovery
+# in older releases. Dovecot rejects the entire identity when an address is
+# present more than once. Keep the most recently written entry for each user.
+DOVECOT_USERS_TMP=$(mktemp "${DOVECOT_STATE_DIR}/users.dedupe.XXXXXX")
+awk -F: '
+    NF > 1 {
+        if (!($1 in seen)) {
+            order[++count] = $1
+            seen[$1] = 1
+        }
+        latest[$1] = $0
+    }
+    END {
+        for (index = 1; index <= count; index++) {
+            print latest[order[index]]
+        }
+    }
+' "${DOVECOT_USERS}" > "${DOVECOT_USERS_TMP}"
+chmod 640 "${DOVECOT_USERS_TMP}"
+chown root:dovecot "${DOVECOT_USERS_TMP}" 2>/dev/null || chown root:root "${DOVECOT_USERS_TMP}"
+mv "${DOVECOT_USERS_TMP}" "${DOVECOT_STATE_DIR}/users"
+
 # Generate password hash via doveadm (SHA512-CRYPT)
 ADMIN_HASH=$(doveadm pw -s SHA512-CRYPT -p "${ADMIN_PASSWORD}" 2>/dev/null || true)
 if [ -z "${ADMIN_HASH}" ]; then

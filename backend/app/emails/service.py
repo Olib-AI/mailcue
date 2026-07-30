@@ -59,20 +59,35 @@ async def _ensure_dovecot_user(address: str) -> None:
         return
     try:
         content = await asyncio.to_thread(users_path.read_text, encoding="utf-8")
-        if f"{address}:" not in content:
+        matching_lines = [
+            line
+            for line in content.splitlines()
+            if line.partition(":")[0].casefold() == address.casefold()
+        ]
+        from app.mailboxes.service import (
+            _create_maildir,
+            _dovecot_hash_password,
+            _upsert_dovecot_user,
+        )
+
+        if len(matching_lines) > 1:
+            # Heal persisted duplicates immediately, even before the next
+            # container restart runs the init-script normalization.
+            await asyncio.to_thread(
+                _upsert_dovecot_user,
+                users_path,
+                address,
+                matching_lines[-1],
+            )
+        elif not matching_lines:
             local_part, _, domain = address.partition("@")
             domain = domain or settings.domain
             maildir = Path(settings.mail_storage_path) / domain / local_part
-            from app.mailboxes.service import (
-                _append_to_file,
-                _create_maildir,
-                _dovecot_hash_password,
-            )
 
             await asyncio.to_thread(_create_maildir, maildir)
             hashed = await asyncio.to_thread(_dovecot_hash_password, "mailcue-auto-password")
             user_line = f"{address}:{hashed}:5000:5000::{maildir}::\n"
-            await asyncio.to_thread(_append_to_file, users_path, user_line)
+            await asyncio.to_thread(_upsert_dovecot_user, users_path, address, user_line)
     except Exception as exc:
         logger.warning("Could not auto-provision Dovecot user for %s: %s", address, exc)
 
@@ -88,7 +103,10 @@ async def _imap_connect(mailbox_address: str) -> aioimaplib.IMAP4:
     try:
         imap = aioimaplib.IMAP4(host=settings.imap_host, port=settings.imap_port)
         await imap.wait_hello_from_server()
-        await imap.login(master_login, settings.imap_master_password)
+        login_response = await imap.login(master_login, settings.imap_master_password)
+        if str(login_response.result).upper() != "OK":
+            detail = " ".join(str(line) for line in login_response.lines)
+            raise ConnectionError(f"IMAP authentication failed: {detail}")
         return imap
     except Exception as exc:
         logger.error("Failed to connect to IMAP server for %s: %s", mailbox_address, exc)

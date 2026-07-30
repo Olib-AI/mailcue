@@ -438,7 +438,12 @@ async def _provision_system_mailbox(
     # Append to passwd-file
     # Format: user@domain:{SCHEME}hash:uid:gid::home::
     user_line = f"{address}:{hashed}:5000:5000::{maildir}::\n"
-    await asyncio.to_thread(_append_to_file, Path(settings.dovecot_users_file), user_line)
+    await asyncio.to_thread(
+        _upsert_dovecot_user,
+        Path(settings.dovecot_users_file),
+        address,
+        user_line,
+    )
 
     # Append to Postfix virtual_mailboxes for backward compat (catch-all
     # makes this optional, so failures are non-fatal).
@@ -508,6 +513,54 @@ def _append_to_file(path: Path, line: str) -> None:
         fh.write(line)
 
 
+def _upsert_dovecot_user(path: Path, address: str, line: str) -> None:
+    """Replace one passwd-file identity without creating duplicate entries.
+
+    A separate lock file serializes concurrent API requests. The data file may
+    be a symlink into the persistent state volume, so replace its resolved
+    target rather than replacing the symlink itself.
+    """
+    import fcntl
+    import os
+    import tempfile
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    target = path.resolve(strict=False)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = target.with_name(f".{target.name}.lock")
+    normalized_address = address.casefold()
+
+    with lock_path.open("a", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        existing_lines = (
+            target.read_text(encoding="utf-8").splitlines(keepends=True) if target.exists() else []
+        )
+        retained = [
+            existing
+            for existing in existing_lines
+            if existing.partition(":")[0].casefold() != normalized_address
+        ]
+        replacement = line if line.endswith("\n") else f"{line}\n"
+
+        target_stat = target.stat() if target.exists() else None
+        file_mode = target_stat.st_mode & 0o777 if target_stat is not None else 0o640
+        fd, temporary_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+                temporary.writelines(retained)
+                temporary.write(replacement)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.chmod(temporary_name, file_mode)
+            if target_stat is not None:
+                with contextlib.suppress(PermissionError):
+                    os.chown(temporary_name, target_stat.st_uid, target_stat.st_gid)
+            os.replace(temporary_name, target)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(temporary_name)
+
+
 def _run_postmap(map_file: str) -> None:
     """Run ``postmap`` to rebuild a Postfix hash map after modification."""
     try:
@@ -558,7 +611,10 @@ async def _imap_get_folder_stats(address: str) -> list[FolderInfo]:
     _list_re = re.compile(r'\([^)]*\)\s+"[^"]*"\s+"?([^"]+)"?')
 
     try:
-        await imap.login(master_login, settings.imap_master_password)
+        login_response = await imap.login(master_login, settings.imap_master_password)
+        if str(login_response.result).upper() != "OK":
+            detail = " ".join(str(line) for line in login_response.lines)
+            raise ConnectionError(f"IMAP authentication failed: {detail}")
 
         # List all folders — aioimaplib sends args raw, so we must quote them
         status_resp, folder_data = await imap.list('""', '"*"')
