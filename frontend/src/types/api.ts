@@ -365,6 +365,31 @@ export interface DnsCheckResponse {
   dns_records: DnsRecordInfo[];
 }
 
+// --- Tunnel Status Types ---
+
+export interface EffectiveTunnelStatus {
+  id: string;
+  name: string;
+  endpoint_host: string;
+  endpoint_port: number;
+  enabled: boolean;
+  weight: number;
+  source: "database" | "config_file";
+  managed: boolean;
+  healthy: boolean | null;
+  idle_connections: number | null;
+  inflight: number | null;
+  requests_ok: number | null;
+  requests_err: number | null;
+  last_success: string | null;
+}
+
+export interface EffectiveTunnelStatusResponse {
+  sidecar_reachable: boolean;
+  status_detail: string | null;
+  tunnels: EffectiveTunnelStatus[];
+}
+
 // --- Certificate Types ---
 
 export interface CertificateDN {

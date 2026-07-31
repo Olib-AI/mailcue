@@ -23,9 +23,32 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.tunnels.service import _parse_sidecar_metrics
+
 # 32 bytes of zeros encoded as base64 -- shape-valid X25519 public key.
 _VALID_PUBKEY_B64: str = base64.b64encode(b"\x00" * 32).decode()
 _VALID_PUBKEY_B64_ALT: str = base64.b64encode(b"\x01" * 32).decode()
+
+
+def test_parse_sidecar_metrics_groups_health_and_outcomes() -> None:
+    metrics = _parse_sidecar_metrics(
+        "\n".join(
+            [
+                'mailcue_tunnel_up{tunnel="edge-1"} 1',
+                'mailcue_tunnel_requests_total{tunnel="edge-1",outcome="ok"} 7',
+                'mailcue_tunnel_requests_total{tunnel="edge-1",outcome="err"} 2',
+                'mailcue_tunnel_idle_connections{tunnel="edge-1"} 3',
+            ]
+        )
+    )
+    assert metrics == {
+        "edge-1": {
+            "up": 1.0,
+            "requests_ok": 7.0,
+            "requests_err": 2.0,
+            "idle_connections": 3.0,
+        }
+    }
 
 
 def _override_settings_path(monkeypatch: pytest.MonkeyPatch, target: Path) -> None:
@@ -97,6 +120,68 @@ async def test_create_tunnel_rejects_invalid_name(
 
 
 # ── CRUD round-trip + tunnels.json shape ─────────────────────────
+
+
+async def test_effective_status_surfaces_file_managed_tunnels_and_metrics(
+    client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The UI must show working sidecar tunnels even when the DB is empty."""
+    json_path = tmp_path / "tunnels.json"
+    _override_settings_path(monkeypatch, json_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "tunnels": [
+                    {
+                        "id": "relay-us",
+                        "name": "US relay",
+                        "host": "relay-us.example.com",
+                        "port": 7843,
+                        "edge_pubkey": _VALID_PUBKEY_B64,
+                        "enabled": True,
+                        "weight": 2,
+                    }
+                ],
+            }
+        )
+    )
+
+    async def _fake_metrics() -> tuple[bool, str | None, dict[str, dict[str, float]]]:
+        return (
+            True,
+            None,
+            {
+                "relay-us": {
+                    "up": 1,
+                    "idle_connections": 3,
+                    "inflight": 1,
+                    "requests_ok": 12,
+                    "requests_err": 2,
+                    "last_success_seconds": 1_785_369_600,
+                }
+            },
+        )
+
+    monkeypatch.setattr("app.tunnels.service._fetch_sidecar_metrics", _fake_metrics)
+    response = await client.get("/api/v1/tunnels/status")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["sidecar_reachable"] is True
+    assert len(body["tunnels"]) == 1
+    tunnel = body["tunnels"][0]
+    assert tunnel["id"] == "relay-us"
+    assert tunnel["endpoint_host"] == "relay-us.example.com"
+    assert tunnel["source"] == "config_file"
+    assert tunnel["managed"] is False
+    assert tunnel["healthy"] is True
+    assert tunnel["idle_connections"] == 3
+    assert tunnel["requests_ok"] == 12
+    # Public keys from tunnels.json must never be returned by the status API.
+    assert "edge_pubkey" not in tunnel
+    assert "server_pubkey" not in tunnel
 
 
 async def test_full_crud_and_tunnels_json(

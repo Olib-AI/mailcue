@@ -12,6 +12,7 @@ from app.auth.models import User
 from app.database import get_db
 from app.dependencies import require_admin, require_scope
 from app.tunnels.schemas import (
+    EffectiveTunnelStatusResponse,
     TunnelClientIdentityRequest,
     TunnelClientIdentityResponse,
     TunnelCreate,
@@ -23,6 +24,7 @@ from app.tunnels.schemas import (
 from app.tunnels.service import (
     create_tunnel,
     delete_tunnel,
+    effective_tunnel_status,
     get_or_init_client_identity,
     get_tunnel,
     health_check,
@@ -96,6 +98,24 @@ async def reload_tunnels_config(
 
 
 # ── Tunnel CRUD ──────────────────────────────────────────────────
+
+
+@router.get(
+    "/status",
+    response_model=EffectiveTunnelStatusResponse,
+    dependencies=[Depends(require_scope(scopes.TUNNEL_READ))],
+)
+async def get_effective_tunnel_status(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> EffectiveTunnelStatusResponse:
+    """Return file-managed tunnels plus live sidecar health. **Admin only.**"""
+    reachable, detail, tunnels = await effective_tunnel_status(db)
+    return EffectiveTunnelStatusResponse(
+        sidecar_reachable=reachable,
+        status_detail=detail,
+        tunnels=tunnels,
+    )
 
 
 @router.get(

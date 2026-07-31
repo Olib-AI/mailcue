@@ -6,6 +6,7 @@ import { CertificateManager } from "@/components/admin/certificate-manager";
 import { MailServerManager } from "@/components/admin/mail-server";
 import { ProductionStatusPanel } from "@/components/admin/production-status";
 import { SignatureManager } from "@/components/admin/signature-manager";
+import { TunnelStatusPanel } from "@/components/admin/tunnel-status";
 import { useAuth } from "@/hooks/use-auth";
 
 function SettingsPage() {
@@ -27,6 +28,7 @@ function SettingsPage() {
           {isAdmin && <TabsTrigger value="certificate">TLS Certificate</TabsTrigger>}
           {isAdmin && <TabsTrigger value="mail-server">Mail Server</TabsTrigger>}
           {isAdmin && <TabsTrigger value="domains">Domains</TabsTrigger>}
+          {isAdmin && <TabsTrigger value="tunnels">Tunnels</TabsTrigger>}
           {isAdmin && <TabsTrigger value="production">Production</TabsTrigger>}
         </TabsList>
 
@@ -53,6 +55,12 @@ function SettingsPage() {
         {isAdmin && (
           <TabsContent value="domains">
             <DomainManager />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="tunnels">
+            <TunnelStatusPanel />
           </TabsContent>
         )}
 

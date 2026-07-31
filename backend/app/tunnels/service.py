@@ -10,18 +10,20 @@ import hashlib
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.exceptions import ConflictError, NotFoundError, ValidationError
 from app.tunnels.models import Tunnel, TunnelClientIdentity
-from app.tunnels.schemas import TunnelCreate, TunnelUpdate
+from app.tunnels.schemas import EffectiveTunnelStatus, TunnelCreate, TunnelUpdate
 
 logger = logging.getLogger("mailcue.tunnels")
 
@@ -29,6 +31,11 @@ _SIDECAR_KEY_PATH = "/var/lib/mailcue-sidecar/client.key"
 _TUNNELS_JSON_VERSION = 1
 _DEFAULT_SELECTION = "round_robin"
 _HEALTH_CHECK_TIMEOUT_SECONDS = 5.0
+_SIDECAR_STATUS_TIMEOUT_SECONDS = 3.0
+_PROM_LINE_RE = re.compile(
+    r"^mailcue_tunnel_(?P<metric>up|requests_total|last_success_seconds|inflight|idle_connections)"
+    r"\{(?P<labels>[^}]*)\}\s+(?P<value>[0-9.eE+-]+)$"
+)
 
 
 # ── CRUD ──────────────────────────────────────────────────────────
@@ -39,6 +46,133 @@ async def list_tunnels(db: AsyncSession) -> list[Tunnel]:
     stmt = select(Tunnel).order_by(Tunnel.name)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+def _read_effective_tunnel_entries(path: str | Path) -> tuple[list[dict[str, Any]], str | None]:
+    """Read the sidecar's effective config without exposing public keys."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return [], f"Tunnel configuration is not mounted at {path}"
+    except PermissionError:
+        return [], f"Tunnel configuration is not readable at {path}"
+    except (OSError, json.JSONDecodeError) as exc:
+        return [], f"Could not read tunnel configuration: {exc}"
+    entries = data.get("tunnels") if isinstance(data, dict) else None
+    if not isinstance(entries, list):
+        return [], "Tunnel configuration does not contain a tunnels list"
+    return [entry for entry in entries if isinstance(entry, dict)], None
+
+
+def _parse_prometheus_labels(raw: str) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for match in re.finditer(r'(\w+)="((?:\\.|[^"])*)"', raw):
+        labels[match.group(1)] = match.group(2).replace(r"\"", '"').replace("\\\\", "\\")
+    return labels
+
+
+def _parse_sidecar_metrics(body: str) -> dict[str, dict[str, float]]:
+    """Parse the small, fixed Prometheus surface emitted by the sidecar."""
+    result: dict[str, dict[str, float]] = {}
+    for line in body.splitlines():
+        match = _PROM_LINE_RE.fullmatch(line.strip())
+        if match is None:
+            continue
+        labels = _parse_prometheus_labels(match.group("labels"))
+        tunnel_id = labels.get("tunnel")
+        if not tunnel_id:
+            continue
+        metric = match.group("metric")
+        if metric == "requests_total":
+            outcome = labels.get("outcome")
+            if outcome not in {"ok", "err"}:
+                continue
+            metric = f"requests_{outcome}"
+        result.setdefault(tunnel_id, {})[metric] = float(match.group("value"))
+    return result
+
+
+async def _fetch_sidecar_metrics() -> tuple[bool, str | None, dict[str, dict[str, float]]]:
+    url = settings.tunnel_metrics_url.rstrip("/") + "/metrics"
+    try:
+        async with httpx.AsyncClient(timeout=_SIDECAR_STATUS_TIMEOUT_SECONDS) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        return False, f"Could not reach sidecar metrics at {url}: {exc}", {}
+    return True, None, _parse_sidecar_metrics(response.text)
+
+
+async def effective_tunnel_status(
+    db: AsyncSession,
+) -> tuple[bool, str | None, list[EffectiveTunnelStatus]]:
+    """Return the sidecar's effective file config enriched with live health."""
+    database_tunnels = await list_tunnels(db)
+    database_by_id = {tunnel.id: tunnel for tunnel in database_tunnels}
+    file_entries, config_error = await asyncio.to_thread(
+        _read_effective_tunnel_entries, settings.tunnels_config_path
+    )
+    sidecar_reachable, metrics_error, metrics = await _fetch_sidecar_metrics()
+
+    statuses: list[EffectiveTunnelStatus] = []
+    seen: set[str] = set()
+    for entry in file_entries:
+        tunnel_id = str(entry.get("id", "")).strip()
+        name = str(entry.get("name", tunnel_id)).strip()
+        host = str(entry.get("host", "")).strip()
+        if not tunnel_id or not name or not host:
+            continue
+        try:
+            port = int(entry.get("port", 7843))
+            weight = int(entry.get("weight", 1))
+        except (TypeError, ValueError):
+            continue
+        stat = metrics.get(tunnel_id, {})
+        last_success_value = int(stat.get("last_success_seconds", 0))
+        statuses.append(
+            EffectiveTunnelStatus(
+                id=tunnel_id,
+                name=name,
+                endpoint_host=host,
+                endpoint_port=port,
+                enabled=bool(entry.get("enabled", True)),
+                weight=weight,
+                source="database" if tunnel_id in database_by_id else "config_file",
+                managed=tunnel_id in database_by_id,
+                healthy=bool(stat.get("up")) if tunnel_id in metrics else None,
+                idle_connections=int(stat["idle_connections"])
+                if "idle_connections" in stat
+                else None,
+                inflight=int(stat["inflight"]) if "inflight" in stat else None,
+                requests_ok=int(stat["requests_ok"]) if "requests_ok" in stat else None,
+                requests_err=int(stat["requests_err"]) if "requests_err" in stat else None,
+                last_success=datetime.fromtimestamp(last_success_value, UTC)
+                if last_success_value > 0
+                else None,
+            )
+        )
+        seen.add(tunnel_id)
+
+    # A database row may not have reached the sidecar file yet. Surface it as
+    # managed but not loaded instead of silently dropping it from the UI.
+    for tunnel in database_tunnels:
+        if tunnel.id in seen:
+            continue
+        statuses.append(
+            EffectiveTunnelStatus(
+                id=tunnel.id,
+                name=tunnel.name,
+                endpoint_host=tunnel.endpoint_host,
+                endpoint_port=tunnel.endpoint_port,
+                enabled=tunnel.enabled,
+                weight=tunnel.weight,
+                source="database",
+                managed=True,
+            )
+        )
+
+    status_detail = config_error or metrics_error
+    return sidecar_reachable, status_detail, sorted(statuses, key=lambda item: item.name)
 
 
 async def get_tunnel(tunnel_id: str, db: AsyncSession) -> Tunnel:

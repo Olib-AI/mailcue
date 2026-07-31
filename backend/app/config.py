@@ -125,6 +125,7 @@ class Settings(BaseSettings):
 
     # ── Tunnels (optional outbound relay through remote VPS edges) ─
     tunnels_config_path: str = "/etc/mailcue-sidecar/tunnels.json"
+    tunnel_metrics_url: str = "http://mailcue-sidecar:9325"
 
     @field_validator("mode", mode="before")
     @classmethod

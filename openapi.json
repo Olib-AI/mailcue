@@ -3887,6 +3887,36 @@
         ]
       }
     },
+    "/api/v1/tunnels/status": {
+      "get": {
+        "tags": [
+          "Tunnels"
+        ],
+        "summary": "Get Effective Tunnel Status",
+        "description": "Return file-managed tunnels plus live sidecar health. **Admin only.**",
+        "operationId": "get_effective_tunnel_status_api_v1_tunnels_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectiveTunnelStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/tunnels": {
       "get": {
         "tags": [
@@ -7121,6 +7151,155 @@
         ],
         "title": "DomainResponse",
         "description": "Basic domain information."
+      },
+      "EffectiveTunnelStatus": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "endpoint_host": {
+            "type": "string",
+            "title": "Endpoint Host"
+          },
+          "endpoint_port": {
+            "type": "integer",
+            "title": "Endpoint Port"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "weight": {
+            "type": "integer",
+            "title": "Weight"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "managed": {
+            "type": "boolean",
+            "title": "Managed"
+          },
+          "healthy": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Healthy"
+          },
+          "idle_connections": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle Connections"
+          },
+          "inflight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inflight"
+          },
+          "requests_ok": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requests Ok"
+          },
+          "requests_err": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requests Err"
+          },
+          "last_success": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpoint_host",
+          "endpoint_port",
+          "enabled",
+          "weight",
+          "source",
+          "managed"
+        ],
+        "title": "EffectiveTunnelStatus",
+        "description": "Effective sidecar tunnel, including file-managed configurations."
+      },
+      "EffectiveTunnelStatusResponse": {
+        "properties": {
+          "sidecar_reachable": {
+            "type": "boolean",
+            "title": "Sidecar Reachable"
+          },
+          "status_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Detail"
+          },
+          "tunnels": {
+            "items": {
+              "$ref": "#/components/schemas/EffectiveTunnelStatus"
+            },
+            "type": "array",
+            "title": "Tunnels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sidecar_reachable",
+          "tunnels"
+        ],
+        "title": "EffectiveTunnelStatusResponse",
+        "description": "Sidecar reachability and its effective tunnel configuration."
       },
       "EmailDetail": {
         "properties": {

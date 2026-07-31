@@ -122,6 +122,33 @@ class TunnelResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EffectiveTunnelStatus(BaseModel):
+    """Effective sidecar tunnel, including file-managed configurations."""
+
+    id: str
+    name: str
+    endpoint_host: str
+    endpoint_port: int
+    enabled: bool
+    weight: int
+    source: str
+    managed: bool
+    healthy: bool | None = None
+    idle_connections: int | None = None
+    inflight: int | None = None
+    requests_ok: int | None = None
+    requests_err: int | None = None
+    last_success: datetime | None = None
+
+
+class EffectiveTunnelStatusResponse(BaseModel):
+    """Sidecar reachability and its effective tunnel configuration."""
+
+    sidecar_reachable: bool
+    status_detail: str | None = None
+    tunnels: list[EffectiveTunnelStatus]
+
+
 class TunnelClientIdentityRequest(BaseModel):
     """Request body for upserting the client identity public key."""
 
