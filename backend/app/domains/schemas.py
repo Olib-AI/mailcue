@@ -59,6 +59,9 @@ class DnsRecordInfo(BaseModel):
     current_value: str | None = None
     verified: bool
     purpose: str
+    scope: str = "Domain"
+    required: bool = True
+    status_detail: str | None = None
     last_checked_at: datetime | None = None
     last_verified_at: datetime | None = None
     drift: bool = False

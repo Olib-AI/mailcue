@@ -18,6 +18,7 @@ from collections.abc import AsyncIterator, Iterable
 from typing import Any
 
 import dns.resolver
+import dns.reversename
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -25,11 +26,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.domains.models import Domain
 from app.domains.service import (
+    _build_spf_expected,
     _join_txt_rdata,
     _normalize_dkim_txt,
     _parse_zonefile_txt,
     _read_tunnel_hosts_from_json,
     _record_matches,
+    _validate_spf_record,
 )
 from app.tunnels.models import Tunnel
 
@@ -54,6 +57,22 @@ class _TxtRdata:
 
     def __init__(self, *chunks: bytes) -> None:
         self.strings: tuple[bytes, ...] = tuple(chunks)
+
+
+class _AddressRdata:
+    def __init__(self, address: str) -> None:
+        self.address = address
+
+    def __str__(self) -> str:
+        return self.address
+
+
+class _PtrRdata:
+    def __init__(self, hostname: str) -> None:
+        self.hostname = hostname
+
+    def __str__(self) -> str:
+        return self.hostname
 
 
 # DNS_PLAN maps (qname, rdtype) -> iterable of rdata objects.
@@ -169,6 +188,23 @@ def test_join_multistring_txt_has_no_separator() -> None:
 def test_join_single_string_txt_unchanged() -> None:
     rdata = _TxtRdata(b"v=spf1 mx a:mail.example.com ~all")
     assert _join_txt_rdata(rdata) == "v=spf1 mx a:mail.example.com ~all"
+
+
+def test_spf_validator_rejects_unknown_aaaa_mechanism() -> None:
+    valid, reason = _validate_spf_record("v=spf1 a aaaa -all")
+    assert valid is False
+    assert reason == "Unknown SPF mechanism: aaaa"
+
+
+def test_spf_validator_accepts_a_for_both_address_families() -> None:
+    assert _validate_spf_record("v=spf1 a -all") == (True, None)
+
+
+def test_apex_spf_uses_ip_mechanisms_for_literal_tunnel_endpoints() -> None:
+    assert (
+        _build_spf_expected("mail.example.com", ["192.0.2.7", "2001:db8::7", "relay.example.com"])
+        == "v=spf1 mx ip4:192.0.2.7 ip6:2001:db8::7 a:relay.example.com -all"
+    )
 
 
 # ── Tests: POST /verify-dns ───────────────────────────────────────
@@ -439,6 +475,121 @@ def test_spf_strict_relay_policy_satisfies_single_host_recommendation() -> None:
 
     assert _record_matches("spf", expected, published) is True
     assert _record_matches("spf", expected, "v=spf1 -all") is False
+
+
+async def test_relay_dns_audit_rejects_malformed_helo_spf(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """Regression for Yahoo's ``permerror`` on ``a aaaa``.
+
+    A tunnel's forward and reverse DNS can be correct while its HELO SPF is
+    syntactically invalid. The relay row must explain the exact error and
+    gate ``all_verified``.
+    """
+    _engine, factory = _engine_and_session
+    relay_host = "relay-us.example.com"
+    relay_ip = "192.0.2.44"
+    async with factory() as session:
+        session.add(
+            Tunnel(
+                id="audit-us-bad",
+                name="audit-us-bad",
+                endpoint_host=relay_host,
+                endpoint_port=7843,
+                server_pubkey="F" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        await session.commit()
+
+    expected_apex_spf = f"v=spf1 mx a:{relay_host} -all"
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+        spf_value=expected_apex_spf,
+    )
+    plan[(relay_host, "TXT")] = [_TxtRdata(b"v=spf1 a aaaa -all")]
+    plan[(relay_host, "A")] = [_AddressRdata(relay_ip)]
+    reverse_name = str(dns.reversename.from_address(relay_ip)).rstrip(".")
+    plan[(reverse_name, "PTR")] = [_PtrRdata(f"{relay_host}.")]
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["spf_verified"] is True  # apex policy itself is correct
+    assert body["all_verified"] is False  # relay HELO SPF gates readiness
+
+    relay_spf = next(
+        record
+        for record in body["dns_records"]
+        if record["scope"] == f"Relay · {relay_host}" and record["record_type"] == "TXT"
+    )
+    assert relay_spf["expected_value"] == "v=spf1 a -all"
+    assert relay_spf["current_value"] == "v=spf1 a aaaa -all"
+    assert relay_spf["verified"] is False
+    assert relay_spf["drift"] is True
+    assert relay_spf["status_detail"] == "Unknown SPF mechanism: aaaa"
+
+
+async def test_relay_dns_audit_verifies_forward_reverse_and_optional_ipv6(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    """A correctly configured IPv4-only relay passes; absent IPv6 is optional."""
+    _engine, factory = _engine_and_session
+    relay_host = "relay-de.example.com"
+    relay_ip = "198.51.100.19"
+    async with factory() as session:
+        session.add(
+            Tunnel(
+                id="audit-de-good",
+                name="audit-de-good",
+                endpoint_host=relay_host,
+                endpoint_port=7843,
+                server_pubkey="G" * 64,
+                enabled=True,
+                weight=1,
+            )
+        )
+        await session.commit()
+
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname="mail.example.com",
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+        spf_value=f"v=spf1 mx a:{relay_host} -all",
+    )
+    plan[(relay_host, "TXT")] = [_TxtRdata(b"v=spf1 a -all")]
+    plan[(relay_host, "A")] = [_AddressRdata(relay_ip)]
+    reverse_name = str(dns.reversename.from_address(relay_ip)).rstrip(".")
+    plan[(reverse_name, "PTR")] = [_PtrRdata(f"{relay_host}.")]
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["all_verified"] is True
+    relay_records = [
+        record for record in body["dns_records"] if record["scope"] == f"Relay · {relay_host}"
+    ]
+    assert {record["record_type"] for record in relay_records} == {"TXT", "A", "AAAA", "PTR"}
+    ipv6 = next(record for record in relay_records if record["record_type"] == "AAAA")
+    assert ipv6["required"] is False
+    assert ipv6["current_value"] is None
+    ptr = next(record for record in relay_records if record["record_type"] == "PTR")
+    assert ptr["verified"] is True
 
 
 async def test_spf_expected_includes_every_enabled_tunnel(

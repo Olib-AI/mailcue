@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import PlainTextResponse
@@ -25,6 +26,7 @@ from app.domains.schemas import (
 )
 from app.domains.service import (
     _build_dns_records,
+    _check_relay_dns,
     _list_active_tunnel_hosts,
     add_domain,
     compute_dns_state,
@@ -146,6 +148,7 @@ async def get_domain(
         bimi_verified=bimi_result[0],
         tunnel_hosts=tunnel_hosts,
     )
+    dns_records.extend(await _check_relay_dns(tunnel_hosts, datetime.now(UTC)))
 
     return DomainDetailResponse(
         id=domain.id,

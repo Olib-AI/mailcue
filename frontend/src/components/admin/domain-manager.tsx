@@ -74,15 +74,15 @@ function truncateMiddle(value: string, max = 64): string {
   return `${value.slice(0, head)}...${value.slice(-tail)}`;
 }
 
-/** Records that are informational only (PTR / A) and can never "drift". */
-function isInfoRecord(record: Pick<DnsRecordInfo, "record_type">): boolean {
-  return record.record_type === "PTR" || record.record_type === "A";
+/** Optional/guidance rows do not gate overall DNS readiness. */
+function isInfoRecord(record: Pick<DnsRecordInfo, "required">): boolean {
+  return record.required === false;
 }
 
-type RecordStatus = "info" | "verified" | "drift" | "missing";
+type RecordStatus = "optional" | "verified" | "drift" | "missing";
 
 function recordStatus(record: DnsRecordInfo): RecordStatus {
-  if (isInfoRecord(record)) return "info";
+  if (isInfoRecord(record) && !record.current_value) return "optional";
   if (record.drift === true) return "drift";
   if (record.verified) return "verified";
   if (record.current_value === null || record.current_value === undefined) {
@@ -108,8 +108,8 @@ function RecordStatusBadge({ status }: { status: RecordStatus }) {
           Missing
         </Badge>
       );
-    case "info":
-      return <Badge variant="secondary">Info</Badge>;
+    case "optional":
+      return <Badge variant="secondary">Optional</Badge>;
   }
 }
 
@@ -259,7 +259,7 @@ function DomainCard({ domain }: { domain: Domain }) {
             <div className="flex items-center gap-2">
               <Globe className="h-5 w-5 text-muted-foreground" />
               <CardTitle className="text-base">{domain.name}</CardTitle>
-              {domain.all_verified && !hasDrift && (
+              {domain.all_verified && !hasDrift && !hasMissing && (
                 <Badge className="bg-green-600 text-white">Verified</Badge>
               )}
             </div>
@@ -415,6 +415,7 @@ function DomainCard({ domain }: { domain: Domain }) {
                       <thead>
                         <tr className="border-b bg-muted/50">
                           <th className="px-3 py-2 text-left font-medium">Type</th>
+                          <th className="px-3 py-2 text-left font-medium">Scope</th>
                           <th className="px-3 py-2 text-left font-medium">
                             Hostname
                           </th>
@@ -438,6 +439,9 @@ function DomainCard({ domain }: { domain: Domain }) {
                               <td className="px-3 py-2">
                                 <Badge variant="outline">{record.record_type}</Badge>
                               </td>
+                              <td className="px-3 py-2 text-xs whitespace-nowrap">
+                                {record.scope ?? "Domain"}
+                              </td>
                               <td className="px-3 py-2 font-mono text-xs break-all">
                                 {record.hostname}
                               </td>
@@ -451,6 +455,11 @@ function DomainCard({ domain }: { domain: Domain }) {
                                 {record.purpose && (
                                   <div className="text-xs text-muted-foreground mt-0.5">
                                     {record.purpose}
+                                  </div>
+                                )}
+                                {record.status_detail && (
+                                  <div className="mt-1 text-xs font-medium text-destructive">
+                                    {record.status_detail}
                                   </div>
                                 )}
                                 {status === "drift" && (

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import json
 import logging
 import re
@@ -12,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import dns.resolver
+import dns.reversename
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -155,6 +157,113 @@ def _format_mx_rdata(rdata: object) -> str:
     return f"{int(pref)} {host}."
 
 
+_SPF_QUALIFIERS = "+-~?"
+_SPF_DNS_MECHANISMS = {"a", "mx", "ptr", "include", "exists"}
+_DNS_LOOKUP_LIFETIME_SECONDS = 5.0
+
+
+async def _resolve_dns(qname: str, record_type: str) -> dns.resolver.Answer:
+    """Resolve one DNS RRset with a bounded wall-clock lifetime."""
+    return await asyncio.to_thread(
+        dns.resolver.resolve,
+        qname,
+        record_type,
+        lifetime=_DNS_LOOKUP_LIFETIME_SECONDS,
+    )
+
+
+def _validate_spf_record(value: str) -> tuple[bool, str | None]:
+    """Validate SPF syntax and the per-record DNS lookup limit.
+
+    This deliberately validates mechanisms instead of merely checking the
+    ``v=spf1`` prefix. Unknown modifiers are allowed by RFC 7208, while an
+    unknown mechanism (for example the invalid ``aaaa`` mechanism) is a
+    permanent error at receivers.
+    """
+    tokens = value.strip().split()
+    if not tokens or tokens[0].lower() != "v=spf1":
+        return False, "SPF must start with v=spf1"
+    if len(tokens) == 1:
+        return False, "SPF has no mechanisms"
+
+    lookup_terms = 0
+    seen_modifiers: set[str] = set()
+    for raw_term in tokens[1:]:
+        has_qualifier = raw_term[0] in _SPF_QUALIFIERS
+        qualifier = raw_term[0] if has_qualifier else "+"
+        term = raw_term[1:] if has_qualifier else raw_term
+        if not term:
+            return False, f"Invalid empty SPF term after {qualifier}"
+
+        if "=" in term:
+            if has_qualifier:
+                return False, f"SPF modifiers cannot have a qualifier: {raw_term}"
+            name, modifier_value = term.split("=", 1)
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]*", name) or not modifier_value:
+                return False, f"Invalid SPF modifier: {raw_term}"
+            lowered_name = name.lower()
+            if lowered_name in seen_modifiers:
+                return False, f"Duplicate SPF modifier: {name}"
+            seen_modifiers.add(lowered_name)
+            if lowered_name == "redirect":
+                lookup_terms += 1
+            continue
+
+        mechanism_name = term.split(":", 1)[0].split("/", 1)[0].lower()
+        if mechanism_name == "all":
+            if term.lower() != "all":
+                return False, f"Invalid all mechanism: {raw_term}"
+        elif mechanism_name in {"a", "mx"}:
+            match = re.fullmatch(
+                rf"{mechanism_name}(?::[^/\s]+)?(?:/(\d{{1,3}}))?(?://(\d{{1,3}}))?",
+                term,
+                re.IGNORECASE,
+            )
+            if match is None:
+                return False, f"Invalid {mechanism_name} mechanism: {raw_term}"
+            ipv4_cidr, ipv6_cidr = match.groups()
+            if ipv4_cidr is not None and int(ipv4_cidr) > 32:
+                return False, f"Invalid IPv4 prefix length in {raw_term}"
+            if ipv6_cidr is not None and int(ipv6_cidr) > 128:
+                return False, f"Invalid IPv6 prefix length in {raw_term}"
+        elif mechanism_name == "ptr":
+            if not re.fullmatch(r"ptr(?::[^/\s]+)?", term, re.IGNORECASE):
+                return False, f"Invalid ptr mechanism: {raw_term}"
+        elif mechanism_name in {"include", "exists"}:
+            prefix = f"{mechanism_name}:"
+            if not term.lower().startswith(prefix) or not term[len(prefix) :]:
+                return False, f"Invalid {mechanism_name} mechanism: {raw_term}"
+        elif mechanism_name in {"ip4", "ip6"}:
+            prefix = f"{mechanism_name}:"
+            if not term.lower().startswith(prefix):
+                return False, f"Invalid {mechanism_name} mechanism: {raw_term}"
+            try:
+                network = ipaddress.ip_network(term[len(prefix) :], strict=False)
+            except ValueError:
+                return False, f"Invalid {mechanism_name} network: {raw_term}"
+            expected_version = 4 if mechanism_name == "ip4" else 6
+            if network.version != expected_version:
+                return False, f"Address family does not match {mechanism_name}: {raw_term}"
+        else:
+            return False, f"Unknown SPF mechanism: {mechanism_name}"
+
+        if mechanism_name in _SPF_DNS_MECHANISMS:
+            lookup_terms += 1
+
+    if lookup_terms > 10:
+        return False, f"SPF uses {lookup_terms} DNS lookups; the limit is 10"
+    return True, None
+
+
+def _spf_status_detail(current: str | None) -> str | None:
+    if current is None:
+        return None
+    if " | " in current:
+        return "Multiple SPF records are published; receivers return permerror"
+    _valid, reason = _validate_spf_record(current)
+    return reason
+
+
 async def _check_mx(domain_name: str, hostname: str) -> tuple[bool, str | None]:
     """Check if MX record points to our hostname.
 
@@ -163,7 +272,7 @@ async def _check_mx(domain_name: str, hostname: str) -> tuple[bool, str | None]:
     the canonical ``expected_value`` exactly.
     """
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, domain_name, "MX")
+        answers = await _resolve_dns(domain_name, "MX")
         first_formatted: str | None = None
         for rdata in answers:
             formatted = _format_mx_rdata(rdata)
@@ -181,17 +290,19 @@ async def _check_mx(domain_name: str, hostname: str) -> tuple[bool, str | None]:
 
 
 async def _check_spf(domain_name: str) -> tuple[bool, str | None]:
-    """Check if TXT record contains a valid SPF record."""
+    """Resolve and syntactically validate the domain's single SPF record."""
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, domain_name, "TXT")
-        first_txt: str | None = None
+        answers = await _resolve_dns(domain_name, "TXT")
+        spf_records: list[str] = []
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
-            if first_txt is None:
-                first_txt = txt
-            if txt.startswith("v=spf1"):
-                return True, txt
-        return False, first_txt
+            if txt.lower().startswith("v=spf1"):
+                spf_records.append(txt)
+        if len(spf_records) != 1:
+            return False, " | ".join(spf_records) if spf_records else None
+        record = spf_records[0]
+        valid, _reason = _validate_spf_record(record)
+        return valid, record
     except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
         return False, None
     except Exception as exc:
@@ -205,7 +316,7 @@ async def _check_dkim(
     """Check if DKIM TXT record is configured correctly."""
     dkim_domain = f"{selector}._domainkey.{domain_name}"
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, dkim_domain, "TXT")
+        answers = await _resolve_dns(dkim_domain, "TXT")
         first_txt: str | None = None
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
@@ -234,7 +345,7 @@ async def _check_dmarc(domain_name: str) -> tuple[bool, str | None]:
     """Check if DMARC TXT record exists."""
     dmarc_domain = f"_dmarc.{domain_name}"
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, dmarc_domain, "TXT")
+        answers = await _resolve_dns(dmarc_domain, "TXT")
         first_txt: str | None = None
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
@@ -251,29 +362,15 @@ async def _check_dmarc(domain_name: str) -> tuple[bool, str | None]:
 
 
 async def _check_helo_spf(hostname: str) -> tuple[bool, str | None]:
-    """Check if the mail server hostname has its own SPF TXT record."""
-    try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, hostname, "TXT")
-        first_txt: str | None = None
-        for rdata in answers:
-            txt = _join_txt_rdata(rdata)
-            if first_txt is None:
-                first_txt = txt
-            if txt.startswith("v=spf1"):
-                return True, txt
-        return False, first_txt
-    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
-        return False, None
-    except Exception as exc:
-        logger.debug("HELO SPF check for %s failed: %s", hostname, exc)
-        return False, None
+    """Validate the SPF identity used by an empty-envelope HELO/EHLO."""
+    return await _check_spf(hostname)
 
 
 async def _check_bimi(domain_name: str) -> tuple[bool, str | None]:
     """Check if BIMI TXT record exists."""
     bimi_domain = f"default._bimi.{domain_name}"
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, bimi_domain, "TXT")
+        answers = await _resolve_dns(bimi_domain, "TXT")
         first_txt: str | None = None
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
@@ -293,7 +390,7 @@ async def _check_mta_sts(domain_name: str) -> tuple[bool, str | None]:
     """Check if _mta-sts TXT record exists."""
     mta_sts_domain = f"_mta-sts.{domain_name}"
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, mta_sts_domain, "TXT")
+        answers = await _resolve_dns(mta_sts_domain, "TXT")
         first_txt: str | None = None
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
@@ -313,7 +410,7 @@ async def _check_tls_rpt(domain_name: str) -> tuple[bool, str | None]:
     """Check if _smtp._tls TXT record exists (TLS-RPT, RFC 8460)."""
     tls_rpt_domain = f"_smtp._tls.{domain_name}"
     try:
-        answers = await asyncio.to_thread(dns.resolver.resolve, tls_rpt_domain, "TXT")
+        answers = await _resolve_dns(tls_rpt_domain, "TXT")
         first_txt: str | None = None
         for rdata in answers:
             txt = _join_txt_rdata(rdata)
@@ -629,6 +726,139 @@ async def _list_active_tunnel_hosts(db: AsyncSession) -> list[str]:
     return await asyncio.to_thread(_read_tunnel_hosts_from_json, settings.tunnels_config_path)
 
 
+async def _resolve_ip_addresses(hostname: str, record_type: str) -> list[str]:
+    """Resolve and normalize all A or AAAA addresses for a relay."""
+    try:
+        answers = await _resolve_dns(hostname, record_type)
+        return sorted({str(getattr(answer, "address", answer)) for answer in answers})
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return []
+    except Exception as exc:
+        logger.debug("%s lookup for relay %s failed: %s", record_type, hostname, exc)
+        return []
+
+
+async def _check_ptr(address: str, hostname: str) -> tuple[bool, str | None]:
+    """Verify forward-confirmed reverse DNS for one relay address."""
+    reverse_name = str(dns.reversename.from_address(address))
+    try:
+        answers = await _resolve_dns(reverse_name, "PTR")
+        names = sorted({str(answer).rstrip(".").lower() for answer in answers})
+        current = ", ".join(f"{name}." for name in names) if names else None
+        return hostname.rstrip(".").lower() in names, current
+    except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers):
+        return False, None
+    except Exception as exc:
+        logger.debug("PTR lookup for relay address %s failed: %s", address, exc)
+        return False, None
+
+
+async def _check_one_relay_dns(hostname: str, checked_at: datetime) -> list[DnsRecordInfo]:
+    """Build live HELO-SPF, forward DNS, and reverse DNS rows for one edge."""
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        return [
+            DnsRecordInfo(
+                record_type="CONFIG",
+                hostname=hostname,
+                expected_value="A DNS hostname matching the edge PTR and EHLO/HELO name",
+                current_value=hostname,
+                verified=False,
+                drift=True,
+                purpose="Set the tunnel endpoint to the relay hostname so MailCue can audit HELO SPF and FCrDNS",
+                scope=f"Relay · {hostname}",
+                status_detail="The tunnel endpoint is an IP address; relay DNS cannot be audited safely",
+                last_checked_at=checked_at,
+            )
+        ]
+
+    spf_result, ipv4_addresses, ipv6_addresses = await asyncio.gather(
+        _check_helo_spf(hostname),
+        _resolve_ip_addresses(hostname, "A"),
+        _resolve_ip_addresses(hostname, "AAAA"),
+    )
+    scope = f"Relay · {hostname}"
+    expected_spf = "v=spf1 a -all"
+    spf_current = spf_result[1]
+    spf_verified = bool(
+        spf_result[0]
+        and spf_current is not None
+        and _record_matches("spf", expected_spf, spf_current)
+    )
+    records = [
+        DnsRecordInfo(
+            record_type="TXT",
+            hostname=hostname,
+            expected_value=expected_spf,
+            current_value=spf_current,
+            verified=spf_verified,
+            drift=spf_current is not None and not spf_verified,
+            purpose="HELO SPF for tunnel-generated bounces and other empty-envelope mail",
+            scope=scope,
+            status_detail=_spf_status_detail(spf_current),
+            last_checked_at=checked_at,
+            last_verified_at=checked_at if spf_verified else None,
+        ),
+        DnsRecordInfo(
+            record_type="A",
+            hostname=hostname,
+            expected_value="Public IPv4 address of this relay",
+            current_value=", ".join(ipv4_addresses) if ipv4_addresses else None,
+            verified=bool(ipv4_addresses),
+            purpose="Forward DNS for the relay's IPv4 egress address",
+            scope=scope,
+            last_checked_at=checked_at,
+            last_verified_at=checked_at if ipv4_addresses else None,
+        ),
+        DnsRecordInfo(
+            record_type="AAAA",
+            hostname=hostname,
+            expected_value="Public IPv6 address of this relay (when IPv6 egress is enabled)",
+            current_value=", ".join(ipv6_addresses) if ipv6_addresses else None,
+            verified=bool(ipv6_addresses),
+            required=False,
+            purpose="Optional IPv6 forward DNS; when published, matching PTR is required",
+            scope=scope,
+            last_checked_at=checked_at,
+            last_verified_at=checked_at if ipv6_addresses else None,
+        ),
+    ]
+
+    all_addresses = [*ipv4_addresses, *ipv6_addresses]
+    ptr_results = await asyncio.gather(
+        *(_check_ptr(address, hostname) for address in all_addresses)
+    )
+    for address, (ptr_verified, ptr_current) in zip(all_addresses, ptr_results, strict=True):
+        records.append(
+            DnsRecordInfo(
+                record_type="PTR",
+                hostname=address,
+                expected_value=f"{hostname}.",
+                current_value=ptr_current,
+                verified=ptr_verified,
+                drift=ptr_current is not None and not ptr_verified,
+                purpose="Reverse DNS set at the relay hosting provider; must match its HELO name",
+                scope=scope,
+                last_checked_at=checked_at,
+                last_verified_at=checked_at if ptr_verified else None,
+            )
+        )
+    return records
+
+
+async def _check_relay_dns(hostnames: list[str], checked_at: datetime) -> list[DnsRecordInfo]:
+    """Audit every enabled tunnel edge concurrently."""
+    if not hostnames:
+        return []
+    groups = await asyncio.gather(
+        *(_check_one_relay_dns(hostname, checked_at) for hostname in hostnames)
+    )
+    return [record for group in groups for record in group]
+
+
 def _build_spf_expected(hostname: str, tunnel_hosts: list[str]) -> str:
     """Render the apex SPF expected value.
 
@@ -639,8 +869,15 @@ def _build_spf_expected(hostname: str, tunnel_hosts: list[str]) -> str:
     if the operator has additional senders we don't know about.
     """
     if tunnel_hosts:
-        a_records = " ".join(f"a:{h}" for h in tunnel_hosts)
-        return f"v=spf1 mx {a_records} -all"
+        mechanisms: list[str] = []
+        for host in tunnel_hosts:
+            try:
+                address = ipaddress.ip_address(host)
+            except ValueError:
+                mechanisms.append(f"a:{host}")
+            else:
+                mechanisms.append(f"ip{address.version}:{address}")
+        return f"v=spf1 mx {' '.join(mechanisms)} -all"
     return f"v=spf1 mx a:{hostname} ~all"
 
 
@@ -689,6 +926,7 @@ def _build_dns_records(
             expected_value="v=spf1 a -all",
             verified=helo_spf_verified,
             purpose="SPF for the mail server hostname (checked during SMTP EHLO handshake)",
+            scope="Mail server",
         ),
         DnsRecordInfo(
             record_type="TXT",
@@ -711,6 +949,7 @@ def _build_dns_records(
             expected_value=f"v=BIMI1; l=https://{hostname}/brand/logo.svg",
             verified=bimi_verified,
             purpose="BIMI — publish a brand logo displayed by supporting mailbox providers (requires DMARC p=reject)",
+            required=False,
         ),
         # MTA-STS policy record (RFC 8461)
         DnsRecordInfo(
@@ -735,6 +974,8 @@ def _build_dns_records(
             expected_value=hostname,
             verified=False,
             purpose="Reverse DNS — critical for deliverability. Set your server IP's PTR record to match the hostname",
+            scope="Mail server",
+            required=False,
         ),
         # A record guidance
         DnsRecordInfo(
@@ -743,6 +984,8 @@ def _build_dns_records(
             expected_value="(Your server's public IPv4 address)",
             verified=False,
             purpose="Points your mail hostname to your server's IP address",
+            scope="Mail server",
+            required=False,
         ),
     ]
     return records
@@ -896,6 +1139,10 @@ def _record_matches(slot: str, expected: str, current: str) -> bool:
     if slot == "spf":
         expected_normalized = " ".join(expected.lower().split())
         current_normalized = " ".join(current.lower().split())
+        expected_valid, _ = _validate_spf_record(expected_normalized)
+        current_valid, _ = _validate_spf_record(current_normalized)
+        if not expected_valid or not current_valid:
+            return False
         expected_simple = _simple_spf_parts(expected_normalized)
         current_simple = _simple_spf_parts(current_normalized)
         if expected_simple is not None and current_simple is not None:
@@ -942,10 +1189,39 @@ def _simple_spf_parts(value: str) -> tuple[frozenset[str], str] | None:
     return frozenset(mechanisms), terminal
 
 
+_CHECK_RECORD_LAYOUT: tuple[tuple[str, str | None, str], ...] = (
+    ("mx", "mx", "mx"),
+    ("spf", "spf", "spf"),
+    ("helo_spf", None, "spf"),
+    ("dkim", "dkim", "dkim"),
+    ("dmarc", "dmarc", "dmarc"),
+    ("bimi", None, "bimi"),
+    ("mta_sts", "mta_sts", "mta_sts"),
+    ("tls_rpt", "tls_rpt", "tls_rpt"),
+)
+
+
+def _apply_expected_check_results(
+    records: list[DnsRecordInfo], checks: dict[str, tuple[bool, str | None]]
+) -> None:
+    """Make check booleans mean "valid and matches MailCue's configuration"."""
+    for record, (slot, _audit, match_slot) in zip(
+        records[: len(_CHECK_RECORD_LAYOUT)], _CHECK_RECORD_LAYOUT, strict=True
+    ):
+        syntactically_valid, current = checks[slot]
+        matches = bool(
+            syntactically_valid
+            and current is not None
+            and _record_matches(match_slot, record.expected_value, current)
+        )
+        checks[slot] = (matches, current)
+
+
 def _attach_check_metadata(
     domain: Domain,
     records: list[DnsRecordInfo],
     checks: dict[str, tuple[bool, str | None]],
+    checked_at: datetime,
 ) -> None:
     """Populate ``current_value``, ``drift`` and per-record audit timestamps
     on a freshly built ``DnsRecordInfo`` list.
@@ -955,26 +1231,26 @@ def _attach_check_metadata(
     """
     # (logical_slot, audit_attr_prefix_or_None) — None means info-only,
     # no audit timestamps and no drift even if current_value is set.
-    layout: tuple[tuple[str | None, str | None], ...] = (
-        ("mx", "mx"),
-        ("spf", "spf"),
-        ("helo_spf", None),  # informational — not gated on
-        ("dkim", "dkim"),
-        ("dmarc", "dmarc"),
-        ("bimi", None),  # informational — not gated on
-        ("mta_sts", "mta_sts"),
-        ("tls_rpt", "tls_rpt"),
-        (None, None),  # PTR — manual / out-of-band
-        (None, None),  # A   — manual / out-of-band
+    layout: tuple[tuple[str | None, str | None, str | None], ...] = (
+        *_CHECK_RECORD_LAYOUT,
+        (None, None, None),  # PTR — manual / out-of-band
+        (None, None, None),  # A   — manual / out-of-band
     )
-    for record, (slot, audit) in zip(records, layout, strict=True):
+    for record, (slot, audit, match_slot) in zip(records, layout, strict=True):
         current: str | None = checks[slot][1] if slot is not None else None
         record.current_value = current
         record.drift = (
-            audit is not None
+            match_slot is not None
             and current is not None
-            and not _record_matches(audit, record.expected_value, current)
+            and not _record_matches(match_slot, record.expected_value, current)
         )
+        if slot is not None:
+            record.verified = checks[slot][0] and not record.drift
+        if slot is not None and audit is None:
+            record.last_checked_at = checked_at
+            record.last_verified_at = checked_at if record.verified else None
+        if match_slot == "spf":
+            record.status_detail = _spf_status_detail(current)
         if audit is not None:
             record.last_checked_at = getattr(domain, f"{audit}_last_checked_at")
             record.last_verified_at = getattr(domain, f"{audit}_last_verified_at")
@@ -1001,6 +1277,15 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
     checks = await _run_dns_checks(domain, hostname)
     now = datetime.now(UTC)
 
+    records = _build_dns_records(
+        domain,
+        hostname,
+        helo_spf_verified=checks["helo_spf"][0],
+        bimi_verified=checks["bimi"][0],
+        tunnel_hosts=tunnel_hosts,
+    )
+    _apply_expected_check_results(records, checks)
+
     domain.mx_verified = checks["mx"][0]
     domain.spf_verified = checks["spf"][0]
     domain.dkim_verified = checks["dkim"][0]
@@ -1011,25 +1296,10 @@ async def verify_dns(name: str, db: AsyncSession) -> DnsCheckResponse:
     _stamp_audit_timestamps(domain, checks, now)
     await db.commit()
 
-    records = _build_dns_records(
-        domain,
-        hostname,
-        helo_spf_verified=checks["helo_spf"][0],
-        bimi_verified=checks["bimi"][0],
-        tunnel_hosts=tunnel_hosts,
-    )
-    _attach_check_metadata(domain, records, checks)
+    _attach_check_metadata(domain, records, checks, now)
+    records.extend(await _check_relay_dns(tunnel_hosts, now))
 
-    all_verified = all(
-        [
-            domain.mx_verified,
-            domain.spf_verified,
-            domain.dkim_verified,
-            domain.dmarc_verified,
-            domain.mta_sts_verified,
-            domain.tls_rpt_verified,
-        ]
-    )
+    all_verified = all(record.verified for record in records if record.required)
 
     return DnsCheckResponse(
         mx_verified=domain.mx_verified,
@@ -1068,9 +1338,6 @@ async def compute_dns_state(name: str, db: AsyncSession) -> DomainDnsStateRespon
     checks = await _run_dns_checks(domain, hostname)
     now = datetime.now(UTC)
 
-    _stamp_audit_timestamps(domain, checks, now)
-    await db.commit()
-
     records = _build_dns_records(
         domain,
         hostname,
@@ -1078,13 +1345,18 @@ async def compute_dns_state(name: str, db: AsyncSession) -> DomainDnsStateRespon
         bimi_verified=checks["bimi"][0],
         tunnel_hosts=tunnel_hosts,
     )
-    _attach_check_metadata(domain, records, checks)
+    _apply_expected_check_results(records, checks)
 
-    has_drift = any(r.drift for r in records)
-    # Only canonical (audited) records contribute to has_missing — info-only
-    # records like HELO SPF, BIMI, PTR, A leave ``last_checked_at`` unset and
-    # are excluded by design.
-    has_missing = any(r.current_value is None and r.last_checked_at is not None for r in records)
+    _stamp_audit_timestamps(domain, checks, now)
+    await db.commit()
+
+    _attach_check_metadata(domain, records, checks, now)
+    records.extend(await _check_relay_dns(tunnel_hosts, now))
+
+    has_drift = any(r.drift for r in records if r.required)
+    has_missing = any(
+        r.required and r.current_value is None and r.last_checked_at is not None for r in records
+    )
     last_dns_check = max(
         (r.last_checked_at for r in records if r.last_checked_at is not None),
         default=None,

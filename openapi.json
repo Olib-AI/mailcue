@@ -6789,6 +6789,27 @@
             "type": "string",
             "title": "Purpose"
           },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": "Domain"
+          },
+          "required": {
+            "type": "boolean",
+            "title": "Required",
+            "default": true
+          },
+          "status_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Detail"
+          },
           "last_checked_at": {
             "anyOf": [
               {

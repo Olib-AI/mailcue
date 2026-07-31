@@ -323,6 +323,9 @@ export interface DnsRecordInfo {
   verified: boolean;
   current_value: string | null;
   purpose: string;
+  scope?: string;
+  required?: boolean;
+  status_detail?: string | null;
   drift?: boolean;
   last_checked_at?: string | null;
   last_verified_at?: string | null;
