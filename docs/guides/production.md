@@ -187,8 +187,8 @@ database backup.
 
 Production mode supports three approaches:
 
-1. **Let's Encrypt (automatic)**: Set `MAILCUE_ACME_EMAIL=you@example.com` and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup.
-2. **External certificates**: Set `MAILCUE_TLS_CERT_PATH` and `MAILCUE_TLS_KEY_PATH` to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning.
+1. **Let's Encrypt (automatic)**: Set `MAILCUE_ACME_EMAIL=you@example.com` and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup. After `mta-sts.example.com` resolves, MailCue expands the certificate to cover both the mail and MTA-STS hostnames on the next container start.
+2. **External certificates**: Set `MAILCUE_TLS_CERT_PATH` and `MAILCUE_TLS_KEY_PATH` to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning. The certificate must include both `mail.example.com` and `mta-sts.example.com`.
 3. **Upload via API**: Use `PUT /api/v1/system/tls` to rotate a certificate after production has started with ACME or externally mounted certificates.
 
 ## DNS Requirements
@@ -205,8 +205,9 @@ For each domain, configure the following DNS records. The domain management UI (
 | 6 | **TXT** | `_dmarc.example.com` | `v=DMARC1; p=reject; rua=mailto:postmaster@example.com` | DMARC, reject policy for auth failures (required for BIMI) |
 | 7 | **TXT** | `default._bimi.example.com` | `v=BIMI1; l=https://mail.example.com/brand/logo.svg` | BIMI, brand logo displayed by supporting mailbox providers (optional) |
 | 8 | **TXT** | `_mta-sts.example.com` | `v=STSv1; id=<timestamp>` | MTA-STS, strict TLS for inbound (optional) |
-| 9 | **TXT** | `_smtp._tls.example.com` | `v=TLSRPTv1; rua=mailto:tls-reports@example.com` | TLS-RPT, TLS failure reporting (optional) |
-| 10 | **PTR** | `<server-ip>` | `mail.example.com` | Reverse DNS, set at your VPS provider. Critical for deliverability. |
+| 9 | **A / AAAA** | `mta-sts.example.com` | `<server-ip>` | Makes the MTA-STS HTTPS policy reachable; either address family is sufficient |
+| 10 | **TXT** | `_smtp._tls.example.com` | `v=TLSRPTv1; rua=mailto:tls-reports@example.com` | TLS-RPT, TLS failure reporting (optional) |
+| 11 | **PTR** | `<server-ip>` | `mail.example.com` | Reverse DNS, set at your VPS provider. Critical for deliverability. |
 
 **Getting the DKIM public key:** After starting MailCue, retrieve your DKIM key with:
 
@@ -217,6 +218,7 @@ docker exec mailcue cat /etc/opendkim/keys/<domain>/mail.txt
 Extract the `p=...` value (concatenate if split across lines) and use it for record #5.
 
 **Important notes:**
-- Records 1-6 and 10 are **required** for production email delivery.
+- Records 1-6 and 11 are **required** for production email delivery.
+- Records 8 and 9, plus a valid HTTPS certificate for `mta-sts.example.com`, are required when enabling MTA-STS.
 - The DKIM key is auto-generated at first startup and persists in the `dkim-data` volume. It will not change across restarts.
 - If your VPS provider blocks outbound port 25 (common on GCP, AWS), you will need a smarthost relay or a provider that allows it (OVH, Hetzner, Vultr).

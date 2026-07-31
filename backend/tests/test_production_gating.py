@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi import HTTPException
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.emails.router import _require_non_production
@@ -108,3 +108,23 @@ def test_create_app_starts_cleanly_in_production_mode(
     # If we got here at all the bug is fixed; the route count assertion
     # is a sanity check that something was actually registered.
     assert len(app.routes) > 0
+
+
+async def test_production_accepts_mta_sts_policy_hostname(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "mode", "production", raising=False)
+    monkeypatch.setattr(settings, "domain", "example.com", raising=False)
+    monkeypatch.setattr(settings, "hostname", "mail.example.com", raising=False)
+
+    from app.main import create_app
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="https://mta-sts.example.com",
+    ) as test_client:
+        response = await test_client.get("/api/v1/health")
+
+    assert response.status_code == 200

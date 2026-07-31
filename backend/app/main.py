@@ -307,7 +307,13 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=[settings.hostname, settings.domain, "localhost", "127.0.0.1"]
+        allowed_hosts=[
+            settings.hostname,
+            settings.domain,
+            f"mta-sts.{settings.domain}",
+            "localhost",
+            "127.0.0.1",
+        ]
         if settings.is_production
         else ["*"],
     )

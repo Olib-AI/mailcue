@@ -7,10 +7,13 @@ set -eu
 
 MAILCUE_MODE="${MAILCUE_MODE:-test}"
 MAILCUE_ACME_EMAIL="${MAILCUE_ACME_EMAIL:-}"
-HOSTNAME="${MAILCUE_HOSTNAME:-mail.${MAILCUE_DOMAIN:-mailcue.local}}"
+DOMAIN="${MAILCUE_DOMAIN:-mailcue.local}"
+HOSTNAME="${MAILCUE_HOSTNAME:-mail.${DOMAIN}}"
+MTA_STS_HOSTNAME="mta-sts.${DOMAIN}"
 SSL_DIR="/etc/ssl/mailcue"
+ACME_CERT_DIR="/etc/letsencrypt/live/${HOSTNAME}"
 
-# Only run in production mode with ACME email set and no cert yet
+# Only run in production mode with ACME configured.
 if [ "$MAILCUE_MODE" != "production" ]; then
     exit 0
 fi
@@ -19,13 +22,38 @@ if [ -z "${MAILCUE_ACME_EMAIL}" ]; then
     exit 0
 fi
 
-# If cert already exists (custom mount, previous certbot run, etc.), skip
-if [ -f "${SSL_DIR}/fullchain.pem" ]; then
-    echo "[acme-setup] TLS cert already exists, skipping certbot."
+# Custom certificates are operator-managed. Never replace one with ACME.
+if [ -f "${SSL_DIR}/fullchain.pem" ] && [ ! -f "${ACME_CERT_DIR}/fullchain.pem" ]; then
+    if openssl x509 -in "${SSL_DIR}/fullchain.pem" -noout -checkhost "${MTA_STS_HOSTNAME}" >/dev/null 2>&1; then
+        echo "[acme-setup] Custom TLS certificate already covers ${MTA_STS_HOSTNAME}."
+    else
+        echo "[acme-setup] WARNING: custom TLS certificate must include ${MTA_STS_HOSTNAME}."
+    fi
     exit 0
 fi
 
-echo "[acme-setup] Requesting Let's Encrypt certificate for ${HOSTNAME}..."
+# A persisted mail-host certificate may predate MTA-STS support. Keep it live
+# until the policy hostname resolves, then expand the same ACME lineage.
+MTA_STS_RESOLVES=false
+if getent ahosts "${MTA_STS_HOSTNAME}" >/dev/null 2>&1 || getent hosts "${MTA_STS_HOSTNAME}" >/dev/null 2>&1; then
+    MTA_STS_RESOLVES=true
+fi
+
+EXPAND_CERTIFICATE=false
+if [ -f "${ACME_CERT_DIR}/fullchain.pem" ]; then
+    if openssl x509 -in "${ACME_CERT_DIR}/fullchain.pem" -noout -checkhost "${MTA_STS_HOSTNAME}" >/dev/null 2>&1; then
+        echo "[acme-setup] TLS certificate already covers ${HOSTNAME} and ${MTA_STS_HOSTNAME}."
+        exit 0
+    fi
+    if [ "${MTA_STS_RESOLVES}" != "true" ]; then
+        echo "[acme-setup] Existing certificate covers ${HOSTNAME}; waiting for DNS for ${MTA_STS_HOSTNAME} before expanding it."
+        exit 0
+    fi
+    echo "[acme-setup] Expanding the existing certificate to include ${MTA_STS_HOSTNAME}..."
+    EXPAND_CERTIFICATE=true
+else
+    echo "[acme-setup] Requesting Let's Encrypt certificate for ${HOSTNAME}..."
+fi
 echo "[acme-setup] ACME email: ${MAILCUE_ACME_EMAIL}"
 
 mkdir -p /var/www/acme-challenge
@@ -33,21 +61,31 @@ mkdir -p /var/www/acme-challenge
 # Wait briefly for Nginx to be ready
 sleep 2
 
-if certbot certonly --webroot \
+set -- certonly --webroot \
     -w /var/www/acme-challenge \
-    -d "${HOSTNAME}" \
+    --cert-name "${HOSTNAME}" \
+    -d "${HOSTNAME}"
+if [ "${MTA_STS_RESOLVES}" = "true" ]; then
+    set -- "$@" -d "${MTA_STS_HOSTNAME}"
+fi
+set -- "$@" \
     --email "${MAILCUE_ACME_EMAIL}" \
-    --agree-tos --non-interactive; then
+    --agree-tos --non-interactive
+if [ "${EXPAND_CERTIFICATE}" = "true" ]; then
+    set -- "$@" --expand
+fi
+
+if certbot "$@"; then
 
     echo "[acme-setup] Certificate obtained successfully."
 
     # Symlink to MailCue SSL directory
-    ln -sf "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" "${SSL_DIR}/fullchain.pem"
-    ln -sf "/etc/letsencrypt/live/${HOSTNAME}/privkey.pem" "${SSL_DIR}/privkey.pem"
+    ln -sf "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/fullchain.pem"
+    ln -sf "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/privkey.pem"
 
     # Also update Postfix and Dovecot certs
-    cp "/etc/letsencrypt/live/${HOSTNAME}/fullchain.pem" "${SSL_DIR}/server.crt"
-    cp "/etc/letsencrypt/live/${HOSTNAME}/privkey.pem" "${SSL_DIR}/server.key"
+    cp "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/server.crt"
+    cp "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/server.key"
     chmod 600 "${SSL_DIR}/server.key" "${SSL_DIR}/privkey.pem"
 
     # Reload Postfix and Dovecot with new certs
@@ -169,5 +207,5 @@ NGINXHTTPS
     echo "[acme-setup] HTTPS configured and Nginx reloaded."
 else
     echo "[acme-setup] WARNING: certbot failed. Check that port 80 is reachable and DNS points to this server."
-    echo "[acme-setup] You can retry manually: certbot certonly --webroot -w /var/www/acme-challenge -d ${HOSTNAME} --email ${MAILCUE_ACME_EMAIL}"
+    echo "[acme-setup] Retry after DNS is correct: certbot certonly --webroot -w /var/www/acme-challenge --cert-name ${HOSTNAME} -d ${HOSTNAME} -d ${MTA_STS_HOSTNAME} --expand --email ${MAILCUE_ACME_EMAIL}"
 fi

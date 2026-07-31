@@ -100,7 +100,7 @@ def test_alembic_history_builds_complete_sqlite_schema(tmp_path: Path) -> None:
                 "SELECT name FROM sqlite_master WHERE type='index'"
             ).fetchall()
         }
-    assert revision == ("022_gpg_tenant_ownership",)
+    assert revision == ("023_reset_mta_sts_verification",)
     assert "gpg_keys" in tables
     assert "warmup_campaign_accounts" in tables
     assert "ix_httpbin_requests_bin_created" in indexes
@@ -156,3 +156,24 @@ def test_scale_migration_normalizes_existing_warmup_data(tmp_path: Path) -> None
     assert "account_ids" not in campaign_columns
     assert "auto_clean_local_mailbox" in campaign_columns
     assert user_flags == (0, 1)
+
+
+def test_mta_sts_migration_resets_legacy_txt_only_verification(tmp_path: Path) -> None:
+    backend_root = Path(__file__).resolve().parents[1]
+    database = tmp_path / "mta-sts-cache.db"
+    _run_alembic(backend_root, database, "upgrade", "022_gpg_tenant_ownership")
+
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO domains (name, created_at, mta_sts_verified) "
+            "VALUES ('example.com', '2026-07-31', 1)"
+        )
+        connection.commit()
+
+    _run_alembic(backend_root, database, "upgrade", "head")
+
+    with sqlite3.connect(database) as connection:
+        verified = connection.execute(
+            "SELECT mta_sts_verified FROM domains WHERE name='example.com'"
+        ).fetchone()
+    assert verified == (0,)

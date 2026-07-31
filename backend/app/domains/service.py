@@ -14,6 +14,7 @@ from pathlib import Path
 
 import dns.resolver
 import dns.reversename
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -404,6 +405,84 @@ async def _check_mta_sts(domain_name: str) -> tuple[bool, str | None]:
     except Exception as exc:
         logger.debug("MTA-STS check for %s failed: %s", mta_sts_domain, exc)
         return False, None
+
+
+async def _check_mta_sts_host(domain_name: str) -> tuple[bool, str | None]:
+    """Require the RFC 8461 policy hostname to resolve only to public IPs."""
+    policy_host = f"mta-sts.{domain_name}"
+    results = await asyncio.gather(
+        _resolve_dns(policy_host, "A"),
+        _resolve_dns(policy_host, "AAAA"),
+        return_exceptions=True,
+    )
+    addresses: list[str] = []
+    for result in results:
+        if isinstance(result, BaseException):
+            continue
+        addresses.extend(str(rdata).rstrip(".") for rdata in result)
+    addresses = list(dict.fromkeys(addresses))
+    if addresses:
+        is_public = all(ipaddress.ip_address(address).is_global for address in addresses)
+        return is_public, ", ".join(addresses)
+    return False, None
+
+
+def _build_mta_sts_policy(hostname: str) -> str:
+    """Return the policy content MailCue expects to publish."""
+    mode = "enforce" if settings.is_production else "testing"
+    return f"version: STSv1\nmode: {mode}\nmx: {hostname}\nmax_age: 86400"
+
+
+def _normalize_mta_sts_policy(value: str) -> str:
+    """Normalize line endings and insignificant surrounding whitespace."""
+    return "\n".join(line.strip() for line in value.splitlines() if line.strip())
+
+
+async def _fetch_mta_sts_policy(url: str) -> httpx.Response:
+    """Fetch a policy without redirects, using normal public CA validation."""
+    async with httpx.AsyncClient(
+        timeout=5.0,
+        follow_redirects=False,
+        trust_env=False,
+    ) as client:
+        return await client.get(url, headers={"Accept": "text/plain"})
+
+
+async def _check_mta_sts_policy(domain_name: str, hostname: str) -> tuple[bool, str | None]:
+    """Validate the public HTTPS policy, including its certificate and content."""
+    url = f"https://mta-sts.{domain_name}/.well-known/mta-sts.txt"
+    try:
+        response = await _fetch_mta_sts_policy(url)
+    except httpx.ConnectError as exc:
+        detail = str(exc).strip() or "connection failed"
+        return False, f"Connection failed: {detail}"
+    except httpx.TimeoutException:
+        return False, "Connection timed out"
+    except httpx.HTTPError as exc:
+        detail = str(exc).strip() or exc.__class__.__name__
+        return False, f"HTTPS validation failed: {detail}"
+
+    if response.status_code != 200:
+        return False, f"HTTP {response.status_code}"
+    content_type = response.headers.get("content-type", "").lower()
+    if not content_type.startswith("text/plain"):
+        return False, f"Invalid Content-Type: {content_type or '(missing)'}"
+    if len(response.content) > 64 * 1024:
+        return False, "Policy exceeds 64 KiB"
+
+    current = _normalize_mta_sts_policy(response.text)
+    expected = _normalize_mta_sts_policy(_build_mta_sts_policy(hostname))
+    return current == expected, current
+
+
+async def _check_mta_sts_endpoint(
+    domain_name: str, hostname: str
+) -> tuple[tuple[bool, str | None], tuple[bool, str | None]]:
+    """Validate public DNS before making the outbound HTTPS policy request."""
+    host_result = await _check_mta_sts_host(domain_name)
+    if not host_result[0]:
+        return host_result, (False, None)
+    return host_result, await _check_mta_sts_policy(domain_name, hostname)
 
 
 async def _check_tls_rpt(domain_name: str) -> tuple[bool, str | None]:
@@ -959,6 +1038,22 @@ def _build_dns_records(
             verified=domain.mta_sts_verified,
             purpose="MTA-STS policy enabling strict TLS for inbound email (RFC 8461)",
         ),
+        DnsRecordInfo(
+            record_type="A / AAAA",
+            hostname=f"mta-sts.{domain.name}",
+            expected_value="(Public address serving the MTA-STS HTTPS policy)",
+            verified=False,
+            purpose="Makes the MTA-STS policy hostname reachable over IPv4 or IPv6",
+            scope="MTA-STS policy",
+        ),
+        DnsRecordInfo(
+            record_type="HTTPS",
+            hostname=f"mta-sts.{domain.name}/.well-known/mta-sts.txt",
+            expected_value=_build_mta_sts_policy(hostname),
+            verified=False,
+            purpose="Valid CA-signed HTTPS certificate and MailCue MTA-STS policy content",
+            scope="MTA-STS policy",
+        ),
         # TLS-RPT reporting record (RFC 8460)
         DnsRecordInfo(
             record_type="TXT",
@@ -1069,6 +1164,7 @@ async def _run_dns_checks(domain: Domain, hostname: str) -> dict[str, tuple[bool
     Returns a mapping keyed by logical record name (matches
     ``_CANONICAL_RECORD_SLOTS`` plus ``helo_spf`` and ``bimi``).
     """
+    mta_sts_endpoint_task = asyncio.create_task(_check_mta_sts_endpoint(domain.name, hostname))
     (
         mx_result,
         spf_result,
@@ -1076,7 +1172,7 @@ async def _run_dns_checks(domain: Domain, hostname: str) -> dict[str, tuple[bool
         dkim_result,
         dmarc_result,
         bimi_result,
-        mta_sts_result,
+        mta_sts_txt_result,
         tls_rpt_result,
     ) = await asyncio.gather(
         _check_mx(domain.name, hostname),
@@ -1088,6 +1184,12 @@ async def _run_dns_checks(domain: Domain, hostname: str) -> dict[str, tuple[bool
         _check_mta_sts(domain.name),
         _check_tls_rpt(domain.name),
     )
+    mta_sts_endpoint_result = await mta_sts_endpoint_task
+    mta_sts_host_result, mta_sts_policy_result = mta_sts_endpoint_result
+    mta_sts_result = (
+        mta_sts_txt_result[0] and mta_sts_host_result[0] and mta_sts_policy_result[0],
+        mta_sts_txt_result[1],
+    )
     return {
         "mx": mx_result,
         "spf": spf_result,
@@ -1096,6 +1198,9 @@ async def _run_dns_checks(domain: Domain, hostname: str) -> dict[str, tuple[bool
         "dmarc": dmarc_result,
         "bimi": bimi_result,
         "mta_sts": mta_sts_result,
+        "mta_sts_txt": mta_sts_txt_result,
+        "mta_sts_host": mta_sts_host_result,
+        "mta_sts_policy": mta_sts_policy_result,
         "tls_rpt": tls_rpt_result,
     }
 
@@ -1136,6 +1241,8 @@ def _record_matches(slot: str, expected: str, current: str) -> bool:
         prefix = "v=STSv1; id="
         stripped = current.strip()
         return stripped.startswith(prefix) and len(stripped) > len(prefix)
+    if slot == "mta_sts_policy":
+        return _normalize_mta_sts_policy(expected) == _normalize_mta_sts_policy(current)
     if slot == "spf":
         expected_normalized = " ".join(expected.lower().split())
         current_normalized = " ".join(current.lower().split())
@@ -1189,14 +1296,16 @@ def _simple_spf_parts(value: str) -> tuple[frozenset[str], str] | None:
     return frozenset(mechanisms), terminal
 
 
-_CHECK_RECORD_LAYOUT: tuple[tuple[str, str | None, str], ...] = (
+_CHECK_RECORD_LAYOUT: tuple[tuple[str, str | None, str | None], ...] = (
     ("mx", "mx", "mx"),
     ("spf", "spf", "spf"),
     ("helo_spf", None, "spf"),
     ("dkim", "dkim", "dkim"),
     ("dmarc", "dmarc", "dmarc"),
     ("bimi", None, "bimi"),
-    ("mta_sts", "mta_sts", "mta_sts"),
+    ("mta_sts_txt", "mta_sts", "mta_sts"),
+    ("mta_sts_host", None, None),
+    ("mta_sts_policy", None, "mta_sts_policy"),
     ("tls_rpt", "tls_rpt", "tls_rpt"),
 )
 
@@ -1209,12 +1318,20 @@ def _apply_expected_check_results(
         records[: len(_CHECK_RECORD_LAYOUT)], _CHECK_RECORD_LAYOUT, strict=True
     ):
         syntactically_valid, current = checks[slot]
-        matches = bool(
-            syntactically_valid
-            and current is not None
-            and _record_matches(match_slot, record.expected_value, current)
+        matches = syntactically_valid and (
+            match_slot is None
+            or (
+                current is not None and _record_matches(match_slot, record.expected_value, current)
+            )
         )
         checks[slot] = (matches, current)
+
+    # The canonical MTA-STS status represents the complete discovery chain,
+    # not merely the existence of the version TXT record.
+    checks["mta_sts"] = (
+        all(checks[slot][0] for slot in ("mta_sts_txt", "mta_sts_host", "mta_sts_policy")),
+        checks["mta_sts_txt"][1],
+    )
 
 
 def _attach_check_metadata(
@@ -1227,7 +1344,7 @@ def _attach_check_metadata(
     on a freshly built ``DnsRecordInfo`` list.
 
     Order MUST match ``_build_dns_records``: MX, SPF, HELO SPF, DKIM, DMARC,
-    BIMI, MTA-STS, TLS-RPT, PTR, A.
+    BIMI, MTA-STS TXT, MTA-STS host, MTA-STS HTTPS, TLS-RPT, PTR, A.
     """
     # (logical_slot, audit_attr_prefix_or_None) — None means info-only,
     # no audit timestamps and no drift even if current_value is set.
@@ -1251,6 +1368,18 @@ def _attach_check_metadata(
             record.last_verified_at = checked_at if record.verified else None
         if match_slot == "spf":
             record.status_detail = _spf_status_detail(current)
+        if slot == "mta_sts_host" and not record.verified:
+            record.status_detail = (
+                "The policy hostname must resolve only to public IP addresses"
+                if current
+                else f"Publish an A or AAAA record for mta-sts.{domain.name}"
+            )
+        if slot == "mta_sts_policy" and not record.verified:
+            record.status_detail = (
+                "Policy content does not match MailCue's expected policy"
+                if current and current.startswith("version:")
+                else current or "The HTTPS policy could not be retrieved"
+            )
         if audit is not None:
             record.last_checked_at = getattr(domain, f"{audit}_last_checked_at")
             record.last_verified_at = getattr(domain, f"{audit}_last_verified_at")

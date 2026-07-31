@@ -20,7 +20,7 @@ from typing import Any
 import dns.resolver
 import dns.reversename
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, Request, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -90,6 +90,21 @@ def _install_resolver_stub(monkeypatch: pytest.MonkeyPatch, plan: DnsPlan) -> No
 
     monkeypatch.setattr(dns.resolver, "resolve", _fake_resolve)
 
+    async def _fake_fetch_mta_sts_policy(url: str) -> Response:
+        from app.domains.service import _build_mta_sts_policy
+
+        return Response(
+            200,
+            text=_build_mta_sts_policy(_TEST_HOSTNAME) + "\n",
+            headers={"content-type": "text/plain; charset=utf-8"},
+            request=Request("GET", url),
+        )
+
+    monkeypatch.setattr(
+        "app.domains.service._fetch_mta_sts_policy",
+        _fake_fetch_mta_sts_policy,
+    )
+
 
 _TEST_HOSTNAME: str = "mail.example.com"
 
@@ -123,6 +138,7 @@ def _build_full_plan(
             _TxtRdata(f"v=BIMI1; l=https://{hostname}/brand/logo.svg".encode())
         ],
         (f"_mta-sts.{domain}", "TXT"): [_TxtRdata(b"v=STSv1; id=42")],
+        (f"mta-sts.{domain}", "A"): [_AddressRdata("8.8.8.8")],
         (f"_smtp._tls.{domain}", "TXT"): [
             _TxtRdata(f"v=TLSRPTv1; rua=mailto:tls-reports@{domain}".encode())
         ],
@@ -878,15 +894,107 @@ async def test_mta_sts_drift_is_true_for_malformed_record(
     _pin_hostname(monkeypatch)
     _install_resolver_stub(monkeypatch, plan)
 
-    resp = await client.get(f"/api/v1/domains/{seed_domain.name}/dns-state")
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     mta_sts_rec = next(
         r
-        for r in body["records"]
+        for r in body["dns_records"]
         if r["record_type"] == "TXT" and r["hostname"] == f"_mta-sts.{seed_domain.name}"
     )
     assert mta_sts_rec["drift"] is True
+    assert body["mta_sts_verified"] is False
+
+
+async def test_mta_sts_requires_policy_hostname_dns(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname=_TEST_HOSTNAME,
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    plan.pop((f"mta-sts.{seed_domain.name}", "A"))
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["mta_sts_verified"] is False
+    host_record = next(r for r in body["dns_records"] if r["record_type"] == "A / AAAA")
+    assert host_record["verified"] is False
+    assert host_record["current_value"] is None
+    assert "Publish an A or AAAA" in host_record["status_detail"]
+
+
+async def test_mta_sts_rejects_private_policy_address_without_fetching(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname=_TEST_HOSTNAME,
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    plan[(f"mta-sts.{seed_domain.name}", "A")] = [_AddressRdata("127.0.0.1")]
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    async def _unexpected_fetch(url: str) -> Response:
+        raise AssertionError(f"must not fetch private MTA-STS URL: {url}")
+
+    monkeypatch.setattr("app.domains.service._fetch_mta_sts_policy", _unexpected_fetch)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["mta_sts_verified"] is False
+    host_record = next(r for r in body["dns_records"] if r["record_type"] == "A / AAAA")
+    assert host_record["current_value"] == "127.0.0.1"
+    assert "public IP" in host_record["status_detail"]
+
+
+async def test_mta_sts_requires_matching_https_policy(
+    client: AsyncClient,
+    seed_domain: Domain,
+    monkeypatch: pytest.MonkeyPatch,
+    _engine_and_session: Any,
+) -> None:
+    plan = _build_full_plan(
+        domain=seed_domain.name,
+        hostname=_TEST_HOSTNAME,
+        selector=seed_domain.dkim_selector,
+        dkim_value=seed_domain.dkim_public_key_txt or "",
+    )
+    _pin_hostname(monkeypatch)
+    _install_resolver_stub(monkeypatch, plan)
+
+    async def _wrong_policy(url: str) -> Response:
+        return Response(
+            200,
+            text="version: STSv1\nmode: testing\nmx: wrong.example.com\nmax_age: 86400\n",
+            headers={"content-type": "text/plain"},
+            request=Request("GET", url),
+        )
+
+    monkeypatch.setattr("app.domains.service._fetch_mta_sts_policy", _wrong_policy)
+
+    resp = await client.post(f"/api/v1/domains/{seed_domain.name}/verify-dns")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["mta_sts_verified"] is False
+    policy_record = next(r for r in body["dns_records"] if r["record_type"] == "HTTPS")
+    assert policy_record["verified"] is False
+    assert policy_record["drift"] is True
+    assert "wrong.example.com" in policy_record["current_value"]
 
 
 # ── Tests: legacy stray-space DKIM verification ──────────────────

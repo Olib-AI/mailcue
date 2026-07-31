@@ -50,6 +50,7 @@ services:
       # --- Let's Encrypt (recommended) ---
       # Set your email for automatic TLS certificate provisioning.
       # Port 80 must be publicly reachable for HTTP-01 validation.
+      # Once mta-sts.<domain> resolves, its name is added to the certificate.
       - MAILCUE_ACME_EMAIL=CHANGE_ME_EMAIL
 
       # --- Optional settings ---

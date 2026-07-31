@@ -54,10 +54,12 @@ services:
       # --- Let's Encrypt / ACME (optional) ---
       # Set your email to automatically request a Let's Encrypt certificate.
       # Requires port 80 to be publicly reachable for HTTP-01 validation.
+      # Once mta-sts.<domain> resolves, its name is added to the certificate.
       - MAILCUE_ACME_EMAIL=
 
       # --- Custom TLS certificates (optional) ---
       # If you have your own TLS certificates, set these paths (inside the container).
+      # The certificate must also cover mta-sts.<domain> when MTA-STS is enabled.
       # They will be symlinked to /etc/ssl/mailcue/fullchain.pem and privkey.pem.
       # - MAILCUE_TLS_CERT_PATH=/etc/ssl/mailcue/custom/fullchain.pem
       # - MAILCUE_TLS_KEY_PATH=/etc/ssl/mailcue/custom/privkey.pem
