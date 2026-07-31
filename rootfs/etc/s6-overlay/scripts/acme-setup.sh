@@ -13,6 +13,22 @@ MTA_STS_HOSTNAME="mta-sts.${DOMAIN}"
 SSL_DIR="/etc/ssl/mailcue"
 ACME_CERT_DIR="/etc/letsencrypt/live/${HOSTNAME}"
 
+# The helper is installed by the rootfs overlay and linted independently.
+# shellcheck disable=SC1091
+. /usr/local/lib/mailcue-acme.sh
+
+sync_acme_certificate() {
+    mkdir -p "${SSL_DIR}"
+    ln -sf "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/fullchain.pem"
+    ln -sf "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/privkey.pem"
+    cp "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/server.crt"
+    cp "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/server.key"
+    chmod 600 "${SSL_DIR}/server.key" "${SSL_DIR}/privkey.pem"
+
+    postfix reload 2>/dev/null || true
+    doveadm reload 2>/dev/null || true
+}
+
 # Only run in production mode with ACME configured.
 if [ "$MAILCUE_MODE" != "production" ]; then
     exit 0
@@ -24,7 +40,7 @@ fi
 
 # Custom certificates are operator-managed. Never replace one with ACME.
 if [ -f "${SSL_DIR}/fullchain.pem" ] && [ ! -f "${ACME_CERT_DIR}/fullchain.pem" ]; then
-    if openssl x509 -in "${SSL_DIR}/fullchain.pem" -noout -checkhost "${MTA_STS_HOSTNAME}" >/dev/null 2>&1; then
+    if certificate_covers_host "${SSL_DIR}/fullchain.pem" "${MTA_STS_HOSTNAME}"; then
         echo "[acme-setup] Custom TLS certificate already covers ${MTA_STS_HOSTNAME}."
     else
         echo "[acme-setup] WARNING: custom TLS certificate must include ${MTA_STS_HOSTNAME}."
@@ -41,8 +57,12 @@ fi
 
 EXPAND_CERTIFICATE=false
 if [ -f "${ACME_CERT_DIR}/fullchain.pem" ]; then
-    if openssl x509 -in "${ACME_CERT_DIR}/fullchain.pem" -noout -checkhost "${MTA_STS_HOSTNAME}" >/dev/null 2>&1; then
+    if certificate_covers_host "${ACME_CERT_DIR}/fullchain.pem" "${HOSTNAME}" \
+        && certificate_covers_host "${ACME_CERT_DIR}/fullchain.pem" "${MTA_STS_HOSTNAME}"; then
+        sync_acme_certificate
+        nginx -t && nginx -s reload
         echo "[acme-setup] TLS certificate already covers ${HOSTNAME} and ${MTA_STS_HOSTNAME}."
+        echo "[acme-setup] Certificate files synchronized and services reloaded."
         exit 0
     fi
     if [ "${MTA_STS_RESOLVES}" != "true" ]; then
@@ -79,18 +99,7 @@ if certbot "$@"; then
 
     echo "[acme-setup] Certificate obtained successfully."
 
-    # Symlink to MailCue SSL directory
-    ln -sf "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/fullchain.pem"
-    ln -sf "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/privkey.pem"
-
-    # Also update Postfix and Dovecot certs
-    cp "${ACME_CERT_DIR}/fullchain.pem" "${SSL_DIR}/server.crt"
-    cp "${ACME_CERT_DIR}/privkey.pem" "${SSL_DIR}/server.key"
-    chmod 600 "${SSL_DIR}/server.key" "${SSL_DIR}/privkey.pem"
-
-    # Reload Postfix and Dovecot with new certs
-    postfix reload 2>/dev/null || true
-    doveadm reload 2>/dev/null || true
+    sync_acme_certificate
 
     # Generate Nginx HTTPS config
     mkdir -p /etc/nginx/conf.d
