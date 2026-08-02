@@ -21,6 +21,10 @@ updates:
     labels:
       - "dependencies"
     open-pull-requests-limit: 10
+    groups:
+      tiptap:
+        patterns:
+          - "@tiptap/*"
 
   # Docker base images
   - package-ecosystem: "docker"
