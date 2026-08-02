@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import email as email_stdlib
 import json
 import logging
@@ -17,7 +18,6 @@ from email import policy
 from email.message import Message
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import Any, cast
 
 import gnupg
@@ -38,6 +38,26 @@ from app.gpg.schemas import (
 )
 
 logger = logging.getLogger("mailcue.gpg")
+
+
+def _pgp_mime_body(original: Message) -> Message:
+    """Return a detached MIME entity without RFC 5322 envelope headers."""
+    body = copy.deepcopy(original)
+    for header in tuple(body.keys()):
+        lowered = header.casefold()
+        if lowered != "mime-version" and not lowered.startswith("content-"):
+            del body[header]
+    return body
+
+
+def _copy_outer_headers(original: Message, wrapped: Message) -> None:
+    """Copy message-level headers onto a PGP/MIME wrapper exactly once."""
+    for header, value in original.raw_items():
+        lowered = header.casefold()
+        if lowered == "bcc" or lowered == "mime-version" or lowered.startswith("content-"):
+            continue
+        wrapped[header] = value
+
 
 # ── GPG instance helper ─────────────────────────────────────────
 
@@ -432,25 +452,12 @@ async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession, *, user_
     # Parse the original message
     original = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
 
-    # Build the MIME body part that will be signed
-    content_part: Message
-    if original.is_multipart():
-        content_part = original
-    else:
-        decoded_payload = original.get_payload(decode=True)
-        payload_text = (
-            decoded_payload.decode("utf-8", errors="replace")
-            if isinstance(decoded_payload, bytes)
-            else ""
-        )
-        content_part = MIMEText(
-            payload_text,
-            _subtype=original.get_content_subtype(),
-            _charset="utf-8",
-        )
+    # RFC 3156 signs the MIME body entity, not a nested copy of the complete
+    # message with From/To/Subject headers repeated inside multipart/signed.
+    content_part = _pgp_mime_body(original)
 
     # Serialize content for signing
-    content_bytes = content_part.as_bytes()
+    content_bytes = content_part.as_bytes(policy=policy.SMTP)
 
     # Create a detached signature
     sig = await asyncio.to_thread(
@@ -464,13 +471,10 @@ async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession, *, user_
         "signed",
         protocol="application/pgp-signature",
         micalg="pgp-sha256",
+        policy=policy.SMTP,
     )
 
-    # Preserve original envelope headers
-    for header in ("From", "To", "Cc", "Bcc", "Subject", "Date", "Message-ID", "MIME-Version"):
-        value = original[header]
-        if value:
-            signed_msg[header] = value
+    _copy_outer_headers(original, signed_msg)
 
     # Part 1: the signed content
     signed_msg.attach(content_part)
@@ -484,7 +488,7 @@ async def sign_message(raw_bytes: bytes, sender: str, db: AsyncSession, *, user_
     sig_part.add_header("Content-Description", "OpenPGP digital signature")
     signed_msg.attach(sig_part)
 
-    return signed_msg.as_bytes()
+    return signed_msg.as_bytes(policy=policy.SMTP)
 
 
 async def encrypt_message(
@@ -511,24 +515,9 @@ async def encrypt_message(
     # Parse the original message
     original = email_stdlib.message_from_bytes(raw_bytes, policy=policy.SMTP)
 
-    # Build the MIME body to encrypt
-    body_part: Message
-    if original.is_multipart():
-        body_part = original
-    else:
-        decoded_payload = original.get_payload(decode=True)
-        payload_text = (
-            decoded_payload.decode("utf-8", errors="replace")
-            if isinstance(decoded_payload, bytes)
-            else ""
-        )
-        body_part = MIMEText(
-            payload_text,
-            _subtype=original.get_content_subtype(),
-            _charset="utf-8",
-        )
+    body_part = _pgp_mime_body(original)
 
-    body_bytes = body_part.as_bytes()
+    body_bytes = body_part.as_bytes(policy=policy.SMTP)
 
     # Encrypt
     encrypted = await asyncio.to_thread(
@@ -545,13 +534,10 @@ async def encrypt_message(
     enc_msg = MIMEMultipart(
         "encrypted",
         protocol="application/pgp-encrypted",
+        policy=policy.SMTP,
     )
 
-    # Preserve original envelope headers
-    for header in ("From", "To", "Cc", "Bcc", "Subject", "Date", "Message-ID", "MIME-Version"):
-        value = original[header]
-        if value:
-            enc_msg[header] = value
+    _copy_outer_headers(original, enc_msg)
 
     # Part 1: PGP/MIME version identification
     version_part = MIMEApplication("Version: 1\n", _subtype="pgp-encrypted")
@@ -563,7 +549,7 @@ async def encrypt_message(
     data_part.add_header("Content-Description", "OpenPGP encrypted message")
     enc_msg.attach(data_part)
 
-    return enc_msg.as_bytes()
+    return enc_msg.as_bytes(policy=policy.SMTP)
 
 
 async def verify_signature(raw_bytes: bytes) -> GpgEmailInfo:
@@ -589,7 +575,7 @@ async def verify_signature(raw_bytes: bytes) -> GpgEmailInfo:
     assert isinstance(content_part, Message)
     assert isinstance(sig_part, Message)
 
-    content_bytes = content_part.as_bytes()
+    content_bytes = content_part.as_bytes(policy=policy.SMTP)
     sig_payload = sig_part.get_payload(decode=True)
     sig_bytes: bytes
     if sig_payload is None:

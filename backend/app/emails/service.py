@@ -625,23 +625,9 @@ async def send_email(
 
     message_id: str = msg["Message-ID"]
 
-    # Save a copy to the Sent folder via IMAP APPEND
-    try:
-        imap = await _imap_connect(request.from_address)
-        try:
-            # Ensure Sent folder exists
-            with contextlib.suppress(Exception):
-                await imap.create("Sent")
-            await imap.append(
-                message_bytes=raw_bytes,
-                mailbox="Sent",
-                flags="(\\Seen)",
-                date=None,
-            )
-        finally:
-            await _imap_disconnect(imap)
-    except Exception:
-        logger.warning("Could not save sent email to Sent folder for %s", request.from_address)
+    # Postfix sender_bcc_maps routes one copy to sender+sent@domain, and the
+    # Dovecot Sieve rule files that envelope recipient into Sent. Do not also
+    # IMAP APPEND here: that creates two Sent messages with the same Message-ID.
 
     await event_bus.publish(
         "email.sent",
