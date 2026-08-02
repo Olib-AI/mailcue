@@ -11,7 +11,6 @@ import asyncio
 import base64
 import contextlib
 import email.utils
-import html as html_module
 import logging
 import re
 import secrets
@@ -21,6 +20,7 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +47,114 @@ from app.gpg import service as gpg_service
 from app.gpg.schemas import ImportKeyRequest
 
 logger = logging.getLogger("mailcue.emails")
+
+
+class _PlainTextHTMLParser(HTMLParser):
+    """Render the meaningful structure of an HTML email as plain text."""
+
+    _BLOCK_TAGS = frozenset(
+        {
+            "address",
+            "article",
+            "aside",
+            "blockquote",
+            "div",
+            "dl",
+            "dt",
+            "dd",
+            "fieldset",
+            "figcaption",
+            "figure",
+            "footer",
+            "form",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "header",
+            "hr",
+            "main",
+            "nav",
+            "ol",
+            "p",
+            "pre",
+            "section",
+            "table",
+            "ul",
+        }
+    )
+    _HIDDEN_TAGS = frozenset({"head", "noscript", "script", "style", "template"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden_depth = 0
+
+    def _line_break(self, count: int = 1) -> None:
+        if not self.parts:
+            return
+        trailing = len(self.parts[-1]) - len(self.parts[-1].rstrip("\n"))
+        if trailing < count:
+            self.parts.append("\n" * (count - trailing))
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        tag = tag.casefold()
+        if tag in self._HIDDEN_TAGS:
+            self.hidden_depth += 1
+            return
+        if self.hidden_depth:
+            return
+        if tag == "br":
+            self._line_break()
+        elif tag == "li":
+            self._line_break()
+            self.parts.append("- ")
+        elif tag in {"td", "th"}:
+            if self.parts and not self.parts[-1].endswith(("\n", "\t")):
+                self.parts.append("\t")
+        elif tag in self._BLOCK_TAGS:
+            self._line_break(2)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.casefold()
+        if tag in self._HIDDEN_TAGS:
+            self.hidden_depth = max(0, self.hidden_depth - 1)
+            return
+        if self.hidden_depth:
+            return
+        if tag == "li" or tag == "tr":
+            self._line_break()
+        elif tag in self._BLOCK_TAGS:
+            self._line_break(2)
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden_depth:
+            self.parts.append(data)
+
+
+def _html_to_plain_text(value: str) -> str:
+    """Convert HTML email content while preserving human-readable boundaries."""
+    parser = _PlainTextHTMLParser()
+    parser.feed(value)
+    parser.close()
+
+    lines: list[str] = []
+    for raw_line in "".join(parser.parts).replace("\r", "").split("\n"):
+        line = re.sub(r"\s+", " ", raw_line).strip()
+        if line:
+            lines.append(line)
+        elif lines and lines[-1]:
+            lines.append("")
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
 
 
 # ── IMAP connection helper ───────────────────────────────────────
@@ -411,8 +519,7 @@ async def send_email(
     # Always include both text/plain and text/html for best deliverability.
     # Gmail and other providers penalize emails that lack a text/plain part.
     if html_body and not text_body:
-        # Strip HTML tags to generate a plain-text fallback
-        plain = re.sub(r"<[^>]+>", "", html_module.unescape(html_body)).strip()
+        plain = _html_to_plain_text(html_body)
         body_part.attach(MIMEText(plain, "plain", "utf-8"))
     elif text_body:
         body_part.attach(MIMEText(text_body, "plain", "utf-8"))
