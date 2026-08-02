@@ -43,8 +43,8 @@ pub enum Frame {
     },
     /// Sidecar → edge: relay an outbound mail through the edge's network.
     ///
-    /// `raw_message` is the full RFC 5322 message *as it should appear on
-    /// the wire* (DOT-stuffing is applied by the edge during DATA).
+    /// `raw_message` is the sender's full RFC 5322 message. The edge prepends
+    /// its own `Received` trace field and applies DOT-stuffing during DATA.
     Relay {
         /// Sidecar-chosen request id. Must be unique on this channel.
         request_id: u64,

@@ -214,7 +214,7 @@ async def test_full_crud_and_tunnels_json(
     assert json_path.exists()
     payload = json.loads(json_path.read_text())
     assert payload["version"] == 1
-    assert payload["selection"] == "round_robin"
+    assert payload["selection"] == "ordered_failover"
     assert payload["client_static_key_path"] == "/var/lib/mailcue-sidecar/client.key"
     assert len(payload["tunnels"]) == 1
     entry = payload["tunnels"][0]
@@ -251,7 +251,7 @@ async def test_full_crud_and_tunnels_json(
     assert payload2["tunnels"][0]["port"] == 7844
     assert payload2["tunnels"][0]["weight"] == 10
 
-    # Add a second tunnel and confirm sort-by-name.
+    # Add a second tunnel and confirm priority (weight), then name ordering.
     create_resp2 = await client.post(
         "/api/v1/tunnels",
         json={
@@ -265,7 +265,7 @@ async def test_full_crud_and_tunnels_json(
 
     payload3 = json.loads(json_path.read_text())
     names = [t["name"] for t in payload3["tunnels"]]
-    assert names == sorted(names) == ["alpha-edge", "edge-paris"]
+    assert names == ["edge-paris", "alpha-edge"]
 
     # Delete
     del_resp = await client.delete(f"/api/v1/tunnels/{tunnel_id}")

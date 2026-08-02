@@ -26,7 +26,7 @@ use mailcue_relay_proto::{Frame, ProbeStatus, RelayOpts, RelayStatus};
 use crate::config::{PartialFailurePolicy, SidecarConfig};
 use crate::pool::Pool;
 use crate::selector::Selector;
-use crate::tunnels::{Tunnel, TunnelRegistry};
+use crate::tunnels::{SelectionStrategy, Tunnel, TunnelRegistry};
 
 const PROBE_REQUEST_TIMEOUT_SECS: u64 = 20;
 
@@ -92,6 +92,7 @@ impl SmtpRelay {
         body: Bytes,
     ) -> SmtpReply {
         let view = self.registry.snapshot();
+        let ordered_failover = view.selection == SelectionStrategy::OrderedFailover;
         let healthy = self.pool.healthy_ids();
         let candidates = self.selector.pick_all(&view, &healthy);
         if candidates.is_empty() {
@@ -133,7 +134,7 @@ impl SmtpRelay {
                         }
                         upsert_outcome(&mut accumulated, r);
                     }
-                    if !next_remaining.is_empty() && idx + 1 < total_tunnels {
+                    if !ordered_failover && !next_remaining.is_empty() && idx + 1 < total_tunnels {
                         info!(
                             tunnel = %tunnel.id,
                             request_id,
@@ -143,7 +144,14 @@ impl SmtpRelay {
                             "failing over to next tunnel",
                         );
                     }
-                    remaining = next_remaining;
+                    // Once an MX responds, its SMTP verdict is authoritative.
+                    // Ordered failover changes public IP only when the tunnel
+                    // itself is unavailable, not to evade a 4xx/5xx policy.
+                    remaining = if ordered_failover {
+                        Vec::new()
+                    } else {
+                        next_remaining
+                    };
                 }
                 TunnelAttempt::TunnelError(reply) => {
                     tunnel_level_error = Some(reply);

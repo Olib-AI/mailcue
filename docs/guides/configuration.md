@@ -32,7 +32,7 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_DATABASE_CONNECT_TIMEOUT` | `10` | Seconds allowed when opening a PostgreSQL connection |
 | `MAILCUE_DATABASE_STATEMENT_TIMEOUT_MS` | `30000` | PostgreSQL statement timeout in milliseconds. Set to `0` to disable it. |
 | `MAILCUE_SMTP_HOST` | `127.0.0.1` | SMTP server address (internal) |
-| `MAILCUE_SMTP_PORT` | `25` | SMTP server port (internal) |
+| `MAILCUE_SMTP_PORT` | `10026` | Loopback-only Postfix submission port used by the MailCue API; bypasses inbound spam filtering while retaining DKIM signing |
 | `MAILCUE_IMAP_HOST` | `127.0.0.1` | IMAP server address (internal) |
 | `MAILCUE_IMAP_PORT` | `143` | IMAP server port (internal) |
 | `MAILCUE_IMAP_MASTER_USER` | `mailcue-master` | Dovecot master user for API impersonation |

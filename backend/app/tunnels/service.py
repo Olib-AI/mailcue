@@ -29,7 +29,9 @@ logger = logging.getLogger("mailcue.tunnels")
 
 _SIDECAR_KEY_PATH = "/var/lib/mailcue-sidecar/client.key"
 _TUNNELS_JSON_VERSION = 1
-_DEFAULT_SELECTION = "round_robin"
+# Keep one stable egress identity for reputation.  Additional edges are hot
+# standbys and are used only when the primary tunnel itself is unavailable.
+_DEFAULT_SELECTION = "ordered_failover"
 _HEALTH_CHECK_TIMEOUT_SECONDS = 5.0
 _SIDECAR_STATUS_TIMEOUT_SECONDS = 3.0
 _PROM_LINE_RE = re.compile(
@@ -328,7 +330,9 @@ def _build_tunnels_payload(tunnels: list[Tunnel]) -> dict[str, Any]:
                 "enabled": bool(t.enabled),
                 "weight": int(t.weight),
             }
-            for t in sorted(tunnels, key=lambda x: x.name)
+            # Ordered failover interprets higher weight as higher priority.
+            # Name provides deterministic ordering for equal priorities.
+            for t in sorted(tunnels, key=lambda x: (-x.weight, x.name))
         ],
     }
 

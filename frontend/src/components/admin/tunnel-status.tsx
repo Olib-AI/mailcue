@@ -131,7 +131,7 @@ export function TunnelStatusPanel() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">Weight {tunnel.weight}</Badge>
+                  <Badge variant="outline">Priority {tunnel.weight}</Badge>
                   <Badge variant={tunnel.managed ? "default" : "secondary"}>
                     {tunnel.managed ? "MailCue managed" : "File managed · read only"}
                   </Badge>

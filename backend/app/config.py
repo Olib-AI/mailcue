@@ -65,7 +65,10 @@ class Settings(BaseSettings):
 
     # ── Mail server ──────────────────────────────────────────────
     smtp_host: str = "127.0.0.1"
-    smtp_port: int = 25
+    # MailCue-generated mail uses a loopback-only Postfix submission service.
+    # Keeping it separate from public port 25 prevents outbound messages from
+    # being passed through the inbound SpamAssassin reinjection path.
+    smtp_port: int = 10026
     smtp_tls: bool = False
     imap_host: str = "127.0.0.1"
     imap_port: int = 143

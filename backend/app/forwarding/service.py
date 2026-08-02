@@ -266,6 +266,7 @@ async def _execute_smtp_forward(
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             recipients=[config.to_address],
+            local_hostname="localhost",
             start_tls=False,
             use_tls=False,
         )

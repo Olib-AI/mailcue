@@ -5,15 +5,16 @@ Railway, Vercel, ...) block outbound TCP/25, which is the only port public
 MX servers accept mail on. The MailCue tunnel works around that by relaying
 SMTP egress through a small VPS that **does** have port-25 access - an OVH
 Eco / Kimsufi / Public Cloud instance is the canonical choice - and by
-making it trivial to add more such VPSes for IP rotation and per-tenant
-egress isolation.
+making it possible to add standby VPSes for resilient egress. MailCue keeps a
+stable primary sending IP for reputation and uses another healthy edge only
+when the primary tunnel is unavailable.
 
 This crate ships **two** binaries:
 
 | Binary                    | Where it runs                       | Job |
 |---------------------------|-------------------------------------|-----|
 | `mailcue-relay-edge`      | The OVH (or equivalent) VPS         | Listens on a single TCP port (default `7843`), accepts authenticated tunnels from sidecars, and delivers their messages to public MX servers on port 25. |
-| `mailcue-relay-sidecar`   | Next to the MailCue mail container  | Exposes a loopback SMTP submission endpoint (default `127.0.0.1:2525`) that Postfix relays through. Multiplexes outbound mail across one or more configured edges. |
+| `mailcue-relay-sidecar`   | Next to the MailCue mail container  | Exposes a loopback SMTP submission endpoint (default `127.0.0.1:2525`) that Postfix relays through. Selects the highest-weight healthy edge as primary and retains the others as failovers. |
 
 Wire format and threat model are specified in [`docs/PROTOCOL.md`](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/PROTOCOL.md)
 and [`docs/SECURITY.md`](https://github.com/Olib-AI/mailcue/blob/main/tunnel/docs/SECURITY.md).

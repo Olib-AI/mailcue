@@ -323,7 +323,8 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
     }
 
     // Body — dot-stuff and terminate.
-    write_body(&mut session, delivery.raw_message, delivery.io_timeout).await?;
+    let traced_message = add_relay_received_header(delivery.raw_message, delivery.helo_name);
+    write_body(&mut session, &traced_message, delivery.io_timeout).await?;
     let final_reply = read_reply(&mut session, delivery.io_timeout).await?;
 
     let _ = send_cmd(&mut session, "QUIT\r\n", delivery.io_timeout).await;
@@ -492,6 +493,32 @@ fn dot_stuff(raw: &[u8]) -> Vec<u8> {
     crlf_normalise(out)
 }
 
+/// Add the trace field required when the public edge accepts responsibility
+/// for relaying a message. It is deliberately inserted after DKIM signing;
+/// `Received` fields are prepended by each hop and are not part of the sender's
+/// DKIM header set.
+fn add_relay_received_header(raw: &[u8], helo_name: &str) -> Vec<u8> {
+    let safe_helo: String = helo_name
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | ':' | '[' | ']'))
+        .collect();
+    let safe_helo = if safe_helo.is_empty() {
+        "unknown"
+    } else {
+        &safe_helo
+    };
+    let date = httpdate::fmt_http_date(std::time::SystemTime::now());
+    let header = format!(
+        "Received: from mailcue-sidecar (authenticated MailCue tunnel)\r\n\
+         \tby {safe_helo} with ESMTP;\r\n\
+         \t{date}\r\n"
+    );
+    let mut out = Vec::with_capacity(header.len() + raw.len());
+    out.extend_from_slice(header.as_bytes());
+    out.extend_from_slice(raw);
+    out
+}
+
 fn crlf_normalise(raw: Vec<u8>) -> Vec<u8> {
     let mut out = Vec::with_capacity(raw.len());
     let mut prev: Option<u8> = None;
@@ -544,4 +571,30 @@ async fn attempt_starttls(
     }
     debug!("STARTTLS established with {}", mx_host);
     Ok(session)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relay_trace_is_prepended_and_preserves_message() {
+        let raw = b"From: sender@example.com\r\nTo: user@example.net\r\n\r\nhello\r\n";
+        let traced = add_relay_received_header(raw, "relay-us.example.com");
+        let text = String::from_utf8(traced).unwrap();
+        assert!(text.starts_with(
+            "Received: from mailcue-sidecar (authenticated MailCue tunnel)\r\n\
+             \tby relay-us.example.com with ESMTP;\r\n\t"
+        ));
+        assert!(text.ends_with(std::str::from_utf8(raw).unwrap()));
+    }
+
+    #[test]
+    fn relay_trace_cannot_inject_another_header() {
+        let traced =
+            add_relay_received_header(b"From: a@example.com\r\n\r\nbody", "good\r\nBcc:bad");
+        let text = String::from_utf8(traced).unwrap();
+        assert!(text.contains("by goodBcc:bad with ESMTP"));
+        assert!(!text.contains("\r\nBcc:"));
+    }
 }

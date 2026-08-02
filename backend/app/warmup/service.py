@@ -791,6 +791,7 @@ async def _send_one(
             msg,
             hostname=settings.smtp_host,
             port=settings.smtp_port,
+            local_hostname="localhost",
             start_tls=False,
             use_tls=False,
         )

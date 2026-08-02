@@ -1,8 +1,8 @@
 //! Tunnel selector.
 //!
 //! Picks an `enabled && healthy` tunnel from the current registry view
-//! using one of three strategies: round-robin, uniform random, or
-//! weighted random. State (the round-robin cursor) survives reloads as
+//! using ordered failover, round-robin, uniform random, or weighted random.
+//! State (the round-robin cursor) survives reloads as
 //! long as the *set of tunnel ids* is unchanged; if the set changes the
 //! cursor resets to 0.
 
@@ -58,6 +58,7 @@ impl Selector {
         }
 
         match view.selection {
+            SelectionStrategy::OrderedFailover => ordered(&candidates).first().copied(),
             SelectionStrategy::RoundRobin => self.round_robin(&candidates, view),
             SelectionStrategy::Random => uniform(&candidates),
             SelectionStrategy::WeightedRandom => weighted(&candidates),
@@ -103,6 +104,7 @@ impl Selector {
         }
 
         match view.selection {
+            SelectionStrategy::OrderedFailover => ordered(&candidates),
             SelectionStrategy::RoundRobin => {
                 // Take the round-robin pick (advances cursor) as the
                 // first element, then list every other healthy tunnel
@@ -143,6 +145,13 @@ impl Selector {
             }
         }
     }
+}
+
+fn ordered<'a>(candidates: &[&'a Tunnel]) -> Vec<&'a Tunnel> {
+    let mut out = candidates.to_vec();
+    // Stable sorting preserves declaration order when weights are equal.
+    out.sort_by_key(|tunnel| std::cmp::Reverse(tunnel.weight));
+    out
 }
 
 fn shuffle(slice: &mut [&Tunnel]) {
@@ -219,6 +228,27 @@ mod tests {
             order.push(s.pick(&v, &h).unwrap().id.clone());
         }
         assert_eq!(order, vec!["b", "c", "b", "c", "b", "c"]);
+    }
+
+    #[test]
+    fn ordered_failover_prefers_weight_then_file_order() {
+        let v = view(
+            SelectionStrategy::OrderedFailover,
+            vec![
+                t("backup", 1, true),
+                t("primary", 100, true),
+                t("peer", 100, true),
+            ],
+        );
+        let h = healthy(&["backup", "primary", "peer"]);
+        let s = Selector::new();
+        let order: Vec<_> = s
+            .pick_all(&v, &h)
+            .into_iter()
+            .map(|tunnel| tunnel.id.as_str())
+            .collect();
+        assert_eq!(order, vec!["primary", "peer", "backup"]);
+        assert_eq!(s.pick(&v, &h).unwrap().id, "primary");
     }
 
     #[test]

@@ -508,6 +508,7 @@ async def send_email(
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             recipients=all_recipients,
+            local_hostname="localhost",
             start_tls=False,
             use_tls=False,
         )

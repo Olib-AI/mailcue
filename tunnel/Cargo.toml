@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 rust-version = "1.95"
 license = "AGPL-3.0-or-later"
@@ -47,6 +47,7 @@ toml = "1.1"
 
 # DNS / SMTP
 hickory-resolver = { version = "0.26", default-features = false, features = ["tokio", "system-config"] }
+httpdate = "1.0"
 
 # Sidecar specifics
 notify = { version = "8.2", default-features = false, features = ["macos_kqueue"] }

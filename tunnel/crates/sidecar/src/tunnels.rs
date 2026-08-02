@@ -37,8 +37,11 @@ use tracing::{info, warn};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SelectionStrategy {
-    /// Round-robin over enabled+healthy.
+    /// Prefer the highest-weight healthy tunnel and use the rest only when
+    /// the tunnel itself is unavailable. Equal weights retain file order.
     #[default]
+    OrderedFailover,
+    /// Round-robin over enabled+healthy.
     RoundRobin,
     /// Uniformly random.
     Random,
@@ -405,5 +408,6 @@ mod tests {
         let v = load_tunnels_file(&p).unwrap();
         assert_eq!(v.tunnels.len(), 1);
         assert_eq!(v.tunnels[0].id, "good");
+        assert_eq!(v.selection, SelectionStrategy::OrderedFailover);
     }
 }
