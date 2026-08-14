@@ -7,6 +7,7 @@ import ipaddress
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from cryptography.hazmat.primitives import serialization
@@ -35,8 +36,9 @@ from app.deliverability.network import (
 from app.deliverability.placement import PlacementResult
 from app.deliverability.providers import AnalysisFinding, AnalysisResult, PreviewResult
 from app.deliverability.scheduler import _prune_expired_data
-from app.deliverability.visual import RenderedArtifact, attention_estimate
+from app.deliverability.visual import RenderedArtifact, _render_one, attention_estimate
 from app.emails.deliverability import score_deliverability
+from app.emails.parser import parse_email
 from app.mailboxes.models import Mailbox
 from app.mailboxes.schemas import MailboxCreateRequest
 from app.mailboxes.service import create_mailbox
@@ -146,6 +148,50 @@ def test_attention_estimate_is_a_valid_same_size_png() -> None:
         assert image.size == (80, 40)
 
 
+async def test_chromium_render_uses_writable_container_runtime_directories(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    html_path = tmp_path / "message.html"
+    html_path.write_text("<html><body>test</body></html>", encoding="utf-8")
+    captured: dict[str, Any] = {}
+
+    class FakeProcess:
+        pid = 123
+        returncode = 0
+
+        def __init__(self, output: Path) -> None:
+            self.output = output
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            self.output.write_bytes(b"\x89PNG\r\n\x1a\nrendered")
+            return b"", b""
+
+    async def fake_subprocess(*args: str, **kwargs: Any) -> FakeProcess:
+        captured["args"] = args
+        captured["env"] = kwargs["env"]
+        screenshot = next(item for item in args if item.startswith("--screenshot="))
+        return FakeProcess(Path(screenshot.split("=", 1)[1]))
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_subprocess)
+
+    rendered = await _render_one(
+        "/usr/bin/chromium",
+        tmp_path,
+        html_path,
+        name="desktop-light",
+        width=1200,
+        height=900,
+        dark=False,
+        renderer_identity=None,
+    )
+
+    assert rendered.data.startswith(b"\x89PNG")
+    assert "--disable-dev-shm-usage" in captured["args"]
+    for key in ("HOME", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR"):
+        assert Path(captured["env"][key]).is_dir()
+
+
 def test_dkim_dns_key_strength_and_revocation_are_distinguished() -> None:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
     encoded = private_key.public_key().public_bytes(
@@ -195,7 +241,8 @@ def test_origin_identity_skips_mailcue_loopback_reinjection() -> None:
     message = EmailMessage()
     message["Received"] = "from localhost (localhost [127.0.0.1]) by mx.mailcue.local with ESMTP"
     message["Received"] = (
-        "from mail.protonmail.ch (mail.protonmail.ch [8.8.8.8]) by mx.mailcue.local with ESMTPS"
+        "from smtp.sender.example.com (smtp.sender.example.com [8.8.8.8]) "
+        "by mx.mailcue.local with ESMTPS"
     )
     message["Received"] = "from forged.example [1.1.1.1] by attacker.example"
     message.set_content("test")
@@ -203,7 +250,46 @@ def test_origin_identity_skips_mailcue_loopback_reinjection() -> None:
     origin, greeting = _origin_route_identity(message)
 
     assert str(origin) == "8.8.8.8"
-    assert greeting == "mail.protonmail.ch"
+    assert greeting == "smtp.sender.example.com"
+
+
+def test_origin_identity_skips_dovecot_lmtp_and_spam_reinjection(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(settings, "hostname", "mail.recipient.example.com")
+    message = EmailMessage()
+    message["Received"] = (
+        "from mail.recipient.example.com by mail.recipient.example.com "
+        "with LMTP id local-delivery for <delivery@recipient.example.com>"
+    )
+    message["Received"] = (
+        "from localhost (localhost [127.0.0.1]) by mail.recipient.example.com with ESMTP"
+    )
+    message["Received"] = (
+        "from smtp.sender.example.com (smtp.sender.example.com [8.8.8.8]) "
+        "by mail.recipient.example.com with ESMTPS"
+    )
+    message["Received"] = "from forged.example [1.1.1.1] by attacker.example"
+    message.set_content("test")
+
+    origin, greeting = _origin_route_identity(message)
+
+    assert str(origin) == "8.8.8.8"
+    assert greeting == "smtp.sender.example.com"
+
+
+def test_email_detail_preserves_all_received_headers() -> None:
+    message = EmailMessage()
+    message["Received"] = "from local.example by local.example with LMTP"
+    message["Received"] = "from sender.example [8.8.8.8] by local.example with ESMTPS"
+    message.set_content("test")
+
+    detail = parse_email(message.as_bytes())
+
+    assert detail.raw_headers["Received"].splitlines() == [
+        "from local.example by local.example with LMTP",
+        "from sender.example [8.8.8.8] by local.example with ESMTPS",
+    ]
 
 
 def test_origin_identity_does_not_cross_an_untrusted_private_hop() -> None:

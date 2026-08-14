@@ -87,11 +87,11 @@ async def test_fetch_key_from_keyserver_success(_engine_and_session, monkeypatch
     async def fake_import_key(req, db, *, user_id):
         return GpgKeyResponse(
             id="test-id",
-            mailbox_address=req.mailbox_address or "akram@olib.email",
+            mailbox_address=req.mailbox_address or "user@example.com",
             fingerprint="1234567890ABCDEF1234567890ABCDEF12345678",
             key_id="90ABCDEF12345678",
             uid_name="Akram",
-            uid_email="akram@olib.email",
+            uid_email="user@example.com",
             algorithm="RSA",
             key_length=2048,
             created_at=datetime.now(UTC),
@@ -105,6 +105,6 @@ async def test_fetch_key_from_keyserver_success(_engine_and_session, monkeypatch
 
     async with factory() as session:
         res = await gpg_service.fetch_key_from_keyserver(
-            "akram@olib.email", session, user_id="test-user"
+            "user@example.com", session, user_id="test-user"
         )
-        assert res.mailbox_address == "akram@olib.email"
+        assert res.mailbox_address == "user@example.com"

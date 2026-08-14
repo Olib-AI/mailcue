@@ -117,6 +117,21 @@ async def _render_one(
     renderer_identity: tuple[int, int] | None,
 ) -> RenderedArtifact:
     output = directory / f"{name}.png"
+    profile_directory = directory / f"profile-{name}"
+    runtime_directory = directory / f"runtime-{name}"
+    cache_directory = directory / f"cache-{name}"
+    config_directory = directory / f"config-{name}"
+    temporary_directory = directory / f"tmp-{name}"
+    for path in (
+        profile_directory,
+        runtime_directory,
+        cache_directory,
+        config_directory,
+        temporary_directory,
+    ):
+        path.mkdir(mode=0o700)
+        if renderer_identity is not None:
+            os.chown(path, *renderer_identity)
     args = [
         executable,
         "--headless=new",
@@ -136,7 +151,7 @@ async def _render_one(
         "--no-proxy-server",
         "--no-sandbox",
         "--no-zygote",
-        f"--user-data-dir={directory / f'profile-{name}'}",
+        f"--user-data-dir={profile_directory}",
         "--virtual-time-budget=1000",
         f"--screenshot={output}",
         f"--window-size={width},{height}",
@@ -144,7 +159,14 @@ async def _render_one(
     if dark:
         args.append("--force-dark-mode")
     args.append(html_path.as_uri())
-    environment = {**os.environ, "HOME": str(directory)}
+    environment = {
+        **os.environ,
+        "HOME": str(directory),
+        "TMPDIR": str(temporary_directory),
+        "XDG_CACHE_HOME": str(cache_directory),
+        "XDG_CONFIG_HOME": str(config_directory),
+        "XDG_RUNTIME_DIR": str(runtime_directory),
+    }
 
     def drop_renderer_privileges() -> None:
         if renderer_identity is None:
@@ -162,26 +184,30 @@ async def _render_one(
         preexec_fn=drop_renderer_privileges if renderer_identity else None,
         start_new_session=True,
     )
+    communication = asyncio.create_task(process.communicate())
     try:
         _stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=settings.deliverability_visual_timeout_seconds
+            asyncio.shield(communication),
+            timeout=settings.deliverability_visual_timeout_seconds,
         )
     except TimeoutError:
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except OSError:
             process.kill()
-        await process.wait()
+        _stdout, stderr = await communication
         timeout = settings.deliverability_visual_timeout_seconds
+        detail = " ".join(stderr.decode("utf-8", errors="replace").split())[-500:]
         raise RuntimeError(
             f"Chromium render timed out for {name} after {timeout:g} seconds"
+            + (f": {detail}" if detail else "")
         ) from None
     except asyncio.CancelledError:
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except OSError:
             process.kill()
-        await process.wait()
+        await communication
         raise
     if process.returncode != 0 or not output.is_file():
         detail = stderr.decode("utf-8", errors="replace")[-500:].strip()

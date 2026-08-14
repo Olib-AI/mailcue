@@ -251,11 +251,22 @@ def _origin_route_identity(
     received = [str(value) for value in msg.get_all("Received", [])]
     if not received:
         return None, None
-    # SpamAssassin re-injects mail through MailCue's loopback SMTP service,
-    # which prepends another Received field. Skip only leading loopback
-    # handoffs, then trust the first public handoff recorded by the receiving
-    # MTA. Never cross a private or malformed boundary into older fields.
+    # Dovecot LMTP and SpamAssassin loopback re-injection prepend local
+    # Received fields. Skip only those exact leading handoffs, then trust the
+    # first public handoff recorded by the receiving MTA. Never cross another
+    # private or malformed boundary into older fields.
     for trusted_hop in received:
+        lmtp = re.match(
+            r"\s*from\s+([^\s(;]+).*?\s+by\s+([^\s(;]+).*?\s+with\s+LMTP\b",
+            trusted_hop,
+            re.I | re.S,
+        )
+        if lmtp:
+            from_host = lmtp.group(1).strip("[]").lower().rstrip(".")
+            by_host = lmtp.group(2).strip("[]").lower().rstrip(".")
+            configured_host = settings.hostname.strip().lower().rstrip(".")
+            if from_host == by_host == configured_host:
+                continue
         from_clause = re.split(r"\s+by\s+", trusted_hop, maxsplit=1, flags=re.I)[0]
         explicit_greeting = re.search(
             r"\b(?:ehlo|helo)(?:\s*=|\s+)\s*[\"']?([a-z0-9._-]{1,253})",

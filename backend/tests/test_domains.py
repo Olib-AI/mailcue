@@ -486,8 +486,8 @@ def test_spf_relay_mechanism_order_is_semantically_equivalent() -> None:
 
 
 def test_spf_strict_relay_policy_satisfies_single_host_recommendation() -> None:
-    expected = "v=spf1 mx a:mail.olib.email ~all"
-    published = "v=spf1 mx a:relay-us.olib.email a:relay-de.olib.email -all"
+    expected = "v=spf1 mx a:mail.example.com ~all"
+    published = "v=spf1 mx a:relay-us.example.com a:relay-de.example.com -all"
 
     assert _record_matches("spf", expected, published) is True
     assert _record_matches("spf", expected, "v=spf1 -all") is False

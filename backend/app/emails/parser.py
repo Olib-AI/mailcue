@@ -322,10 +322,11 @@ def _safe_decode(payload: bytes, charset: str) -> str:
 
 
 def _extract_all_headers(msg: EmailMessage) -> dict[str, str]:
-    """Collect all headers into a flat dict (last value wins for duplicates)."""
+    """Collect headers into a flat dict while preserving repeated route evidence."""
     headers: dict[str, str] = {}
-    for key in msg:
-        headers[key] = _decode_header_str(msg.get(key))
+    for key, raw_value in msg.raw_items():
+        value = _decode_header_str(raw_value)
+        headers[key] = f"{headers[key]}\n{value}" if key in headers else value
     return headers
 
 
