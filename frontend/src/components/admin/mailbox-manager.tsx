@@ -227,7 +227,7 @@ function MailboxManager() {
               No mailboxes yet
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Create your first mailbox to start receiving test emails
+              Create your first mailbox to start receiving emails
             </p>
           </CardContent>
         </Card>
@@ -327,8 +327,8 @@ function MailboxManager() {
           <DialogHeader>
             <DialogTitle>Create Mailbox</DialogTitle>
             <DialogDescription>
-              Create a new email account for testing. The full address will be
-              generated from the username and domain.
+              Create a new email account. The full address will be generated
+              from the username and domain.
             </DialogDescription>
           </DialogHeader>
 
@@ -336,11 +336,12 @@ function MailboxManager() {
             <div className="space-y-1.5">
               <Label htmlFor="mb-purpose">Mailbox purpose</Label>
               <Select id="mb-purpose" {...register("purpose")}>
-                <option value="standard">Email testing inbox</option>
+                <option value="standard">Standard mailbox</option>
                 <option value="deliverability">Deliverability testing</option>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Deliverability testing shows a scored diagnostic report for each received email.
+                Standard mailboxes use the regular inbox. Deliverability testing adds a scored
+                diagnostic report for each received email.
               </p>
             </div>
 

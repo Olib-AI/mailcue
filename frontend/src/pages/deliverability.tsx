@@ -213,8 +213,63 @@ export function DeliverabilityPage() {
 
         {comparison.data && <Card><CardHeader><CardTitle>Latest regression comparison</CardTitle></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-4"><div className="rounded-lg bg-muted p-3"><p className={`text-2xl font-bold ${comparison.data.score_delta >= 0 ? "text-emerald-600" : "text-red-600"}`}>{comparison.data.score_delta > 0 ? "+" : ""}{comparison.data.score_delta}</p><p className="text-xs text-muted-foreground">Score change</p></div><div className="rounded-lg bg-emerald-50 p-3 dark:bg-emerald-950/20"><p className="text-2xl font-bold text-emerald-600">{comparison.data.improved}</p><p className="text-xs text-muted-foreground">Improved checks</p></div><div className="rounded-lg bg-red-50 p-3 dark:bg-red-950/20"><p className="text-2xl font-bold text-red-600">{comparison.data.regressed}</p><p className="text-xs text-muted-foreground">Regressed checks</p></div><div className="rounded-lg bg-muted p-3"><p className="text-2xl font-bold">{comparison.data.unchanged}</p><p className="text-xs text-muted-foreground">Unchanged checks</p></div></div><div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{comparison.data.categories.map((category) => <div key={category.id} className="flex items-center justify-between rounded-lg border p-3"><div><p className="text-sm font-medium">{category.title}</p><p className="text-xs text-muted-foreground">{category.before_score ?? "N/A"} to {category.after_score ?? "N/A"}</p></div><Badge variant={(category.score_delta ?? 0) < 0 ? "destructive" : "secondary"}>{category.score_delta == null ? "N/A" : `${category.score_delta > 0 ? "+" : ""}${category.score_delta}`}</Badge></div>)}</div></CardContent></Card>}
 
-        <div className="grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <Card><CardHeader><CardTitle className="flex items-center gap-2"><History className="h-5 w-5" />Report history</CardTitle></CardHeader><CardContent className="space-y-2">{(history.data?.reports ?? []).map((report) => <div key={report.id} className="flex items-center gap-2 rounded-lg border p-2"><button type="button" onClick={() => openReport(report)} className="flex min-w-0 flex-1 items-center gap-3 rounded-md p-1 text-left hover:bg-muted/40"><div className={`grid h-11 w-11 place-items-center rounded-full bg-muted font-bold ${scoreTone(report.score)}`}>{report.score}</div><div className="min-w-0 flex-1"><p className="truncate font-medium">{report.message_id || `Message UID ${report.uid}`}</p><p className="text-xs text-muted-foreground">{new Date(report.created_at).toLocaleString()}</p></div>{report.is_baseline && <Badge variant="outline">Baseline</Badge>}<Badge className="capitalize" variant="secondary">{report.verdict.replace("_", " ")}</Badge></button>{!report.is_baseline && <Button size="sm" variant="ghost" onClick={() => setBaseline.mutate(report.id)}>Set baseline</Button>}</div>)}{history.data?.reports.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No scored messages yet.</p>}</CardContent></Card>
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+          <Card className="min-w-0 overflow-hidden">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Report history
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="min-w-0 space-y-2">
+              {(history.data?.reports ?? []).map((report) => {
+                const messageLabel = report.message_id || `Message UID ${report.uid}`;
+                return (
+                  <div
+                    key={report.id}
+                    className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border p-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openReport(report)}
+                      className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden rounded-md p-1 text-left hover:bg-muted/40"
+                    >
+                      <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-muted font-bold ${scoreTone(report.score)}`}>
+                        {report.score}
+                      </div>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="truncate font-medium" title={messageLabel}>
+                          {messageLabel}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {new Date(report.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                      {report.is_baseline && <Badge className="shrink-0" variant="outline">Baseline</Badge>}
+                      <Badge className="shrink-0 capitalize" variant="secondary">
+                        {report.verdict.replace("_", " ")}
+                      </Badge>
+                    </button>
+                    {!report.is_baseline && (
+                      <Button
+                        className="shrink-0"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setBaseline.mutate(report.id)}
+                      >
+                        Set baseline
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+              {history.data?.reports.length === 0 && (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No scored messages yet.
+                </p>
+              )}
+            </CardContent>
+          </Card>
           <div className="space-y-6">
             <Card><CardHeader><CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5" />Open alerts</CardTitle></CardHeader><CardContent className="space-y-3">{(alerts.data?.alerts ?? []).map((alert) => <div key={alert.id} className="rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20"><div className="flex gap-2"><AlertCircle className="mt-0.5 h-4 w-4 text-amber-600" /><div className="min-w-0 flex-1"><p className="text-sm font-semibold">{alert.title}</p><p className="mt-1 text-xs text-muted-foreground">{alert.detail}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => acknowledge.mutate(alert.id)}>Acknowledge</Button></div></div></div>)}{alerts.data?.alerts.length === 0 && <div className="py-6 text-center"><CheckCircle2 className="mx-auto h-8 w-8 text-emerald-500" /><p className="mt-2 text-sm">No open alerts</p></div>}</CardContent></Card>
             <Card><CardHeader><CardTitle className="flex items-center gap-2"><Settings2 className="h-5 w-5" />Automation</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-muted p-3"><p className="text-2xl font-bold">{policies.data?.length ?? 0}</p><p className="text-xs text-muted-foreground">Policies</p></div><div className="rounded-lg bg-muted p-3"><p className="text-2xl font-bold">{schedules.data?.length ?? 0}</p><p className="text-xs text-muted-foreground">Schedules</p></div><div className="rounded-lg bg-muted p-3"><p className="text-2xl font-bold">{providers.data?.length ?? 0}</p><p className="text-xs text-muted-foreground">Providers</p></div></div>

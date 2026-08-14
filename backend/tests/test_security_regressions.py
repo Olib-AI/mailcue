@@ -52,12 +52,22 @@ def test_public_smtp_strips_sender_supplied_verdict_headers() -> None:
     repository_root = Path(__file__).resolve().parents[2]
     master = (repository_root / "rootfs/etc/postfix/master.cf").read_text()
     checks = (repository_root / "rootfs/etc/postfix/inbound_header_checks").read_text()
+    opendkim = (repository_root / "rootfs/etc/opendkim/opendkim.conf").read_text()
+    opendmarc = (repository_root / "rootfs/etc/opendmarc/opendmarc.conf").read_text()
+    policyd_spf = (
+        repository_root / "rootfs/etc/postfix-policyd-spf-python/policyd-spf.conf"
+    ).read_text()
 
     public_smtp = master.split("# ---- Port 587", maxsplit=1)[0]
     assert "header_checks=regexp:/etc/postfix/inbound_header_checks" in public_smtp
     assert "/^Authentication-Results:/" in checks
     assert "/^Received-SPF:/" in checks
     assert "/^X-Spam-[^:]*:/" in checks
+    assert "AuthservID        mailcue" in opendkim
+    assert "AlwaysAddARHeader yes" in opendkim
+    assert "AuthservID              mailcue" in opendmarc
+    assert "Header_Type = AR" in policyd_spf
+    assert "Authserv_Id = mailcue" in policyd_spf
 
 
 async def test_event_bus_only_delivers_events_for_allowed_mailboxes() -> None:

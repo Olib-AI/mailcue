@@ -10,7 +10,13 @@ from app.auth import scopes
 from app.config import settings
 from app.database import get_db
 from app.deliverability.schemas import DeliverabilityRunRequest, DeliverabilityRunResponse
-from app.deliverability.service import execute_run, get_or_create_report, get_report_record
+from app.deliverability.service import (
+    delete_mailbox_reports,
+    delete_message_reports,
+    execute_run,
+    get_or_create_report,
+    get_report_record,
+)
 from app.dependencies import AuthContext, get_auth, require_scope
 from app.emails.schemas import (
     BulkDeleteRequest,
@@ -236,7 +242,9 @@ async def purge_mailbox_emails(
     """
     await verify_mailbox_access(address, auth, db)
     decoded = unquote(address)
+    mailbox = await get_mailbox_by_address(decoded, db)
     deleted = await purge_mailbox(decoded)
+    await delete_mailbox_reports(db, user_id=auth.user.id, mailbox_id=mailbox.id)
     return {"deleted": deleted}
 
 
@@ -395,7 +403,16 @@ async def bulk_delete_mailbox_emails(
     """Delete multiple emails by UID from a specific mailbox."""
     await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
-    return await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
+    mailbox = await get_mailbox_by_address(decoded, db)
+    result, deleted_uids = await bulk_delete_emails(mailbox=decoded, request=body, folder=folder)
+    await delete_message_reports(
+        db,
+        user_id=auth.user.id,
+        mailbox_id=mailbox.id,
+        folder=folder,
+        uids=deleted_uids,
+    )
+    return result
 
 
 @router.delete(
@@ -414,7 +431,15 @@ async def delete_mailbox_email(
     """Delete an email by UID from a specific mailbox."""
     await verify_mailbox_access(mailbox_address, auth, db)
     decoded = unquote(mailbox_address)
+    mailbox = await get_mailbox_by_address(decoded, db)
     await delete_email(mailbox=decoded, uid=uid, folder=folder)
+    await delete_message_reports(
+        db,
+        user_id=auth.user.id,
+        mailbox_id=mailbox.id,
+        folder=folder,
+        uids=[uid],
+    )
 
 
 @router.patch(

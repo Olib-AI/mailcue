@@ -8,6 +8,7 @@ from app.auth import scopes
 from app.auth.models import User
 from app.config import settings
 from app.database import get_db
+from app.deliverability.service import delete_message_reports
 from app.dependencies import AuthContext, get_auth, require_admin, require_scope
 from app.emails.schemas import (
     BulkInjectRequest,
@@ -31,6 +32,7 @@ from app.emails.service import (
 )
 from app.emails.validation import validate_email
 from app.mailboxes.router import verify_mailbox_access
+from app.mailboxes.service import get_mailbox_by_address
 from app.rate_limit import limiter
 
 
@@ -233,7 +235,15 @@ async def delete_single_email(
 ) -> None:
     """Delete an email by UID (sets \\Deleted flag and expunges)."""
     await verify_mailbox_access(mailbox, auth, db)
+    mailbox_record = await get_mailbox_by_address(mailbox, db)
     await delete_email(mailbox=mailbox, uid=uid, folder=folder)
+    await delete_message_reports(
+        db,
+        user_id=auth.user.id,
+        mailbox_id=mailbox_record.id,
+        folder=folder,
+        uids=[uid],
+    )
 
 
 @router.post(

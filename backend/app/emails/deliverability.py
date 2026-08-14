@@ -18,6 +18,7 @@ from html.parser import HTMLParser
 from typing import Literal, TypeAlias
 from urllib.parse import urlparse
 
+from app.config import settings
 from app.emails.schemas import (
     DeliverabilityCategory,
     DeliverabilityCheck,
@@ -25,7 +26,7 @@ from app.emails.schemas import (
     DeliverabilityReport,
 )
 
-DELIVERABILITY_SCORE_VERSION = "2.2"
+DELIVERABILITY_SCORE_VERSION = "2.3"
 
 _CATEGORY_TITLES = {
     "authentication": "Authentication",
@@ -36,6 +37,9 @@ _CATEGORY_TITLES = {
     "attachments": "Attachments",
 }
 _AUTH_RESULT_RE = re.compile(r"\b(spf|dkim|dmarc)\s*=\s*([a-z]+)", re.IGNORECASE)
+_RECEIVED_SPF_RESULT_RE = re.compile(
+    r"^\s*(pass|fail|softfail|neutral|none|temperror|permerror)\b", re.IGNORECASE
+)
 _PROPERTY_RE = re.compile(r"\b([a-z][a-z0-9_.-]*)\s*=\s*(?:\"([^\"]*)\"|([^\s;]+))", re.I)
 _SPAM_SCORE_RE = re.compile(r"\bscore=(-?\d+(?:\.\d+)?)", re.I)
 _SPAM_REQUIRED_RE = re.compile(r"\brequired=(-?\d+(?:\.\d+)?)", re.I)
@@ -282,28 +286,104 @@ def _domain(address: str) -> str | None:
     return domain or None
 
 
+def _identity_domain(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = value.strip().strip("<>").lower().rstrip(".")
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return _domain(normalized)
+    return normalized
+
+
 def _aligned(left: str | None, right: str | None) -> bool:
-    if not left or not right:
+    left_domain = _identity_domain(left)
+    right_domain = _identity_domain(right)
+    if not left_domain or not right_domain:
         return False
-    return left == right or left.endswith(f".{right}") or right.endswith(f".{left}")
+    return (
+        left_domain == right_domain
+        or left_domain.endswith(f".{right_domain}")
+        or right_domain.endswith(f".{left_domain}")
+    )
+
+
+def _trusted_authserv_ids() -> set[str]:
+    """Return receiver IDs emitted by current and earlier MailCue versions."""
+    candidates = {
+        "mailcue",
+        settings.hostname,
+        f"mx1.{settings.domain}",
+    }
+    return {candidate.strip().lower().rstrip(".") for candidate in candidates if candidate.strip()}
+
+
+def _authserv_id(value: str) -> str | None:
+    preamble, separator, _results = value.partition(";")
+    if not separator:
+        return None
+    tokens = preamble.strip().split()
+    if not tokens:
+        return None
+    return tokens[0].strip('"').lower().rstrip(".") or None
+
+
+def _parsed_authentication_results(
+    msg: EmailMessage,
+) -> dict[str, list[tuple[str, dict[str, str]]]]:
+    trusted_ids = _trusted_authserv_ids()
+    parsed: dict[str, list[tuple[str, dict[str, str]]]] = {}
+
+    for raw_result in msg.get_all("Authentication-Results", []):
+        value = str(raw_result)
+        if _authserv_id(value) not in trusted_ids:
+            continue
+        for segment in value.split(";")[1:]:
+            result_match = _AUTH_RESULT_RE.search(segment)
+            if not result_match:
+                continue
+            method, result = result_match.groups()
+            properties = {
+                match.group(1).lower(): match.group(2) or match.group(3)
+                for match in _PROPERTY_RE.finditer(segment)
+            }
+            parsed.setdefault(method.lower(), []).append((result.lower(), properties))
+
+    # MailCue releases before score model 2.3 used policyd-spf's default
+    # Received-SPF output. Accept it only when its receiver identifies this
+    # deployment, so an imported or sender-forged field cannot earn points.
+    if "spf" not in parsed:
+        for raw_result in msg.get_all("Received-SPF", []):
+            value = str(raw_result)
+            result_match = _RECEIVED_SPF_RESULT_RE.match(value)
+            if not result_match:
+                continue
+            properties = {
+                match.group(1).lower(): match.group(2) or match.group(3)
+                for match in _PROPERTY_RE.finditer(value)
+            }
+            receiver = _identity_domain(properties.get("receiver"))
+            if receiver not in trusted_ids:
+                continue
+            parsed.setdefault("spf", []).append(
+                (
+                    result_match.group(1).lower(),
+                    {
+                        "smtp.mailfrom": properties.get("envelope-from", ""),
+                        "smtp.helo": properties.get("helo", ""),
+                    },
+                )
+            )
+            break
+
+    return parsed
 
 
 def _authentication_checks(
     msg: EmailMessage, sender_domain: str | None
 ) -> list[DeliverabilityCheck]:
-    raw_results = msg.get_all("Authentication-Results", [])
-    trusted = str(raw_results[0]) if raw_results else ""
-    parsed: dict[str, list[tuple[str, dict[str, str]]]] = {}
-    for segment in trusted.split(";")[1:]:
-        result_match = _AUTH_RESULT_RE.search(segment)
-        if not result_match:
-            continue
-        method, result = result_match.groups()
-        properties = {
-            match.group(1).lower(): match.group(2) or match.group(3)
-            for match in _PROPERTY_RE.finditer(segment)
-        }
-        parsed.setdefault(method.lower(), []).append((result.lower(), properties))
+    parsed = _parsed_authentication_results(msg)
 
     definitions = (
         ("spf", 10.0, "SPF", "Publish SPF for the envelope sender and authorize this sending IP."),
@@ -335,11 +415,13 @@ def _authentication_checks(
             )
             continue
         result, properties = best
-        auth_domain = properties.get("header.from")
+        auth_domain = _identity_domain(properties.get("header.from"))
         if method == "spf":
-            auth_domain = properties.get("smtp.mailfrom") or properties.get("smtp.helo")
+            auth_domain = _identity_domain(properties.get("smtp.mailfrom")) or _identity_domain(
+                properties.get("smtp.helo")
+            )
         elif method == "dkim":
-            auth_domain = properties.get("header.d")
+            auth_domain = _identity_domain(properties.get("header.d"))
         alignment = _aligned(auth_domain, sender_domain)
         details = [f"Receiver result: {result}"]
         if auth_domain:

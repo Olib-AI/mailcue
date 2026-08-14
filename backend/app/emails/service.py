@@ -773,18 +773,20 @@ async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
 
 async def bulk_delete_emails(
     mailbox: str, request: BulkDeleteRequest, folder: str = "INBOX"
-) -> BulkDeleteResponse:
+) -> tuple[BulkDeleteResponse, list[str]]:
     """Delete multiple emails by UID from a mailbox."""
     deleted = 0
     failed = 0
+    deleted_uids: list[str] = []
     for uid in request.uids:
         try:
             await delete_email(mailbox=mailbox, uid=uid, folder=folder)
             deleted += 1
+            deleted_uids.append(uid)
         except Exception:
             logger.exception("Failed to delete email uid=%s from %s", uid, mailbox)
             failed += 1
-    return BulkDeleteResponse(deleted=deleted, failed=failed)
+    return BulkDeleteResponse(deleted=deleted, failed=failed), deleted_uids
 
 
 async def purge_mailbox(mailbox: str) -> int:
@@ -980,7 +982,7 @@ def _generate_realistic_headers(
     # ── Authentication-Results ────────────────────────────────────
     short_sig = _b64_token(6)[:8]
     msg["Authentication-Results"] = (
-        f"mx1.{domain};\r\n"
+        "mailcue;\r\n"
         f"\tdkim=pass header.d={from_domain} header.s=mail header.b={short_sig};\r\n"
         f"\tspf=pass (mailcue: domain of {request.from_address} designates 203.0.113.42 as permitted sender)"
         f" smtp.mailfrom={request.from_address};\r\n"
@@ -1004,7 +1006,7 @@ def _generate_realistic_headers(
         f"\tb={sig_placeholder}"
     )
     msg["ARC-Authentication-Results"] = (
-        f"i=1; mx1.{domain};\r\n"
+        "i=1; mailcue;\r\n"
         f"\tdkim=pass header.d={from_domain};\r\n"
         f"\tspf=pass smtp.mailfrom={request.from_address};\r\n"
         f"\tdmarc=pass header.from={from_domain}"

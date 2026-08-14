@@ -121,7 +121,7 @@ class DeliverabilityCategory(BaseModel):
 class DeliverabilityReport(BaseModel):
     """Versioned deliverability assessment for a received message."""
 
-    score_version: str = "2.2"
+    score_version: str = "2.3"
     report_id: str | None = None
     raw_sha256: str = ""
     cached: bool = False

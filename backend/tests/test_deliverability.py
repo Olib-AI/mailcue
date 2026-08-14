@@ -66,7 +66,7 @@ def _raw_message(*, auth_results: str, spam_status: str | None = None) -> bytes:
 def test_strong_message_gets_actionable_high_score() -> None:
     raw = _raw_message(
         auth_results=(
-            "mx.mailcue.local; spf=pass smtp.mailfrom=example.com; "
+            "mailcue; spf=pass smtp.mailfrom=example.com; "
             "dkim=pass header.d=example.com header.s=mail; "
             "dmarc=pass header.from=example.com"
         ),
@@ -84,6 +84,50 @@ def test_strong_message_gets_actionable_high_score() -> None:
         "dkim": "pass",
         "dmarc": "pass",
     }
+
+
+def test_receiver_results_are_aggregated_across_headers_with_received_spf_fallback() -> None:
+    message = EmailMessage()
+    message["From"] = "Sender <news@example.com>"
+    message["Authentication-Results"] = "mailcue; dmarc=pass header.from=example.com"
+    message["Authentication-Results"] = "mailcue; dkim=pass header.d=example.com header.s=mail"
+    message["Received-SPF"] = (
+        "Pass (mailcue: sender is authorized) receiver=mailcue; client-ip=192.0.2.10; "
+        'envelope-from="bounce@example.com"; helo=smtp.example.com;'
+    )
+    message.set_content("A message with receiver-generated authentication evidence.")
+
+    report = score_deliverability(
+        message.as_bytes(), mailbox="test@mailcue.local", uid="auth-multi", folder="INBOX"
+    )
+    auth = next(category for category in report.categories if category.id == "authentication")
+
+    assert {check.id: check.status for check in auth.checks} == {
+        "spf": "pass",
+        "dkim": "pass",
+        "dmarc": "pass",
+    }
+
+
+def test_received_spf_from_an_untrusted_receiver_is_not_scored() -> None:
+    message = EmailMessage()
+    message["From"] = "Sender <news@example.com>"
+    message["Authentication-Results"] = (
+        "mailcue; dkim=pass header.d=example.com; dmarc=pass header.from=example.com"
+    )
+    message["Received-SPF"] = (
+        'Pass receiver=attacker.example; client-ip=192.0.2.10; envelope-from="bounce@example.com";'
+    )
+    message.set_content("A message with forged SPF evidence.")
+
+    report = score_deliverability(
+        message.as_bytes(), mailbox="test@mailcue.local", uid="auth-forged", folder="INBOX"
+    )
+    checks = {check.id: check for category in report.categories for check in category.checks}
+
+    assert checks["spf"].status == "fail"
+    assert checks["dkim"].status == "pass"
+    assert checks["dmarc"].status == "pass"
 
 
 def test_attention_estimate_is_a_valid_same_size_png() -> None:
@@ -174,7 +218,7 @@ def test_failed_authentication_and_unsafe_content_reduce_score() -> None:
     message["From"] = "offers@bad.example"
     message["To"] = "test@mailcue.local"
     message["Authentication-Results"] = (
-        "mx.mailcue.local; spf=fail smtp.mailfrom=other.example; "
+        "mailcue; spf=fail smtp.mailfrom=other.example; "
         "dkim=none; dmarc=fail header.from=bad.example"
     )
     message.set_content(
@@ -222,16 +266,16 @@ def test_accessibility_checks_find_heading_contrast_and_tap_target_issues() -> N
     assert checks["tap_target_size"].status == "warning"
 
 
-def test_only_topmost_authentication_results_are_scored() -> None:
+def test_untrusted_authentication_results_are_not_scored() -> None:
     raw = _raw_message(
         auth_results=(
-            "mx.mailcue.local; spf=fail smtp.mailfrom=example.com; "
+            "mailcue; spf=fail smtp.mailfrom=example.com; "
             "dkim=fail header.d=example.com; dmarc=fail header.from=example.com"
         )
     )
     message = EmailMessage()
     message.set_content("placeholder")
-    # Add a forged passing result below the receiver's topmost result.
+    # Add a forged passing result with an authserv ID outside MailCue's trust domain.
     split = raw.split(b"\n\n", 1)
     forged = (
         b"Authentication-Results: attacker.example; spf=pass smtp.mailfrom=example.com; "
@@ -325,7 +369,7 @@ async def test_report_endpoint_uses_owned_mailbox_and_original_bytes(
 
     raw = _raw_message(
         auth_results=(
-            "mx.mailcue.local; spf=pass smtp.mailfrom=example.com; "
+            "mailcue; spf=pass smtp.mailfrom=example.com; "
             "dkim=pass header.d=example.com; dmarc=pass header.from=example.com"
         )
     )
@@ -343,7 +387,7 @@ async def test_report_endpoint_uses_owned_mailbox_and_original_bytes(
     payload = response.json()
     assert payload["mailbox"] == "delivery@mailcue.local"
     assert payload["uid"] == "12"
-    assert payload["score_version"] == "2.2"
+    assert payload["score_version"] == "2.3"
     assert payload["report_id"]
     assert len(payload["raw_sha256"]) == 64
     assert payload["cached"] is False
@@ -362,6 +406,64 @@ async def test_report_endpoint_uses_owned_mailbox_and_original_bytes(
     )
     assert history.status_code == 200
     assert history.json()["total"] == 1
+
+
+async def test_deleting_source_email_removes_its_deliverability_history(
+    client: AsyncClient,
+    _engine_and_session: Any,
+    monkeypatch: Any,
+) -> None:
+    _engine, factory = _engine_and_session
+    address = "delete-report@mailcue.local"
+    async with factory() as session:
+        session.add(
+            Mailbox(
+                address=address,
+                display_name="Delete report",
+                domain="mailcue.local",
+                user_id="test-user-id",
+                purpose="deliverability",
+            )
+        )
+        await session.commit()
+
+    raw = _raw_message(
+        auth_results=(
+            "mailcue; spf=pass smtp.mailfrom=example.com; "
+            "dkim=pass header.d=example.com; dmarc=pass header.from=example.com"
+        )
+    )
+
+    async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
+        return raw
+
+    async def fake_delete(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr("app.mailboxes.router.get_email_raw", fake_raw)
+    monkeypatch.setattr("app.mailboxes.router.delete_email", fake_delete)
+
+    encoded_address = address.replace("@", "%40")
+    scored = await client.get(
+        f"/api/v1/mailboxes/{encoded_address}/emails/42/deliverability",
+        params={"folder": "INBOX"},
+    )
+    assert scored.status_code == 200, scored.text
+
+    before = await client.get("/api/v1/deliverability/reports", params={"mailbox": address})
+    assert before.status_code == 200, before.text
+    assert before.json()["total"] == 1
+
+    deleted = await client.delete(
+        f"/api/v1/mailboxes/{encoded_address}/emails/42",
+        params={"folder": "INBOX"},
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    after = await client.get("/api/v1/deliverability/reports", params={"mailbox": address})
+    assert after.status_code == 200, after.text
+    assert after.json()["reports"] == []
+    assert after.json()["total"] == 0
 
 
 async def test_report_baseline_and_comparison_api(
@@ -384,7 +486,7 @@ async def test_report_baseline_and_comparison_api(
 
     strong = _raw_message(
         auth_results=(
-            "mx.mailcue.local; spf=pass smtp.mailfrom=example.com; "
+            "mailcue; spf=pass smtp.mailfrom=example.com; "
             "dkim=pass header.d=example.com; dmarc=pass header.from=example.com"
         )
     )
@@ -392,7 +494,7 @@ async def test_report_baseline_and_comparison_api(
     weak["From"] = "sender@other.example"
     weak["To"] = "compare@mailcue.local"
     weak["Authentication-Results"] = (
-        "mx.mailcue.local; spf=fail; dkim=fail; dmarc=fail header.from=other.example"
+        "mailcue; spf=fail; dkim=fail; dmarc=fail header.from=other.example"
     )
     weak.set_content("ACT NOW. BUY NOW. CLICK HERE. FREE MONEY.")
 
@@ -454,7 +556,7 @@ async def test_capabilities_and_policy_evaluation_api(
     weak["From"] = "sender@other.example"
     weak["To"] = "policy@mailcue.local"
     weak["Authentication-Results"] = (
-        "mx.mailcue.local; spf=fail; dkim=fail; dmarc=fail header.from=other.example"
+        "mailcue; spf=fail; dkim=fail; dmarc=fail header.from=other.example"
     )
     weak.set_content("ACT NOW. BUY NOW. CLICK HERE. FREE MONEY.")
 
@@ -659,7 +761,7 @@ async def test_opt_in_network_run_is_persisted_and_truthful(
 
     raw = _raw_message(
         auth_results=(
-            "mx.mailcue.local; spf=pass smtp.mailfrom=example.com; "
+            "mailcue; spf=pass smtp.mailfrom=example.com; "
             "dkim=pass header.d=example.com header.s=mail; "
             "dmarc=pass header.from=example.com"
         )
@@ -763,7 +865,7 @@ async def test_visual_run_persists_protected_png_artifacts(
             )
         )
         await session.commit()
-    raw = _raw_message(auth_results="mx.mailcue.local; spf=pass; dkim=pass; dmarc=pass")
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
 
     async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
         return raw
@@ -831,7 +933,7 @@ async def test_byo_seed_inbox_placement_run(
         )
         await session.commit()
 
-    raw = _raw_message(auth_results="mx.mailcue.local; spf=pass; dkim=pass; dmarc=pass")
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
 
     async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
         return raw
@@ -886,7 +988,7 @@ async def test_real_client_preview_adapter_results_are_protected(
             )
         )
         await session.commit()
-    raw = _raw_message(auth_results="mx.mailcue.local; spf=pass; dkim=pass; dmarc=pass")
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
 
     async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
         return raw
@@ -946,7 +1048,7 @@ async def test_ai_analysis_is_explicit_advisory_and_does_not_change_base_score(
             )
         )
         await session.commit()
-    raw = _raw_message(auth_results="mx.mailcue.local; spf=pass; dkim=pass; dmarc=pass")
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
 
     async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
         return raw

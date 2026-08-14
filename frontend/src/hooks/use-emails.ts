@@ -194,9 +194,13 @@ export function useDeleteEmail() {
       uid: string;
       folder?: string;
     }) => api.delete<void>(`/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}?folder=${encodeURIComponent(folder)}`),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      queryClient.removeQueries({
+        queryKey: emailKeys.detail(variables.mailbox, variables.uid),
+      });
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: ["deliverability"] });
     },
   });
 }
@@ -248,6 +252,7 @@ export function useBulkDeleteEmails() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: emailKeys.lists() });
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: ["deliverability"] });
     },
   });
 }

@@ -66,6 +66,9 @@ export function useSSE(enabled: boolean): void {
             void queryClient.invalidateQueries({
               queryKey: mailboxKeys.list(),
             });
+            void queryClient.invalidateQueries({
+              queryKey: ["deliverability"],
+            });
             break;
           }
           case "mailbox.created":

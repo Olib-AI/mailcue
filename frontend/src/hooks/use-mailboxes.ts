@@ -43,6 +43,7 @@ export function useDeleteMailbox() {
       api.delete<void>(`/mailboxes/${encodeURIComponent(address)}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: ["deliverability"] });
     },
   });
 }
@@ -57,6 +58,7 @@ export function usePurgeMailbox() {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: mailboxKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: ["deliverability"] });
     },
   });
 }

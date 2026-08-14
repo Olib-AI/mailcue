@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 from urllib.parse import urlsplit
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -201,6 +201,41 @@ async def list_reports(
         page_size=page_size,
         has_more=page * page_size < total,
     )
+
+
+async def delete_message_reports(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    mailbox_id: str,
+    folder: str,
+    uids: list[str],
+) -> int:
+    """Delete report snapshots whose source messages were removed."""
+    if not uids:
+        return 0
+    result = await db.execute(
+        delete(DeliverabilityReportRecord).where(
+            DeliverabilityReportRecord.user_id == user_id,
+            DeliverabilityReportRecord.mailbox_id == mailbox_id,
+            DeliverabilityReportRecord.folder == folder,
+            DeliverabilityReportRecord.uid.in_(uids),
+        )
+    )
+    await db.commit()
+    return result.rowcount
+
+
+async def delete_mailbox_reports(db: AsyncSession, *, user_id: str, mailbox_id: str) -> int:
+    """Delete every report snapshot after all mailbox messages are purged."""
+    result = await db.execute(
+        delete(DeliverabilityReportRecord).where(
+            DeliverabilityReportRecord.user_id == user_id,
+            DeliverabilityReportRecord.mailbox_id == mailbox_id,
+        )
+    )
+    await db.commit()
+    return result.rowcount
 
 
 async def set_baseline(

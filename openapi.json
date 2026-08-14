@@ -6820,83 +6820,45 @@
           }
         }
       },
-      "delete": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
@@ -6972,6 +6934,44 @@
           }
         }
       },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "head": {
         "tags": [
           "HTTP Bin Catch-All"
@@ -7010,7 +7010,7 @@
           }
         }
       },
-      "patch": {
+      "post": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
@@ -7097,101 +7097,54 @@
           }
         }
       },
-      "delete": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
@@ -7285,6 +7238,53 @@
           }
         }
       },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "head": {
         "tags": [
           "HTTP Bin Catch-All"
@@ -7332,7 +7332,7 @@
           }
         }
       },
-      "patch": {
+      "post": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
@@ -9162,7 +9162,7 @@
           "score_version": {
             "type": "string",
             "title": "Score Version",
-            "default": "2.2"
+            "default": "2.3"
           },
           "report_id": {
             "anyOf": [
@@ -9379,23 +9379,20 @@
         ],
         "title": "DeliverabilityReportSummary"
       },
-      "DeliverabilityRunCheck": {
-        "type": "string",
-        "enum": [
-          "dns",
-          "reputation",
-          "links",
-          "visual",
-          "placement",
-          "client_previews",
-          "ai_analysis"
-        ]
-      },
       "DeliverabilityRunRequest": {
         "properties": {
           "checks": {
             "items": {
-              "$ref": "#/components/schemas/DeliverabilityRunCheck"
+              "type": "string",
+              "enum": [
+                "dns",
+                "reputation",
+                "links",
+                "visual",
+                "placement",
+                "client_previews",
+                "ai_analysis"
+              ]
             },
             "type": "array",
             "maxItems": 7,
@@ -9627,7 +9624,16 @@
           },
           "checks": {
             "items": {
-              "$ref": "#/components/schemas/DeliverabilityRunCheck"
+              "type": "string",
+              "enum": [
+                "dns",
+                "reputation",
+                "links",
+                "visual",
+                "placement",
+                "client_previews",
+                "ai_analysis"
+              ]
             },
             "type": "array",
             "maxItems": 7,
