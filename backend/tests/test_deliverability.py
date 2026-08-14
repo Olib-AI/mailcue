@@ -173,6 +173,10 @@ async def test_chromium_render_uses_writable_container_runtime_directories(
         screenshot = next(item for item in args if item.startswith("--screenshot="))
         return FakeProcess(Path(screenshot.split("=", 1)[1]))
 
+    monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "invalid-session-address")
+    monkeypatch.setenv("DBUS_SYSTEM_BUS_ADDRESS", "invalid-system-address")
+    monkeypatch.setenv("DISPLAY", ":99")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-99")
     monkeypatch.setattr("asyncio.create_subprocess_exec", fake_subprocess)
 
     rendered = await _render_one(
@@ -188,6 +192,15 @@ async def test_chromium_render_uses_writable_container_runtime_directories(
 
     assert rendered.data.startswith(b"\x89PNG")
     assert "--disable-dev-shm-usage" in captured["args"]
+    assert "--ozone-platform=headless" in captured["args"]
+    assert "--no-zygote" not in captured["args"]
+    for key in (
+        "DBUS_SESSION_BUS_ADDRESS",
+        "DBUS_SYSTEM_BUS_ADDRESS",
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+    ):
+        assert key not in captured["env"]
     for key in ("HOME", "TMPDIR", "XDG_CACHE_HOME", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR"):
         assert Path(captured["env"][key]).is_dir()
 

@@ -24,6 +24,17 @@ _CSP = (
     "form-action 'none'; base-uri 'none'"
 )
 
+_DESKTOP_SESSION_ENVIRONMENT = frozenset(
+    {
+        "DBUS_SESSION_BUS_ADDRESS",
+        "DBUS_SYSTEM_BUS_ADDRESS",
+        "DISPLAY",
+        "SESSION_MANAGER",
+        "WAYLAND_DISPLAY",
+        "XAUTHORITY",
+    }
+)
+
 
 @dataclass(frozen=True)
 class RenderedArtifact:
@@ -150,7 +161,7 @@ async def _render_one(
         "--no-first-run",
         "--no-proxy-server",
         "--no-sandbox",
-        "--no-zygote",
+        "--ozone-platform=headless",
         f"--user-data-dir={profile_directory}",
         "--virtual-time-budget=1000",
         f"--screenshot={output}",
@@ -160,13 +171,17 @@ async def _render_one(
         args.append("--force-dark-mode")
     args.append(html_path.as_uri())
     environment = {
-        **os.environ,
-        "HOME": str(directory),
-        "TMPDIR": str(temporary_directory),
-        "XDG_CACHE_HOME": str(cache_directory),
-        "XDG_CONFIG_HOME": str(config_directory),
-        "XDG_RUNTIME_DIR": str(runtime_directory),
+        key: value for key, value in os.environ.items() if key not in _DESKTOP_SESSION_ENVIRONMENT
     }
+    environment.update(
+        {
+            "HOME": str(directory),
+            "TMPDIR": str(temporary_directory),
+            "XDG_CACHE_HOME": str(cache_directory),
+            "XDG_CONFIG_HOME": str(config_directory),
+            "XDG_RUNTIME_DIR": str(runtime_directory),
+        }
+    )
 
     def drop_renderer_privileges() -> None:
         if renderer_identity is None:
