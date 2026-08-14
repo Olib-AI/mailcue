@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -14,7 +14,7 @@ def _default_blocked_statuses() -> list[Literal["warning", "fail"]]:
     return ["fail"]
 
 
-type DeliverabilityRunCheck = Literal[
+DeliverabilityRunCheck: TypeAlias = Literal[
     "dns",
     "reputation",
     "links",

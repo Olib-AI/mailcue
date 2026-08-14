@@ -15,7 +15,7 @@ from email.message import EmailMessage
 from email.utils import parseaddr, parsedate_to_datetime
 from html import unescape
 from html.parser import HTMLParser
-from typing import Literal
+from typing import Literal, TypeAlias
 from urllib.parse import urlparse
 
 from app.emails.schemas import (
@@ -127,7 +127,7 @@ def _preheader_text(html: str) -> str:
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", match.group(1)))).strip()[:500]
 
 
-type DeliverabilityCategoryId = Literal[
+DeliverabilityCategoryId: TypeAlias = Literal[
     "authentication",
     "content",
     "headers",
@@ -141,8 +141,8 @@ type DeliverabilityCategoryId = Literal[
     "placement",
     "client_previews",
 ]
-type DeliverabilityCheckStatus = Literal["pass", "warning", "fail", "info"]
-type DeliverabilityVerdict = Literal["excellent", "good", "needs_work", "poor"]
+DeliverabilityCheckStatus: TypeAlias = Literal["pass", "warning", "fail", "info"]
+DeliverabilityVerdict: TypeAlias = Literal["excellent", "good", "needs_work", "poor"]
 
 
 class _ContentInspector(HTMLParser):

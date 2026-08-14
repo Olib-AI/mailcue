@@ -51,7 +51,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 99
 
 [tool.ruff.lint]
@@ -82,7 +82,7 @@ packages = ["app"]
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
 warn_return_any = true
