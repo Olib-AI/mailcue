@@ -161,12 +161,8 @@ async def _spf_recursive_lookups(
 def _dkim_identities(msg: EmailMessage) -> list[tuple[str, str]]:
     identities: set[tuple[str, str]] = set()
     for value in msg.get_all("DKIM-Signature", []):
-        selector = re.search(
-            r"(?:^|;)\s*s=([a-z0-9._-]{1,63})(?:;|\s|$)", str(value), re.I
-        )
-        signing_domain = re.search(
-            r"(?:^|;)\s*d=([a-z0-9.-]{1,253})(?:;|\s|$)", str(value), re.I
-        )
+        selector = re.search(r"(?:^|;)\s*s=([a-z0-9._-]{1,63})(?:;|\s|$)", str(value), re.I)
+        signing_domain = re.search(r"(?:^|;)\s*d=([a-z0-9.-]{1,253})(?:;|\s|$)", str(value), re.I)
         domain = _safe_domain(signing_domain.group(1) if signing_domain else None)
         if selector and domain:
             identities.add((selector.group(1).lower(), domain))
@@ -227,7 +223,10 @@ def _origin_ip(msg: EmailMessage) -> ipaddress.IPv4Address | ipaddress.IPv6Addre
 def _message_domains(msg: EmailMessage, sender_domain: str) -> list[str]:
     domains = [sender_domain]
     for part in msg.walk():
-        if part.get_content_type() != "text/html" or part.get_content_disposition() == "attachment":
+        if (
+            part.get_content_type() != "text/html"
+            or part.get_content_disposition() == "attachment"
+        ):
             continue
         try:
             body = str(part.get_content())[:2_000_000]
@@ -406,7 +405,9 @@ async def _domain_checks(
             details=(
                 [
                     "Observed selector identities: "
-                    + ", ".join(f"{selector}@{signing_domain}" for selector, signing_domain in identities),
+                    + ", ".join(
+                        f"{selector}@{signing_domain}" for selector, signing_domain in identities
+                    ),
                     *dkim_details,
                 ]
                 if identities
@@ -553,9 +554,7 @@ async def _ip_reputation_checks(
     return [reverse_check, dnsbl]
 
 
-async def _domain_blocklist_check(
-    worker: _DnsWorker, domains: list[str]
-) -> DeliverabilityCheck:
+async def _domain_blocklist_check(worker: _DnsWorker, domains: list[str]) -> DeliverabilityCheck:
     zones = settings.deliverability_domain_dnsbl_zones
     if not zones:
         return _check(
@@ -572,9 +571,7 @@ async def _domain_blocklist_check(
         *(worker.resolve(f"{domain}.{zone}", "A") for domain, zone in queries)
     )
     listed = [
-        (domain, zone)
-        for (domain, zone), records in zip(queries, answers, strict=True)
-        if records
+        (domain, zone) for (domain, zone), records in zip(queries, answers, strict=True) if records
     ]
     return _check(
         "domain_dnsbl",

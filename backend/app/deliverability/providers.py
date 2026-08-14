@@ -153,9 +153,7 @@ async def run_preview_provider(
     return results
 
 
-async def run_analysis_provider(
-    provider: DeliverabilityProvider, raw: bytes
-) -> AnalysisResult:
+async def run_analysis_provider(provider: DeliverabilityProvider, raw: bytes) -> AnalysisResult:
     payload_bytes = await _provider_response(provider, raw, contract="analysis-v1")
     try:
         payload = json.loads(payload_bytes)

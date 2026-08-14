@@ -825,9 +825,7 @@ async def _execute_run(
                     )
                 else:
                     render_variants += 1
-                    description = (
-                        f"{item.width} by {item.height} network-blocked local render."
-                    )
+                    description = f"{item.width} by {item.height} network-blocked local render."
                 if difference is not None:
                     description += f" Pixel difference from baseline: {difference:g}%."
                 evidence.append(

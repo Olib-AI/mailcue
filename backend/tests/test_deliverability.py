@@ -160,9 +160,7 @@ async def test_domain_blocklists_are_explicit_and_report_the_listing_zone(
             assert record_type == "A"
             return ["127.0.0.2"] if name == "link.example.com.domain-list.test" else []
 
-    monkeypatch.setattr(
-        settings, "deliverability_domain_dnsbl_zones", ["domain-list.test"]
-    )
+    monkeypatch.setattr(settings, "deliverability_domain_dnsbl_zones", ["domain-list.test"])
     result = await _domain_blocklist_check(
         FakeWorker(), ["sender.example.com", "link.example.com"]
     )
@@ -217,11 +215,7 @@ def test_accessibility_checks_find_heading_contrast_and_tap_target_issues() -> N
     report = score_deliverability(
         message.as_bytes(), mailbox="test@mailcue.local", uid="a11y", folder="INBOX"
     )
-    checks = {
-        check.id: check
-        for category in report.categories
-        for check in category.checks
-    }
+    checks = {check.id: check for category in report.categories for check in category.checks}
 
     assert checks["heading_order"].status == "warning"
     assert checks["inline_color_contrast"].status == "warning"
@@ -573,7 +567,9 @@ async def test_retention_prunes_non_baseline_data_and_preserves_baselines(
         purpose="deliverability",
     )
 
-    def report(report_id: str, *, baseline: bool, created_at: datetime) -> DeliverabilityReportRecord:
+    def report(
+        report_id: str, *, baseline: bool, created_at: datetime
+    ) -> DeliverabilityReportRecord:
         return DeliverabilityReportRecord(
             id=report_id,
             user_id="test-user-id",
@@ -673,12 +669,15 @@ async def test_opt_in_network_run_is_persisted_and_truthful(
         return raw
 
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
-    dkim_record = "v=DKIM1; p=" + base64.b64encode(
-        public_key.public_bytes(
-            serialization.Encoding.DER,
-            serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-    ).decode()
+    dkim_record = (
+        "v=DKIM1; p="
+        + base64.b64encode(
+            public_key.public_bytes(
+                serialization.Encoding.DER,
+                serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        ).decode()
+    )
 
     async def fake_resolve(_self: Any, name: str, record_type: str) -> list[str]:
         records = {

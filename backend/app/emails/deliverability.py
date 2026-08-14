@@ -126,6 +126,7 @@ def _preheader_text(html: str) -> str:
         return ""
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", match.group(1)))).strip()[:500]
 
+
 type DeliverabilityCategoryId = Literal[
     "authentication",
     "content",
@@ -190,19 +191,17 @@ class _ContentInspector(HTMLParser):
                 )
             }
             tap_width = int(values["width"]) if values.get("width", "").isdigit() else None
-            tap_height = (
-                int(values["height"]) if values.get("height", "").isdigit() else None
-            )
+            tap_height = int(values["height"]) if values.get("height", "").isdigit() else None
             tap_width = (
                 tap_width or style_dimensions.get("min-width") or style_dimensions.get("width")
             )
             tap_height = (
-                tap_height
-                or style_dimensions.get("min-height")
-                or style_dimensions.get("height")
+                tap_height or style_dimensions.get("min-height") or style_dimensions.get("height")
             )
-            if tap_width is not None and tap_height is not None and (
-                tap_width < 44 or tap_height < 44
+            if (
+                tap_width is not None
+                and tap_height is not None
+                and (tap_width < 44 or tap_height < 44)
             ):
                 self.small_explicit_tap_targets += 1
         if lower in {"applet", "audio", "embed", "iframe", "object", "script", "video"}:
@@ -832,7 +831,9 @@ def _content_checks(msg: EmailMessage) -> list[DeliverabilityCheck]:
                 else "No skipped HTML heading levels were detected.",
                 points=0 if heading_skips else 1,
                 max_points=1,
-                details=[f"Heading sequence: {', '.join(f'h{level}' for level in inspector.heading_levels)}"]
+                details=[
+                    f"Heading sequence: {', '.join(f'h{level}' for level in inspector.heading_levels)}"
+                ]
                 if inspector.heading_levels
                 else [],
                 recommendation="Use headings in a logical sequence without skipping levels."
