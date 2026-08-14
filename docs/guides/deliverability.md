@@ -45,7 +45,7 @@ Extended checks are explicit runs attached to a base report. They do not silentl
 | Check | Source | Default |
 |---|---|---|
 | DNS policies | Public DNS for SPF, DKIM, DMARC, MX, BIMI, MTA-STS, and TLS-RPT | Disabled |
-| Reputation | Forward-confirmed reverse DNS and operator-configured DNSBL zones | Disabled |
+| Reputation | Sender IP reverse DNS, HELO/EHLO identity, HELO SPF, and operator-configured DNSBL zones | Disabled |
 | Live links | Pinned public HTTP or HTTPS destinations, without redirects | Disabled |
 | Visual | Local Chromium desktop, tablet, and mobile renders in light and dark modes | Disabled |
 | Client previews | Configured external HTTPS provider | Not configured |
@@ -75,7 +75,9 @@ MAILCUE_DELIVERABILITY_DNSBL_ZONES=["zen.example-dnsbl.net"]
 MAILCUE_DELIVERABILITY_DOMAIN_DNSBL_ZONES=["multi.example-domain-list.net"]
 ```
 
-The first list receives reversed sending IPv4 queries. The second receives sender and linked-domain queries. Empty lists produce informational results and make no listing claim.
+The first list receives reversed-octet IPv4 or reversed-nibble IPv6 queries. The second receives visible From, receiver-verified MAIL FROM, DKIM signing, and linked-domain queries. Empty lists produce informational results and make no listing claim. MailCue accepts loopback DNSBL answers as listings, treats reserved provider error answers or unexpected addresses as query failures, and does not copy account-bearing zone names into report evidence.
+
+Sender infrastructure checks evaluate the external identities observed for each tested message, regardless of whether any of their domains are configured in MailCue. The visible `From` domain is used for DMARC and domain-posture checks, the receiver-verified MAIL FROM domain is used for SPF with HELO as its fallback, and observed DKIM selectors are queried under their signing domains. The newest `Received` field added by the MailCue receiving MTA supplies the public origin IP and HELO or EHLO identity for forward DNS, PTR, forward-confirmed reverse DNS, greeting alignment, and HELO SPF checks. Older sender-supplied route fields are not trusted for these network queries.
 
 ## Local visual rendering
 

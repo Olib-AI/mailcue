@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import ipaddress
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from io import BytesIO
@@ -23,8 +24,12 @@ from app.deliverability.models import (
 from app.deliverability.network import (
     _dkim_identities,
     _dkim_key_description,
+    _dnsbl_answer,
     _domain_blocklist_check,
+    _ip_dnsbl_prefix,
+    _message_domains,
     _origin_ip,
+    _origin_route_identity,
     _spf_recursive_lookups,
 )
 from app.deliverability.placement import PlacementResult
@@ -186,6 +191,56 @@ def test_origin_ip_uses_receiver_added_topmost_received_header() -> None:
     assert str(_origin_ip(message)) == "8.8.8.8"
 
 
+def test_origin_identity_uses_only_the_receiver_added_hop() -> None:
+    message = EmailMessage()
+    message["Received"] = (
+        "from smtp.sender.net (unknown [8.8.8.8]) by mx.mailcue.local ([9.9.9.9]) with ESMTPS"
+    )
+    message["Received"] = "from forged.example (forged.example [1.1.1.1]) by attacker.example"
+    message.set_content("test")
+
+    origin, greeting = _origin_route_identity(message)
+
+    assert str(origin) == "8.8.8.8"
+    assert greeting == "smtp.sender.net"
+
+
+def test_explicit_helo_identity_takes_precedence_over_received_from_name() -> None:
+    message = EmailMessage()
+    message["Received"] = (
+        "from unverified.sender.net (HELO smtp.sender.net) ([8.8.8.8]) "
+        "by mx.mailcue.local with ESMTPS"
+    )
+    message.set_content("test")
+
+    origin, greeting = _origin_route_identity(message)
+
+    assert str(origin) == "8.8.8.8"
+    assert greeting == "smtp.sender.net"
+
+
+def test_reputation_domains_include_external_message_identities_and_links() -> None:
+    message = EmailMessage()
+    message.set_content("Plain text")
+    message.add_alternative(
+        '<html><body><a href="https://offers.tracking.net/path">Offer</a></body></html>',
+        subtype="html",
+    )
+
+    domains = _message_domains(
+        message,
+        "visible-from.example.com",
+        ["bounce.sender.net", "signing.sender.net"],
+    )
+
+    assert domains == [
+        "visible-from.example.com",
+        "bounce.sender.net",
+        "signing.sender.net",
+        "offers.tracking.net",
+    ]
+
+
 def test_dkim_dns_identity_uses_observed_selector_and_signing_domain() -> None:
     message = EmailMessage()
     message["DKIM-Signature"] = (
@@ -211,6 +266,35 @@ async def test_domain_blocklists_are_explicit_and_report_the_listing_zone(
 
     assert result.status == "fail"
     assert any("link.example.com" in detail for detail in result.details)
+    assert all("domain-list.test" not in detail for detail in result.details)
+
+
+def test_dnsbl_queries_support_ipv6_and_do_not_treat_service_errors_as_listings() -> None:
+    address = ipaddress.ip_address("2001:db8::45")
+
+    assert _ip_dnsbl_prefix(address).startswith("5.4.0.0.0.0")
+    assert _dnsbl_answer(["127.0.0.2"]) == (True, False)
+    assert _dnsbl_answer(["127.255.255.252"]) == (False, True)
+    assert _dnsbl_answer(["127.0.1.255"]) == (False, True)
+    assert _dnsbl_answer(["203.0.113.10"]) == (False, True)
+
+
+async def test_domain_blocklist_resolver_failure_does_not_claim_a_clean_result(
+    monkeypatch: Any,
+) -> None:
+    class FailedWorker:
+        def __init__(self) -> None:
+            self.lookup_errors = {("sender.example.com.domain-list.test", "A")}
+
+        async def resolve(self, _name: str, _record_type: str) -> list[str]:
+            return []
+
+    monkeypatch.setattr(settings, "deliverability_domain_dnsbl_zones", ["domain-list.test"])
+    result = await _domain_blocklist_check(FailedWorker(), ["sender.example.com"])
+
+    assert result.status == "info"
+    assert result.max_points == 0
+    assert "service-error" in result.summary
 
 
 def test_failed_authentication_and_unsafe_content_reduce_score() -> None:
@@ -761,11 +845,11 @@ async def test_opt_in_network_run_is_persisted_and_truthful(
 
     raw = _raw_message(
         auth_results=(
-            "mailcue; spf=pass smtp.mailfrom=example.com; "
+            "mailcue; spf=pass smtp.mailfrom=bounce.sender.net; "
             "dkim=pass header.d=example.com header.s=mail; "
             "dmarc=pass header.from=example.com"
         )
-    )
+    ).replace(b"smtp.example.com [192.0.2.10]", b"smtp.example.com [8.8.8.8]")
 
     async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
         return raw
@@ -783,12 +867,15 @@ async def test_opt_in_network_run_is_persisted_and_truthful(
 
     async def fake_resolve(_self: Any, name: str, record_type: str) -> list[str]:
         records = {
-            ("example.com", "TXT"): ["v=spf1 ip4:198.51.100.1 -all"],
+            ("bounce.sender.net", "TXT"): ["v=spf1 ip4:8.8.8.8 -all"],
             ("_dmarc.example.com", "TXT"): ["v=DMARC1; p=reject; pct=100"],
             ("example.com", "MX"): ["10 mx.example.com"],
             ("mail._domainkey.example.com", "TXT"): [dkim_record],
             ("_mta-sts.example.com", "TXT"): ["v=STSv1; id=20260814"],
             ("_smtp._tls.example.com", "TXT"): ["v=TLSRPTv1; rua=mailto:tls@example.com"],
+            ("8.8.8.8.in-addr.arpa", "PTR"): ["smtp.example.com"],
+            ("smtp.example.com", "A"): ["8.8.8.8"],
+            ("smtp.example.com", "TXT"): ["v=spf1 a -all"],
         }
         return records.get((name, record_type), [])
 
@@ -808,8 +895,12 @@ async def test_opt_in_network_run_is_persisted_and_truthful(
         check["id"]: check for category in payload["categories"] for check in category["checks"]
     }
     assert dns_checks["dns_spf"]["status"] == "pass"
+    assert "Receiver-verified SPF identity: bounce.sender.net" in dns_checks["dns_spf"]["details"]
     assert dns_checks["dns_dmarc"]["status"] == "pass"
     assert dns_checks["dns_dkim"]["status"] == "pass"
+    assert dns_checks["reverse_dns"]["status"] == "pass"
+    assert dns_checks["smtp_identity"]["status"] == "pass"
+    assert dns_checks["helo_spf"]["status"] == "pass"
 
     fetched = await client.get(f"/api/v1/deliverability/runs/{payload['id']}")
     assert fetched.status_code == 200
@@ -899,6 +990,117 @@ async def test_visual_run_persists_protected_png_artifacts(
     assert artifact.status_code == 200
     assert artifact.headers["content-type"] == "image/png"
     assert artifact.content.startswith(b"\x89PNG")
+
+
+async def test_visual_run_reports_the_actual_failure_stage(
+    client: AsyncClient,
+    _engine_and_session: Any,
+    monkeypatch: Any,
+) -> None:
+    _engine, factory = _engine_and_session
+    async with factory() as session:
+        session.add(
+            Mailbox(
+                address="visual-failure@mailcue.local",
+                display_name="Visual failure test",
+                domain="mailcue.local",
+                user_id="test-user-id",
+                purpose="deliverability",
+            )
+        )
+        await session.commit()
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
+
+    async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
+        return raw
+
+    async def failed_render(_raw: bytes) -> list[RenderedArtifact]:
+        raise RuntimeError("Chromium render timed out")
+
+    monkeypatch.setattr("app.mailboxes.router.get_email_raw", fake_raw)
+    monkeypatch.setattr("app.deliverability.service.render_email", failed_render)
+    monkeypatch.setattr("app.deliverability.service.chromium_executable", lambda: "/chromium")
+    monkeypatch.setattr(settings, "deliverability_visual_checks_enabled", True)
+
+    response = await client.post(
+        "/api/v1/mailboxes/visual-failure%40mailcue.local/emails/1/deliverability/runs",
+        json={"checks": ["visual"]},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "failed"
+    assert payload["error_code"] == "visual_failed"
+    assert payload["error_detail"] == "Local visual rendering: Chromium render timed out"
+    assert "network enrichment failed" not in payload["error_detail"]
+
+
+async def test_provider_failure_preserves_completed_visual_results(
+    client: AsyncClient,
+    _engine_and_session: Any,
+    monkeypatch: Any,
+) -> None:
+    _engine, factory = _engine_and_session
+    async with factory() as session:
+        session.add(
+            Mailbox(
+                address="provider-failure@mailcue.local",
+                display_name="Provider failure test",
+                domain="mailcue.local",
+                user_id="test-user-id",
+                purpose="deliverability",
+            )
+        )
+        await session.commit()
+    raw = _raw_message(auth_results="mailcue; spf=pass; dkim=pass; dmarc=pass")
+
+    async def fake_raw(*_args: Any, **_kwargs: Any) -> bytes:
+        return raw
+
+    async def fake_render(_raw: bytes) -> list[RenderedArtifact]:
+        return [
+            RenderedArtifact(
+                name="desktop-light",
+                width=1200,
+                height=900,
+                data=b"\x89PNG\r\n\x1a\nrendered",
+            )
+        ]
+
+    async def failed_preview(*_args: Any, **_kwargs: Any) -> None:
+        raise RuntimeError("Provider returned HTTP 503")
+
+    monkeypatch.setattr("app.mailboxes.router.get_email_raw", fake_raw)
+    monkeypatch.setattr("app.deliverability.service.render_email", fake_render)
+    monkeypatch.setattr("app.deliverability.service.run_preview_provider", failed_preview)
+    monkeypatch.setattr("app.deliverability.service.chromium_executable", lambda: "/chromium")
+    monkeypatch.setattr(settings, "deliverability_visual_checks_enabled", True)
+    provider = await client.post(
+        "/api/v1/deliverability/providers",
+        json={
+            "name": "Preview service",
+            "kind": "preview",
+            "adapter": "generic_http_preview",
+            "enabled": True,
+            "config": {"base_url": "https://preview.example.com"},
+            "secret": "provider-api-secret",
+        },
+    )
+    assert provider.status_code == 201, provider.text
+
+    response = await client.post(
+        "/api/v1/mailboxes/provider-failure%40mailcue.local/emails/1/deliverability/runs",
+        json={"checks": ["visual", "client_previews"]},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "partial"
+    assert [category["id"] for category in payload["categories"]] == ["visual"]
+    assert payload["error_code"] == "client_previews_failed"
+    assert payload["error_detail"] == "Real-client previews: Provider returned HTTP 503"
+
+    providers = await client.get("/api/v1/deliverability/providers")
+    assert providers.status_code == 200
+    assert providers.json()[0]["last_error"] == "Provider returned HTTP 503"
 
 
 async def test_byo_seed_inbox_placement_run(

@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519, rsa
 
 from app.config import settings
+from app.emails.deliverability import trusted_spf_domain
 from app.emails.schemas import (
     DeliverabilityCategory,
     DeliverabilityCheck,
@@ -28,7 +29,15 @@ _HOST_RE = re.compile(
     r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\Z",
     re.I,
 )
-_RESERVED_SUFFIXES = (".internal", ".invalid", ".local", ".localhost", ".test")
+_RESERVED_SUFFIXES = (
+    ".example",
+    ".internal",
+    ".invalid",
+    ".local",
+    ".localhost",
+    ".test",
+)
+_DNSBL_ERROR_NETWORK = ipaddress.ip_network("127.255.255.0/24")
 
 
 def _check(
@@ -81,9 +90,38 @@ def _join_txt(value: object) -> str:
     return str(value).strip().strip('"').replace('" "', "")
 
 
+def _ip_dnsbl_prefix(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    if address.version == 4:
+        return ".".join(reversed(str(address).split(".")))
+    return ".".join(reversed(address.exploded.replace(":", "")))
+
+
+def _dnsbl_answer(records: list[str]) -> tuple[bool, bool]:
+    """Return listing and service-error flags without trusting arbitrary DNS A data."""
+    listed = False
+    service_error = False
+    for record in records:
+        try:
+            address = ipaddress.ip_address(record)
+        except ValueError:
+            service_error = True
+            continue
+        if (
+            not isinstance(address, ipaddress.IPv4Address)
+            or not address.is_loopback
+            or address in _DNSBL_ERROR_NETWORK
+            or address.packed[-1] == 255
+        ):
+            service_error = True
+        else:
+            listed = True
+    return listed, service_error
+
+
 class _DnsWorker:
     def __init__(self) -> None:
         self._semaphore = asyncio.Semaphore(settings.deliverability_network_concurrency)
+        self.lookup_errors: set[tuple[str, str]] = set()
 
     async def resolve(self, name: str, record_type: str) -> list[str]:
         async with self._semaphore:
@@ -98,9 +136,13 @@ class _DnsWorker:
             except (
                 dns.resolver.NXDOMAIN,
                 dns.resolver.NoAnswer,
+            ):
+                return []
+            except (
                 dns.resolver.NoNameservers,
                 dns.resolver.LifetimeTimeout,
             ):
+                self.lookup_errors.add((name, record_type))
                 return []
         if record_type == "TXT":
             return [_join_txt(item)[:4096] for item in answer][:50]
@@ -203,25 +245,48 @@ def _dkim_key_description(record: str) -> tuple[bool, bool, str]:
     return False, False, "The DKIM record uses an unsupported public-key type."
 
 
-def _origin_ip(msg: EmailMessage) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+def _origin_route_identity(
+    msg: EmailMessage,
+) -> tuple[ipaddress.IPv4Address | ipaddress.IPv6Address | None, str | None]:
     received = [str(value) for value in msg.get_all("Received", [])]
     if not received:
-        return None
+        return None, None
     # The receiving MTA prepends its own hop. Older Received fields are sender
     # controlled and cannot be trusted for reputation or blocklist queries.
-    candidates = re.findall(r"\[([0-9a-f:.]+)\]", received[0], re.I)
+    trusted_hop = received[0]
+    from_clause = re.split(r"\s+by\s+", trusted_hop, maxsplit=1, flags=re.I)[0]
+    explicit_greeting = re.search(
+        r"\b(?:ehlo|helo)(?:\s*=|\s+)\s*[\"']?([a-z0-9._-]{1,253})",
+        from_clause,
+        re.I,
+    )
+    from_identity = re.match(r"\s*from\s+([^\s(;]+)", from_clause, re.I)
+    greeting = _safe_domain(
+        explicit_greeting.group(1)
+        if explicit_greeting
+        else from_identity.group(1).strip("[]")
+        if from_identity
+        else None
+    )
+    candidates = re.findall(r"\[([0-9a-f:.]+)\]", from_clause, re.I)
     for candidate in reversed(candidates):
         try:
             address = ipaddress.ip_address(candidate)
         except ValueError:
             continue
         if address.is_global:
-            return address
-    return None
+            return address, greeting
+    return None, greeting
 
 
-def _message_domains(msg: EmailMessage, sender_domain: str) -> list[str]:
-    domains = [sender_domain]
+def _origin_ip(msg: EmailMessage) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    return _origin_route_identity(msg)[0]
+
+
+def _message_domains(
+    msg: EmailMessage, sender_domain: str, additional_domains: list[str]
+) -> list[str]:
+    domains = list(dict.fromkeys([sender_domain, *additional_domains]))[:20]
     for part in msg.walk():
         if (
             part.get_content_type() != "text/html"
@@ -257,9 +322,12 @@ def _category(
 
 
 async def _domain_checks(
-    worker: _DnsWorker, domain: str, identities: list[tuple[str, str]]
+    worker: _DnsWorker,
+    domain: str,
+    identities: list[tuple[str, str]],
+    spf_domain: str | None,
 ) -> list[DeliverabilityCheck]:
-    spf_task = worker.resolve(domain, "TXT")
+    spf_task = worker.resolve(spf_domain, "TXT") if spf_domain else asyncio.sleep(0, result=[])
     dmarc_task = worker.resolve(f"_dmarc.{domain}", "TXT")
     mx_task = worker.resolve(domain, "MX")
     bimi_task = worker.resolve(f"default._bimi.{domain}", "TXT")
@@ -270,10 +338,22 @@ async def _domain_checks(
     )
     checks: list[DeliverabilityCheck] = []
     spf = [record for record in spf_txt if record.lower().startswith("v=spf1")]
-    if len(spf) == 1:
+    if spf_domain is None:
+        checks.append(
+            _check(
+                "dns_spf",
+                "dns",
+                "Published SPF policy",
+                "info",
+                "No receiver-verified MAIL FROM or fallback HELO domain was available for a DNS lookup.",
+                points=0,
+                max_points=0,
+            )
+        )
+    elif len(spf) == 1:
         direct_lookup_terms, _nested = _spf_lookup_terms(spf[0])
         lookup_terms, lookup_incomplete = await _spf_recursive_lookups(
-            worker, spf[0], visited={domain}
+            worker, spf[0], visited={spf_domain}
         )
         status: Literal["pass", "warning"] = (
             "pass" if lookup_terms <= 10 and not lookup_incomplete else "warning"
@@ -290,6 +370,7 @@ async def _domain_checks(
                 points=5 if status == "pass" else 2,
                 max_points=5,
                 details=[
+                    f"Receiver-verified SPF identity: {spf_domain}",
                     spf[0],
                     f"Direct lookup terms: {direct_lookup_terms}",
                     f"Bounded recursive lookup terms: {lookup_terms}",
@@ -313,7 +394,7 @@ async def _domain_checks(
                 points=0,
                 max_points=5,
                 details=spf,
-                recommendation="Publish exactly one valid SPF TXT policy.",
+                recommendation=f"Publish exactly one valid SPF TXT policy for {spf_domain}.",
             )
         )
 
@@ -463,7 +544,9 @@ async def _domain_checks(
 
 
 async def _ip_reputation_checks(
-    worker: _DnsWorker, origin: ipaddress.IPv4Address | ipaddress.IPv6Address | None
+    worker: _DnsWorker,
+    origin: ipaddress.IPv4Address | ipaddress.IPv6Address | None,
+    greeting: str | None,
 ) -> list[DeliverabilityCheck]:
     if origin is None:
         return [
@@ -473,6 +556,24 @@ async def _ip_reputation_checks(
                 "Sending IP identity",
                 "info",
                 "No globally routable origin IP was available in the trusted route evidence.",
+                points=0,
+                max_points=0,
+            ),
+            _check(
+                "smtp_identity",
+                "reputation",
+                "SMTP greeting identity",
+                "info",
+                "No globally routable origin IP was available for SMTP identity checks.",
+                points=0,
+                max_points=0,
+            ),
+            _check(
+                "helo_spf",
+                "reputation",
+                "Published HELO SPF policy",
+                "info",
+                "No trusted public SMTP greeting identity was available for an SPF lookup.",
                 points=0,
                 max_points=0,
             ),
@@ -509,6 +610,114 @@ async def _ip_reputation_checks(
         else "Configure a stable PTR hostname whose A or AAAA record resolves back to the sending IP.",
     )
 
+    if greeting is None:
+        identity_check = _check(
+            "smtp_identity",
+            "reputation",
+            "SMTP greeting identity",
+            "warning",
+            "The receiver-added delivery hop did not contain a valid public HELO or EHLO hostname.",
+            points=0,
+            max_points=5,
+            details=[f"Origin IP: {origin}", *[f"PTR: {pointer}" for pointer in pointers]],
+            recommendation="Use a stable public FQDN in HELO or EHLO that resolves to the sending IP.",
+        )
+        helo_spf = _check(
+            "helo_spf",
+            "reputation",
+            "Published HELO SPF policy",
+            "info",
+            "No valid public HELO or EHLO hostname was available for an SPF lookup.",
+            points=0,
+            max_points=0,
+        )
+    else:
+        greeting_a, greeting_aaaa, greeting_txt = await asyncio.gather(
+            worker.resolve(greeting, "A"),
+            worker.resolve(greeting, "AAAA"),
+            worker.resolve(greeting, "TXT"),
+        )
+        greeting_addresses = [*greeting_a, *greeting_aaaa]
+        address_matches = str(origin) in greeting_addresses
+        ptr_matches = greeting in {pointer.lower().rstrip(".") for pointer in pointers}
+        if address_matches and ptr_matches:
+            identity_status: Literal["pass", "warning", "fail"] = "pass"
+            identity_summary = (
+                "The observed SMTP greeting, origin IP, forward DNS, and PTR are consistent."
+            )
+            identity_points = 5
+            identity_recommendation = None
+        elif address_matches:
+            identity_status = "warning"
+            identity_summary = "The SMTP greeting resolves to the origin IP, but it does not match the PTR hostname."
+            identity_points = 3
+            identity_recommendation = (
+                "Align the sending IP PTR hostname with the HELO or EHLO hostname."
+            )
+        else:
+            identity_status = "fail"
+            identity_summary = "The observed SMTP greeting does not resolve to the sending IP."
+            identity_points = 0
+            identity_recommendation = (
+                "Publish matching A or AAAA records and use that hostname in HELO or EHLO."
+            )
+        identity_check = _check(
+            "smtp_identity",
+            "reputation",
+            "SMTP greeting identity",
+            identity_status,
+            identity_summary,
+            points=identity_points,
+            max_points=5,
+            details=[
+                f"Origin IP: {origin}",
+                f"Observed HELO/EHLO: {greeting}",
+                *[f"Greeting address: {address}" for address in greeting_addresses],
+                *[f"PTR: {pointer}" for pointer in pointers],
+            ],
+            recommendation=identity_recommendation,
+        )
+
+        helo_records = [record for record in greeting_txt if record.lower().startswith("v=spf1")]
+        if len(helo_records) == 1:
+            lookup_terms, lookup_incomplete = await _spf_recursive_lookups(
+                worker, helo_records[0], visited={greeting}
+            )
+            helo_valid = lookup_terms <= 10 and not lookup_incomplete
+            helo_spf = _check(
+                "helo_spf",
+                "reputation",
+                "Published HELO SPF policy",
+                "pass" if helo_valid else "warning",
+                "The SMTP greeting hostname publishes a bounded SPF policy."
+                if helo_valid
+                else "The HELO SPF lookup expansion exceeds the limit or is incomplete.",
+                points=2 if helo_valid else 0,
+                max_points=2,
+                details=[
+                    helo_records[0],
+                    f"Bounded recursive lookup terms: {lookup_terms}",
+                    f"Expansion complete: {'yes' if not lookup_incomplete else 'no'}",
+                ],
+                recommendation=None
+                if helo_valid
+                else "Simplify the SPF policy published on the HELO or EHLO hostname.",
+            )
+        else:
+            helo_spf = _check(
+                "helo_spf",
+                "reputation",
+                "Published HELO SPF policy",
+                "warning" if not helo_records else "fail",
+                "The SMTP greeting hostname does not publish an SPF policy."
+                if not helo_records
+                else "The SMTP greeting hostname publishes multiple SPF policies.",
+                points=0,
+                max_points=2,
+                details=helo_records,
+                recommendation="Publish exactly one SPF policy for the HELO or EHLO hostname.",
+            )
+
     zones = [zone.strip().rstrip(".").lower() for zone in settings.deliverability_dnsbl_zones]
     if not zones:
         dnsbl = _check(
@@ -520,38 +729,42 @@ async def _ip_reputation_checks(
             points=0,
             max_points=0,
         )
-    elif origin.version != 4:
-        dnsbl = _check(
-            "dnsbl",
-            "reputation",
-            "Configured blocklists",
-            "info",
-            "Configured IPv4 blocklists were not queried for an IPv6 origin.",
-            points=0,
-            max_points=0,
-        )
     else:
-        reversed_ip = ".".join(reversed(str(origin).split(".")))
-        answers = await asyncio.gather(
-            *(worker.resolve(f"{reversed_ip}.{zone}", "A") for zone in zones)
-        )
-        listed = [zone for zone, records in zip(zones, answers, strict=True) if records]
+        reversed_ip = _ip_dnsbl_prefix(origin)
+        query_names = [f"{reversed_ip}.{zone}" for zone in zones]
+        answers = await asyncio.gather(*(worker.resolve(name, "A") for name in query_names))
+        lookup_errors: set[tuple[str, str]] = getattr(worker, "lookup_errors", set())
+        results = [
+            (listed, invalid or (name, "A") in lookup_errors)
+            for name, records in zip(query_names, answers, strict=True)
+            for listed, invalid in [_dnsbl_answer(records)]
+        ]
+        listed = [index for index, result in enumerate(results, start=1) if result[0]]
+        errors = [index for index, result in enumerate(results, start=1) if result[1]]
         dnsbl = _check(
             "dnsbl",
             "reputation",
             "Configured blocklists",
-            "fail" if listed else "pass",
+            "fail" if listed else "info" if errors else "pass",
             "The origin IP is listed by a configured DNS blocklist."
             if listed
+            else "One or more blocklist queries returned an invalid or service-error response."
+            if errors
             else "The origin IP was not found on the configured DNS blocklists.",
-            points=0 if listed else 5,
-            max_points=5,
-            details=[f"Checked zones: {len(zones)}"] + [f"Listed by: {zone}" for zone in listed],
+            points=0 if listed or errors else 5,
+            max_points=5 if not errors or listed else 0,
+            details=[
+                f"Checked configured zones: {len(zones)}",
+                *(f"Listed by configured IP blocklist {index}." for index in listed),
+                *(f"Query error from configured IP blocklist {index}." for index in errors),
+            ],
             recommendation="Follow each list operator's evidence and delisting process."
             if listed
+            else "Check the blocklist account, query limits, and recursive DNS resolver."
+            if errors
             else None,
         )
-    return [reverse_check, dnsbl]
+    return [reverse_check, identity_check, helo_spf, dnsbl]
 
 
 async def _domain_blocklist_check(worker: _DnsWorker, domains: list[str]) -> DeliverabilityCheck:
@@ -567,28 +780,52 @@ async def _domain_blocklist_check(worker: _DnsWorker, domains: list[str]) -> Del
             max_points=0,
         )
     queries = [(domain, zone) for domain in domains[:20] for zone in zones][:100]
-    answers = await asyncio.gather(
-        *(worker.resolve(f"{domain}.{zone}", "A") for domain, zone in queries)
-    )
+    query_names = [f"{domain}.{zone}" for domain, zone in queries]
+    answers = await asyncio.gather(*(worker.resolve(name, "A") for name in query_names))
+    lookup_errors: set[tuple[str, str]] = getattr(worker, "lookup_errors", set())
+    results = [
+        (listed, invalid or (name, "A") in lookup_errors)
+        for name, records in zip(query_names, answers, strict=True)
+        for listed, invalid in [_dnsbl_answer(records)]
+    ]
+    zone_indexes = {zone: index for index, zone in enumerate(zones, start=1)}
     listed = [
-        (domain, zone) for (domain, zone), records in zip(queries, answers, strict=True) if records
+        (domain, zone_indexes[zone])
+        for (domain, zone), result in zip(queries, results, strict=True)
+        if result[0]
+    ]
+    errors = [
+        (domain, zone_indexes[zone])
+        for (domain, zone), result in zip(queries, results, strict=True)
+        if result[1]
     ]
     return _check(
         "domain_dnsbl",
         "reputation",
         "Configured domain blocklists",
-        "fail" if listed else "pass",
+        "fail" if listed else "info" if errors else "pass",
         "A sender or linked domain is listed by a configured domain blocklist."
         if listed
+        else "One or more domain blocklist queries returned an invalid or service-error response."
+        if errors
         else "No sender or linked domain was found on the configured domain blocklists.",
-        points=0 if listed else 5,
-        max_points=5,
+        points=0 if listed or errors else 5,
+        max_points=5 if not errors or listed else 0,
         details=[
             f"Checked {len(queries)} bounded domain and zone combination(s).",
-            *(f"Listed: {domain} by {zone}" for domain, zone in listed),
+            *(
+                f"Listed: {domain} by configured domain blocklist {index}."
+                for domain, index in listed
+            ),
+            *(
+                f"Query error: {domain} through configured domain blocklist {index}."
+                for domain, index in errors
+            ),
         ],
         recommendation="Review the listed domain and follow the list operator's evidence and removal process."
         if listed
+        else "Check the blocklist account, query limits, and recursive DNS resolver."
+        if errors
         else None,
     )
 
@@ -596,10 +833,11 @@ async def _domain_blocklist_check(worker: _DnsWorker, domains: list[str]) -> Del
 async def _reputation_checks(
     worker: _DnsWorker,
     origin: ipaddress.IPv4Address | ipaddress.IPv6Address | None,
+    greeting: str | None,
     domains: list[str],
 ) -> list[DeliverabilityCheck]:
     ip_checks, domain_check = await asyncio.gather(
-        _ip_reputation_checks(worker, origin),
+        _ip_reputation_checks(worker, origin, greeting),
         _domain_blocklist_check(worker, domains),
     )
     return [*ip_checks, domain_check]
@@ -632,11 +870,28 @@ async def analyze_network(
     if not isinstance(parsed, EmailMessage):
         return []
     worker = _DnsWorker()
+    origin, greeting = _origin_route_identity(parsed)
+    spf_domain = _safe_domain(trusted_spf_domain(parsed))
+    dkim_identities = _dkim_identities(parsed)
+    reputation_domains = _message_domains(
+        parsed,
+        domain,
+        [
+            value
+            for value in [spf_domain, *(signing_domain for _, signing_domain in dkim_identities)]
+            if value is not None
+        ],
+    )
     try:
         async with asyncio.timeout(settings.deliverability_network_timeout_seconds * 4):
             dns_checks, reputation_checks = await asyncio.gather(
-                _domain_checks(worker, domain, _dkim_identities(parsed)),
-                _reputation_checks(worker, _origin_ip(parsed), _message_domains(parsed, domain)),
+                _domain_checks(worker, domain, dkim_identities, spf_domain),
+                _reputation_checks(
+                    worker,
+                    origin,
+                    greeting,
+                    reputation_domains,
+                ),
             )
     except TimeoutError:
         timeout_check = _check(

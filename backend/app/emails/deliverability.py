@@ -380,6 +380,19 @@ def _parsed_authentication_results(
     return parsed
 
 
+def trusted_spf_domain(msg: EmailMessage) -> str | None:
+    """Return the receiver-verified MAIL FROM domain, with HELO as its fallback."""
+    results = _parsed_authentication_results(msg).get("spf", [])
+    passing = next((item for item in results if item[0] == "pass"), None)
+    best = passing or (results[0] if results else None)
+    if best is None:
+        return None
+    properties = best[1]
+    return _identity_domain(properties.get("smtp.mailfrom")) or _identity_domain(
+        properties.get("smtp.helo")
+    )
+
+
 def _authentication_checks(
     msg: EmailMessage, sender_domain: str | None
 ) -> list[DeliverabilityCheck]:

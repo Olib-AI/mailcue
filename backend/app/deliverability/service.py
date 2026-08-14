@@ -69,6 +69,26 @@ from app.warmup.models import WarmupAccount
 
 _ENRICHMENT_SEMAPHORE = asyncio.Semaphore(settings.deliverability_max_concurrent_runs)
 
+_RUN_CHECK_LABELS = {
+    "dns_reputation": "DNS and reputation checks",
+    "links": "Safe link validation",
+    "visual": "Local visual rendering",
+    "client_previews": "Real-client previews",
+    "ai_analysis": "AI-assisted copy review",
+    "placement": "Seed inbox placement",
+}
+
+
+def _safe_exception_detail(exc: Exception) -> str:
+    """Return an actionable error without reflecting request data or credentials."""
+    if isinstance(exc, RuntimeError):
+        detail = " ".join(str(exc).split())
+        if detail:
+            return detail[:500]
+    if isinstance(exc, TimeoutError):
+        return "The operation timed out."
+    return f"{exc.__class__.__name__}: unexpected check failure"
+
 
 def _hydrate(record: DeliverabilityReportRecord, *, cached: bool) -> DeliverabilityReport:
     report = DeliverabilityReport.model_validate(record.report_json)
@@ -811,8 +831,10 @@ async def _execute_run(
     ]
     unavailable = [check_id for check_id in requested_checks if check_id not in available]
     categories: list[DeliverabilityCategory] = []
+    active_check: str | None = None
     try:
         if {"dns", "reputation"} & set(available):
+            active_check = "dns_reputation"
             network_categories = await analyze_network(
                 raw,
                 sender_domain=str(report.report_json.get("sender_domain") or "") or None,
@@ -821,8 +843,10 @@ async def _execute_run(
                 category for category in network_categories if category.id in set(requested_checks)
             )
         if "links" in available:
+            active_check = "links"
             categories.append(await analyze_links(raw))
         if "visual" in available:
+            active_check = "visual"
             rendered = await render_email(raw)
             baseline_artifacts = await _baseline_visual_artifacts(db, report)
             evidence = []
@@ -907,6 +931,7 @@ async def _execute_run(
                 )
             )
         if "client_previews" in available:
+            active_check = "client_previews"
             provider = (
                 await db.execute(
                     select(DeliverabilityProvider)
@@ -923,7 +948,7 @@ async def _execute_run(
                 previews = await run_preview_provider(provider, raw)
             except Exception as exc:
                 provider.last_status = "error"
-                provider.last_error = f"{exc.__class__.__name__}: preview request failed"
+                provider.last_error = _safe_exception_detail(exc)
                 provider.last_checked_at = datetime.now(UTC)
                 raise
             provider.last_status = "healthy"
@@ -984,6 +1009,7 @@ async def _execute_run(
                 )
             )
         if "ai_analysis" in available:
+            active_check = "ai_analysis"
             provider = (
                 await db.execute(
                     select(DeliverabilityProvider)
@@ -1000,7 +1026,7 @@ async def _execute_run(
                 analysis = await run_analysis_provider(provider, raw)
             except Exception as exc:
                 provider.last_status = "error"
-                provider.last_error = f"{exc.__class__.__name__}: analysis request failed"
+                provider.last_error = _safe_exception_detail(exc)
                 provider.last_checked_at = datetime.now(UTC)
                 raise
             provider.last_status = "healthy"
@@ -1039,6 +1065,7 @@ async def _execute_run(
                 )
             )
         if "placement" in available:
+            active_check = "placement"
             provider = (
                 await db.execute(
                     select(DeliverabilityProvider)
@@ -1157,9 +1184,13 @@ async def _execute_run(
             run.error_code = "capability_unavailable"
             run.error_detail = "Unavailable checks: " + ", ".join(sorted(unavailable))
     except Exception as exc:
-        run.status = "failed"
-        run.error_code = "enrichment_failed"
-        run.error_detail = f"{exc.__class__.__name__}: network enrichment failed"
+        run.status = "partial" if categories else "failed"
+        run.result_json = {
+            "categories": [category.model_dump(mode="json") for category in categories]
+        }
+        run.error_code = f"{active_check}_failed" if active_check else "enrichment_failed"
+        label = _RUN_CHECK_LABELS.get(active_check or "", "Deliverability enrichment")
+        run.error_detail = f"{label}: {_safe_exception_detail(exc)}"
     run.completed_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(run)
