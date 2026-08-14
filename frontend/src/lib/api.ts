@@ -47,10 +47,10 @@ async function tryRefresh(): Promise<boolean> {
   return (await restoreSession()) !== null;
 }
 
-async function request<T>(
+async function fetchResponse(
   path: string,
   options?: RequestInit & { skipAuth?: boolean }
-): Promise<T> {
+): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
@@ -70,7 +70,8 @@ async function request<T>(
     Object.assign(headers, incoming);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const requestUrl = path.startsWith(`${BASE_URL}/`) ? path : `${BASE_URL}${path}`;
+  const res = await fetch(requestUrl, {
     ...options,
     headers,
     credentials: "include",
@@ -85,7 +86,7 @@ async function request<T>(
       throw new Error("Unauthorized");
     }
     // Retry original request with new token
-    return request(path, options);
+    return fetchResponse(path, options);
   }
 
   if (!res.ok) {
@@ -96,12 +97,23 @@ async function request<T>(
     throw new Error(apiError.detail ?? `HTTP ${res.status}`);
   }
 
+  return res;
+}
+
+async function request<T>(
+  path: string,
+  options?: RequestInit & { skipAuth?: boolean }
+): Promise<T> {
+  const res = await fetchResponse(path, options);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: "GET" }),
+
+  blob: async (path: string) =>
+    (await fetchResponse(path, { method: "GET" })).blob(),
 
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {

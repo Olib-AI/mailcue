@@ -16,6 +16,7 @@ import type {
   SpamActionRequest,
   DeliverabilityReport,
   DeliverabilityRun,
+  DeliverabilityCapability,
 } from "@/types/api";
 
 // --- Query Keys ---
@@ -143,6 +144,17 @@ export function useRunDeliverabilityChecks() {
       );
     },
     onSuccess: (run) => queryClient.invalidateQueries({ queryKey: ["deliverability", "runs", run.report_id] }),
+  });
+}
+
+export function useDeliverabilityCapabilities() {
+  return useQuery({
+    queryKey: ["deliverability", "capabilities"],
+    queryFn: () =>
+      api.get<{ capabilities: DeliverabilityCapability[] }>(
+        "/deliverability/capabilities"
+      ),
+    staleTime: 30_000,
   });
 }
 

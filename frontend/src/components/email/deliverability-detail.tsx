@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -16,7 +17,12 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatFullDate } from "@/lib/utils";
-import { useDeliverabilityRuns, useRunDeliverabilityChecks } from "@/hooks/use-emails";
+import { api } from "@/lib/api";
+import {
+  useDeliverabilityCapabilities,
+  useDeliverabilityRuns,
+  useRunDeliverabilityChecks,
+} from "@/hooks/use-emails";
 import type {
   DeliverabilityCategory,
   DeliverabilityCheck,
@@ -90,6 +96,45 @@ function StatusIcon({ check }: { check: DeliverabilityCheck }) {
   return <Info className={className} />;
 }
 
+function ArtifactPreview({ path, title }: { path: string; title: string }) {
+  const [source, setSource] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+    void api
+      .blob(path)
+      .then((blob) => {
+        if (!active) return;
+        if (!blob.type.startsWith("image/")) {
+          throw new Error("Artifact is not an image");
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setSource(objectUrl);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [path]);
+
+  if (failed) {
+    return <p className="mt-2 rounded-md border p-3 text-muted-foreground">Artifact could not be loaded.</p>;
+  }
+  if (!source) {
+    return <div className="mt-2 grid h-32 place-items-center rounded-md border"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+  }
+  return (
+    <a href={source} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-md border bg-white">
+      <img src={source} alt={title} loading="lazy" className="max-h-80 w-full object-contain" />
+    </a>
+  );
+}
+
 function CheckRow({ check }: { check: DeliverabilityCheck }) {
   return (
     <div className="rounded-lg border bg-background/70 p-3">
@@ -121,14 +166,12 @@ function CheckRow({ check }: { check: DeliverabilityCheck }) {
               </summary>
               <div className="mt-2 space-y-2">
                 {check.evidence.map((item, index) => (
-                  <div key={`${item.code}-${index}`} className="border-t pt-2 first:border-0 first:pt-0">
+                  <div key={`${item.code}-${index}-${String(item.value)}`} className="border-t pt-2 first:border-0 first:pt-0">
                     <div className="flex flex-wrap justify-between gap-2 font-mono">
                       <span>{item.title}</span><span>{item.score ?? item.value ?? "observed"}</span>
                     </div>
                     {typeof item.value === "string" && item.value.startsWith("/api/v1/deliverability/artifacts/") && (
-                      <a href={item.value} target="_blank" rel="noreferrer" className="mt-2 block overflow-hidden rounded-md border bg-white">
-                        <img src={item.value} alt={item.title} loading="lazy" className="max-h-80 w-full object-contain" />
-                      </a>
+                      <ArtifactPreview path={item.value} title={item.title} />
                     )}
                     {item.description && <p className="mt-1 text-muted-foreground">{item.description}</p>}
                     {item.recommendation && <p className="mt-1">{item.recommendation}</p>}
@@ -185,9 +228,29 @@ function DeliverabilityDetail({
   onRetry,
 }: DeliverabilityDetailProps) {
   const extended = useRunDeliverabilityChecks();
+  const capabilities = useDeliverabilityCapabilities();
   const storedRuns = useDeliverabilityRuns(report?.report_id);
   const storedRun = storedRuns.data?.find((run) => run.categories.length > 0);
   const extendedCategories = extended.data?.categories ?? storedRun?.categories ?? [];
+  const visualProviderChecks = useMemo(() => {
+    const available = new Set(
+      capabilities.data?.capabilities
+        .filter((capability) => capability.status === "available")
+        .map((capability) => capability.id) ?? []
+    );
+    const candidates: Array<[
+      "visual" | "placement" | "client_previews" | "ai_analysis",
+      string,
+    ]> = [
+      ["visual", "visual_rendering"],
+      ["placement", "inbox_placement"],
+      ["client_previews", "client_previews"],
+      ["ai_analysis", "ai_analysis"],
+    ];
+    return candidates
+      .filter(([, capability]) => available.has(capability))
+      .map(([check]) => check);
+  }, [capabilities.data]);
   return (
     <div className="h-full overflow-auto bg-gradient-to-b from-violet-50/60 via-background to-background dark:from-violet-950/10">
       <div className="mx-auto max-w-6xl space-y-5 p-4 md:p-7">
@@ -218,13 +281,13 @@ function DeliverabilityDetail({
             <Button
               variant="outline"
               size="sm"
-              disabled={extended.isPending}
+              disabled={extended.isPending || capabilities.isLoading || visualProviderChecks.length === 0}
               onClick={() => extended.mutate({
                 mailbox: email.mailbox,
                 uid: email.uid,
-                checks: ["visual", "placement", "client_previews", "ai_analysis"],
+                checks: visualProviderChecks,
               })}
-              title="Runs local visuals and explicitly configured providers. Providers may receive the original message."
+              title={visualProviderChecks.length > 0 ? "Runs local visuals and available configured providers. Providers may receive the original message." : "No visual or provider checks are available."}
             >
               {extended.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               Visual and provider checks

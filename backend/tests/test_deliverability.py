@@ -649,8 +649,21 @@ async def test_deleting_source_email_removes_its_deliverability_history(
     async def fake_delete(*_args: Any, **_kwargs: Any) -> None:
         return None
 
+    async def fake_render(_raw: bytes) -> list[RenderedArtifact]:
+        return [
+            RenderedArtifact(
+                name="desktop-light",
+                width=1200,
+                height=900,
+                data=b"\x89PNG\r\n\x1a\nrendered",
+            )
+        ]
+
     monkeypatch.setattr("app.mailboxes.router.get_email_raw", fake_raw)
     monkeypatch.setattr("app.mailboxes.router.delete_email", fake_delete)
+    monkeypatch.setattr("app.deliverability.service.render_email", fake_render)
+    monkeypatch.setattr("app.deliverability.service.chromium_executable", lambda: "/chromium")
+    monkeypatch.setattr(settings, "deliverability_visual_checks_enabled", True)
 
     encoded_address = address.replace("@", "%40")
     scored = await client.get(
@@ -658,6 +671,17 @@ async def test_deleting_source_email_removes_its_deliverability_history(
         params={"folder": "INBOX"},
     )
     assert scored.status_code == 200, scored.text
+    visual = await client.post(
+        f"/api/v1/mailboxes/{encoded_address}/emails/42/deliverability/runs",
+        params={"folder": "INBOX"},
+        json={"checks": ["visual"]},
+    )
+    assert visual.status_code == 200, visual.text
+    run_id = visual.json()["id"]
+    artifact_path = visual.json()["categories"][0]["checks"][0]["evidence"][0]["value"]
+    artifact_id = artifact_path.rsplit("/", 1)[-1]
+    artifact_before = await client.get(artifact_path)
+    assert artifact_before.status_code == 200
 
     before = await client.get("/api/v1/deliverability/reports", params={"mailbox": address})
     assert before.status_code == 200, before.text
@@ -673,6 +697,11 @@ async def test_deleting_source_email_removes_its_deliverability_history(
     assert after.status_code == 200, after.text
     assert after.json()["reports"] == []
     assert after.json()["total"] == 0
+    assert (await client.get(f"/api/v1/deliverability/runs/{run_id}")).status_code == 404
+    assert (await client.get(artifact_path)).status_code == 404
+    async with factory() as session:
+        assert await session.get(DeliverabilityArtifact, artifact_id) is None
+        assert await session.get(DeliverabilityRun, run_id) is None
 
 
 async def test_report_baseline_and_comparison_api(

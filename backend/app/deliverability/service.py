@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.config import settings
 from app.deliverability.links import analyze_links
@@ -231,31 +232,43 @@ async def delete_message_reports(
     folder: str,
     uids: list[str],
 ) -> int:
-    """Delete report snapshots whose source messages were removed."""
+    """Delete report snapshots and binary artifacts whose messages were removed."""
     if not uids:
         return 0
-    result = await db.execute(
-        delete(DeliverabilityReportRecord).where(
-            DeliverabilityReportRecord.user_id == user_id,
-            DeliverabilityReportRecord.mailbox_id == mailbox_id,
-            DeliverabilityReportRecord.folder == folder,
-            DeliverabilityReportRecord.uid.in_(uids),
-        )
+    filters = (
+        DeliverabilityReportRecord.user_id == user_id,
+        DeliverabilityReportRecord.mailbox_id == mailbox_id,
+        DeliverabilityReportRecord.folder == folder,
+        DeliverabilityReportRecord.uid.in_(uids),
     )
+    deleted = await _delete_report_records(db, filters=filters)
     await db.commit()
-    return result.rowcount
+    return deleted
 
 
 async def delete_mailbox_reports(db: AsyncSession, *, user_id: str, mailbox_id: str) -> int:
-    """Delete every report snapshot after all mailbox messages are purged."""
-    result = await db.execute(
-        delete(DeliverabilityReportRecord).where(
-            DeliverabilityReportRecord.user_id == user_id,
-            DeliverabilityReportRecord.mailbox_id == mailbox_id,
-        )
+    """Delete every report and binary artifact after mailbox messages are purged."""
+    filters = (
+        DeliverabilityReportRecord.user_id == user_id,
+        DeliverabilityReportRecord.mailbox_id == mailbox_id,
     )
+    deleted = await _delete_report_records(db, filters=filters)
     await db.commit()
-    return result.rowcount
+    return deleted
+
+
+async def _delete_report_records(
+    db: AsyncSession, *, filters: tuple[ColumnElement[bool], ...]
+) -> int:
+    """Remove artifact and run children explicitly before deleting reports."""
+    report_ids = select(DeliverabilityReportRecord.id).where(*filters)
+    run_ids = select(DeliverabilityRun.id).where(DeliverabilityRun.report_id.in_(report_ids))
+    await db.execute(
+        delete(DeliverabilityArtifact).where(DeliverabilityArtifact.run_id.in_(run_ids))
+    )
+    await db.execute(delete(DeliverabilityRun).where(DeliverabilityRun.report_id.in_(report_ids)))
+    result = await db.execute(delete(DeliverabilityReportRecord).where(*filters))
+    return int(getattr(result, "rowcount", 0) or 0)
 
 
 async def set_baseline(
