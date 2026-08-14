@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.5.7",
+    "@hookform/resolvers": "^5.7.1",
     "@microsoft/fetch-event-source": "^2.0.1",
     "@tanstack/react-query": "^5.101.4",
     "@tiptap/core": "3.29.2",
