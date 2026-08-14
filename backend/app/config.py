@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     deliverability_network_checks_enabled: bool = False
     deliverability_visual_checks_enabled: bool = False
     deliverability_chromium_path: str = "chromium"
-    deliverability_visual_timeout_seconds: float = 15.0
+    deliverability_visual_timeout_seconds: float = 30.0
     deliverability_artifact_max_bytes: int = 5 * 1024 * 1024
     deliverability_network_timeout_seconds: float = 5.0
     deliverability_network_concurrency: int = 4

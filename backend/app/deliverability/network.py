@@ -251,32 +251,38 @@ def _origin_route_identity(
     received = [str(value) for value in msg.get_all("Received", [])]
     if not received:
         return None, None
-    # The receiving MTA prepends its own hop. Older Received fields are sender
-    # controlled and cannot be trusted for reputation or blocklist queries.
-    trusted_hop = received[0]
-    from_clause = re.split(r"\s+by\s+", trusted_hop, maxsplit=1, flags=re.I)[0]
-    explicit_greeting = re.search(
-        r"\b(?:ehlo|helo)(?:\s*=|\s+)\s*[\"']?([a-z0-9._-]{1,253})",
-        from_clause,
-        re.I,
-    )
-    from_identity = re.match(r"\s*from\s+([^\s(;]+)", from_clause, re.I)
-    greeting = _safe_domain(
-        explicit_greeting.group(1)
-        if explicit_greeting
-        else from_identity.group(1).strip("[]")
-        if from_identity
-        else None
-    )
-    candidates = re.findall(r"\[([0-9a-f:.]+)\]", from_clause, re.I)
-    for candidate in reversed(candidates):
-        try:
-            address = ipaddress.ip_address(candidate)
-        except ValueError:
+    # SpamAssassin re-injects mail through MailCue's loopback SMTP service,
+    # which prepends another Received field. Skip only leading loopback
+    # handoffs, then trust the first public handoff recorded by the receiving
+    # MTA. Never cross a private or malformed boundary into older fields.
+    for trusted_hop in received:
+        from_clause = re.split(r"\s+by\s+", trusted_hop, maxsplit=1, flags=re.I)[0]
+        explicit_greeting = re.search(
+            r"\b(?:ehlo|helo)(?:\s*=|\s+)\s*[\"']?([a-z0-9._-]{1,253})",
+            from_clause,
+            re.I,
+        )
+        from_identity = re.match(r"\s*from\s+([^\s(;]+)", from_clause, re.I)
+        greeting = _safe_domain(
+            explicit_greeting.group(1)
+            if explicit_greeting
+            else from_identity.group(1).strip("[]")
+            if from_identity
+            else None
+        )
+        addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+        for candidate in reversed(re.findall(r"\[([0-9a-f:.]+)\]", from_clause, re.I)):
+            try:
+                addresses.append(ipaddress.ip_address(candidate))
+            except ValueError:
+                continue
+        public = next((address for address in addresses if address.is_global), None)
+        if public is not None:
+            return public, greeting
+        if addresses and all(address.is_loopback for address in addresses):
             continue
-        if address.is_global:
-            return address, greeting
-    return None, greeting
+        return None, greeting
+    return None, None
 
 
 def _origin_ip(msg: EmailMessage) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
@@ -808,7 +814,7 @@ async def _domain_blocklist_check(worker: _DnsWorker, domains: list[str]) -> Del
         if listed
         else "One or more domain blocklist queries returned an invalid or service-error response."
         if errors
-        else "No sender or linked domain was found on the configured domain blocklists.",
+        else "No tested sender, signing, or linked domain was listed by the configured domain blocklists.",
         points=0 if listed or errors else 5,
         max_points=5 if not errors or listed else 0,
         details=[

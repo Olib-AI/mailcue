@@ -191,6 +191,32 @@ def test_origin_ip_uses_receiver_added_topmost_received_header() -> None:
     assert str(_origin_ip(message)) == "8.8.8.8"
 
 
+def test_origin_identity_skips_mailcue_loopback_reinjection() -> None:
+    message = EmailMessage()
+    message["Received"] = "from localhost (localhost [127.0.0.1]) by mx.mailcue.local with ESMTP"
+    message["Received"] = (
+        "from mail.protonmail.ch (mail.protonmail.ch [8.8.8.8]) by mx.mailcue.local with ESMTPS"
+    )
+    message["Received"] = "from forged.example [1.1.1.1] by attacker.example"
+    message.set_content("test")
+
+    origin, greeting = _origin_route_identity(message)
+
+    assert str(origin) == "8.8.8.8"
+    assert greeting == "mail.protonmail.ch"
+
+
+def test_origin_identity_does_not_cross_an_untrusted_private_hop() -> None:
+    message = EmailMessage()
+    message["Received"] = "from relay.internal [10.0.0.5] by mx.mailcue.local"
+    message["Received"] = "from forged.example [8.8.8.8] by attacker.example"
+    message.set_content("test")
+
+    origin, _greeting = _origin_route_identity(message)
+
+    assert origin is None
+
+
 def test_origin_identity_uses_only_the_receiver_added_hop() -> None:
     message = EmailMessage()
     message["Received"] = (

@@ -122,15 +122,22 @@ async def _render_one(
         "--headless=new",
         "--disable-background-networking",
         "--disable-component-update",
+        "--disable-crash-reporter",
         "--disable-default-apps",
+        "--disable-dev-shm-usage",
         "--disable-extensions",
         "--disable-features=NetworkServiceInProcess",
+        "--disable-gpu",
+        "--disable-logging",
         "--disable-sync",
         "--hide-scrollbars",
         "--host-resolver-rules=MAP * ~NOTFOUND",
         "--no-first-run",
         "--no-proxy-server",
         "--no-sandbox",
+        "--no-zygote",
+        f"--user-data-dir={directory / f'profile-{name}'}",
+        "--virtual-time-budget=1000",
         f"--screenshot={output}",
         f"--window-size={width},{height}",
     ]
@@ -165,7 +172,10 @@ async def _render_one(
         except OSError:
             process.kill()
         await process.wait()
-        raise RuntimeError("Chromium render timed out") from None
+        timeout = settings.deliverability_visual_timeout_seconds
+        raise RuntimeError(
+            f"Chromium render timed out for {name} after {timeout:g} seconds"
+        ) from None
     except asyncio.CancelledError:
         try:
             os.killpg(process.pid, signal.SIGKILL)
