@@ -38,7 +38,7 @@ function HealthBadge({ tunnel }: { tunnel: EffectiveTunnelStatus }) {
 }
 
 function valueOrDash(value: number | null): string {
-  return value === null ? "—" : value.toLocaleString();
+  return value === null ? "N/A" : value.toLocaleString();
 }
 
 export function TunnelStatusPanel() {

@@ -40,6 +40,7 @@ MailCue packages Postfix, Dovecot, OpenDKIM, OpenDMARC, SpamAssassin, a FastAPI 
 | Web UI | React app with a mailbox sidebar, folder navigation, an email viewer, and a compose dialog. |
 | REST API and SDKs | JSON API for sending, receiving, injecting, searching, and deleting email, with Python and Node SDKs. |
 | Email injection | Insert messages straight into a mailbox over IMAP APPEND for deterministic test setup, with realistic headers. |
+| Deliverability testing | Create a scoring mailbox with authentication, SpamAssassin, content, header, and transport diagnostics through the web UI, REST API, Node SDK, and MCP. |
 | DKIM, DMARC, SPF | OpenDKIM signing, OpenDMARC verification, and SPF policy checks, with Authentication-Results headers. |
 | Spam filtering | SpamAssassin scores inbound mail with a configurable threshold, Bayesian filtering, and RBL checks. |
 | TLS everywhere | Auto-generated certificates for SMTP STARTTLS, IMAPS, and POP3S. Upload your own from the UI. |
@@ -119,7 +120,7 @@ database environment variable.
 | [Sharing MailCue across projects](docs/guides/networking.md) | Run one container behind a shared Docker network. |
 | [Development and contributing](docs/guides/development.md) | Local setup, linting, tests, and the PR process. |
 
-The API is also served as interactive Swagger UI at `/api/docs`, with machine-readable specs in [openapi.json](openapi.json) and [postman_collection.json](postman_collection.json).
+The API is also served as interactive Swagger UI at `/api/docs`, with machine-readable specs in [openapi.json](openapi.json) and [postman_collection.json](postman_collection.json). See the [deliverability testing guide](docs/guides/deliverability.md) for scoring, visual testing, placement, providers, schedules, and CI policies.
 
 The SDKs and MCP server have their own docs: [Python SDK](sdks/python/README.md), [Node SDK](sdks/node/README.md), and [MCP server](sdks/mcp-node/README.md).
 

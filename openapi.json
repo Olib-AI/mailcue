@@ -1842,6 +1842,156 @@
         }
       }
     },
+    "/api/v1/mailboxes/{mailbox_address}/emails/{uid}/deliverability": {
+      "get": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Get Email Deliverability",
+        "description": "Score one received message from its original bytes.\n\nThe endpoint is available for every owned mailbox so API clients can run\ndiagnostics consistently. Mailboxes with purpose ``deliverability`` use\nthe same report as their primary message-detail experience in the web UI.",
+        "operationId": "get_email_deliverability_api_v1_mailboxes__mailbox_address__emails__uid__deliverability_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mailboxes/{mailbox_address}/emails/{uid}/deliverability/runs": {
+      "post": {
+        "tags": [
+          "Mailboxes"
+        ],
+        "summary": "Run Email Deliverability Enrichment",
+        "description": "Run explicitly enabled network, visual, preview, or placement enrichments.",
+        "operationId": "run_email_deliverability_enrichment_api_v1_mailboxes__mailbox_address__emails__uid__deliverability_runs_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox_address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mailbox Address"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "INBOX",
+              "title": "Folder"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mailboxes/{mailbox_address}/emails/bulk-delete": {
       "post": {
         "tags": [
@@ -2248,6 +2398,1306 @@
                     "type": "string"
                   },
                   "title": "Response Update Mailbox Signature Api V1 Mailboxes  Address  Signature Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/capabilities": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities_api_v1_deliverability_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityCapabilities"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/deliverability/providers": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Providers",
+        "operationId": "providers_api_v1_deliverability_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeliverabilityProviderResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Providers Api V1 Deliverability Providers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Create Provider",
+        "operationId": "create_provider_api_v1_deliverability_providers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityProviderWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityProviderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/deliverability/providers/{provider_id}": {
+      "put": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Update Provider",
+        "operationId": "update_provider_api_v1_deliverability_providers__provider_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityProviderWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityProviderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Remove Provider",
+        "operationId": "remove_provider_api_v1_deliverability_providers__provider_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "provider_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Provider Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/schedules": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Schedules",
+        "operationId": "schedules_api_v1_deliverability_schedules_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Owned deliverability mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Owned deliverability mailbox address"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliverabilityScheduleResponse"
+                  },
+                  "title": "Response Schedules Api V1 Deliverability Schedules Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Create Schedule",
+        "operationId": "create_schedule_api_v1_deliverability_schedules_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityScheduleWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityScheduleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/schedules/{schedule_id}": {
+      "put": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Update Schedule",
+        "operationId": "update_schedule_api_v1_deliverability_schedules__schedule_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityScheduleWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityScheduleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Remove Schedule",
+        "operationId": "remove_schedule_api_v1_deliverability_schedules__schedule_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "schedule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Schedule Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/alerts": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Alerts",
+        "operationId": "alerts_api_v1_deliverability_alerts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "acknowledged",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Acknowledged"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityAlertList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/alerts/{alert_id}/acknowledge": {
+      "post": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Acknowledge",
+        "operationId": "acknowledge_api_v1_deliverability_alerts__alert_id__acknowledge_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityAlertResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports/{report_id}/runs": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Report Runs",
+        "operationId": "report_runs_api_v1_deliverability_reports__report_id__runs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliverabilityRunResponse"
+                  },
+                  "title": "Response Report Runs Api V1 Deliverability Reports  Report Id  Runs Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Run Detail",
+        "operationId": "run_detail_api_v1_deliverability_runs__run_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityRunResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/artifacts/{artifact_id}": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Artifact Content",
+        "operationId": "artifact_content_api_v1_deliverability_artifacts__artifact_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "artifact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Artifact Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/policies": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Policies",
+        "operationId": "policies_api_v1_deliverability_policies_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Owned deliverability mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Owned deliverability mailbox address"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeliverabilityPolicyResponse"
+                  },
+                  "title": "Response Policies Api V1 Deliverability Policies Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Create Policy",
+        "operationId": "create_policy_api_v1_deliverability_policies_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityPolicyWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityPolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/policies/{policy_id}": {
+      "put": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Update Policy",
+        "operationId": "update_policy_api_v1_deliverability_policies__policy_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverabilityPolicyWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityPolicyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Remove Policy",
+        "operationId": "remove_policy_api_v1_deliverability_policies__policy_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/policies/{policy_id}/evaluate/{report_id}": {
+      "post": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Policy Evaluation",
+        "operationId": "policy_evaluation_api_v1_deliverability_policies__policy_id__evaluate__report_id__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Policy Id"
+            }
+          },
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityPolicyEvaluationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Report History",
+        "operationId": "report_history_api_v1_deliverability_reports_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Owned mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Owned mailbox address"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 25,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityReportList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/trends": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Report Trend",
+        "operationId": "report_trend_api_v1_deliverability_trends_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mailbox",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Owned mailbox address",
+              "title": "Mailbox"
+            },
+            "description": "Owned mailbox address"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 2,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityTrend"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports/{report_id}": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Report Detail",
+        "operationId": "report_detail_api_v1_deliverability_reports__report_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports/{report_id}/export": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Export Report",
+        "operationId": "export_report_api_v1_deliverability_reports__report_id__export_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(json|csv|html)$",
+              "default": "json",
+              "title": "Format"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports/{report_id}/baseline": {
+      "put": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Update Report Baseline",
+        "operationId": "update_report_baseline_api_v1_deliverability_reports__report_id__baseline_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaselineUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/deliverability/reports/{report_id}/comparison": {
+      "get": {
+        "tags": [
+          "Deliverability"
+        ],
+        "summary": "Report Comparison",
+        "operationId": "report_comparison_api_v1_deliverability_reports__report_id__comparison_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Report Id"
+            }
+          },
+          {
+            "name": "before_report_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverabilityComparison"
                 }
               }
             }
@@ -5332,164 +6782,12 @@
       }
     },
     "/httpbin/{bin_id}": {
-      "post": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "options": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "put": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
+        "operationId": "capture_root_httpbin__bin_id__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -5527,7 +6825,121 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -5565,7 +6977,45 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__post",
+        "operationId": "capture_root_httpbin__bin_id__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -5600,200 +7050,12 @@
       }
     },
     "/httpbin/{bin_id}/{path}": {
-      "post": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "options": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "put": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -5840,7 +7102,148 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "options": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -5887,7 +7290,54 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__post",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__put",
         "parameters": [
           {
             "name": "bin_id",
@@ -6407,6 +7857,17 @@
         "title": "AttachmentInfo",
         "description": "Metadata about a single MIME attachment."
       },
+      "BaselineUpdateRequest": {
+        "properties": {
+          "is_baseline": {
+            "type": "boolean",
+            "title": "Is Baseline",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "BaselineUpdateRequest"
+      },
       "BinCreateRequest": {
         "properties": {
           "name": {
@@ -6719,6 +8180,1581 @@
           "created_at"
         ],
         "title": "CapturedRequestResponse"
+      },
+      "DeliverabilityAlertList": {
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityAlertResponse"
+            },
+            "type": "array",
+            "title": "Alerts"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "alerts",
+          "total"
+        ],
+        "title": "DeliverabilityAlertList"
+      },
+      "DeliverabilityAlertResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "alert_type": {
+            "type": "string",
+            "title": "Alert Type"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "acknowledged": {
+            "type": "boolean",
+            "title": "Acknowledged"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mailbox",
+          "report_id",
+          "run_id",
+          "policy_id",
+          "alert_type",
+          "severity",
+          "title",
+          "detail",
+          "acknowledged",
+          "created_at",
+          "acknowledged_at"
+        ],
+        "title": "DeliverabilityAlertResponse"
+      },
+      "DeliverabilityCapabilities": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCapability"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capabilities"
+        ],
+        "title": "DeliverabilityCapabilities"
+      },
+      "DeliverabilityCapability": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "network",
+              "provider"
+            ],
+            "title": "Mode"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "disabled",
+              "not_configured",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "mode",
+          "status"
+        ],
+        "title": "DeliverabilityCapability"
+      },
+      "DeliverabilityCategory": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "authentication",
+              "content",
+              "headers",
+              "transport",
+              "spam_filter",
+              "attachments",
+              "dns",
+              "reputation",
+              "links",
+              "visual",
+              "placement",
+              "client_previews",
+              "ai_analysis"
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "points": {
+            "type": "number",
+            "title": "Points"
+          },
+          "max_points": {
+            "type": "number",
+            "title": "Max Points"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCheck"
+            },
+            "type": "array",
+            "title": "Checks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "score",
+          "points",
+          "max_points",
+          "checks"
+        ],
+        "title": "DeliverabilityCategory",
+        "description": "Score and check rollup for one report category."
+      },
+      "DeliverabilityCategoryChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "before_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Score"
+          },
+          "after_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Score"
+          },
+          "score_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Delta"
+          },
+          "check_changes": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCheckChange"
+            },
+            "type": "array",
+            "title": "Check Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "DeliverabilityCategoryChange"
+      },
+      "DeliverabilityCheck": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "authentication",
+              "content",
+              "headers",
+              "transport",
+              "spam_filter",
+              "attachments",
+              "dns",
+              "reputation",
+              "links",
+              "visual",
+              "placement",
+              "client_previews",
+              "ai_analysis"
+            ],
+            "title": "Category"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "warning",
+              "fail",
+              "info"
+            ],
+            "title": "Status"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "details": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Details"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityEvidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "points": {
+            "type": "number",
+            "title": "Points",
+            "default": 0
+          },
+          "max_points": {
+            "type": "number",
+            "title": "Max Points",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "title",
+          "status",
+          "summary"
+        ],
+        "title": "DeliverabilityCheck",
+        "description": "One stable, actionable check in a deliverability report."
+      },
+      "DeliverabilityCheckChange": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "before_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Status"
+          },
+          "after_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Status"
+          },
+          "before_points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Points"
+          },
+          "after_points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Points"
+          },
+          "points_delta": {
+            "type": "number",
+            "title": "Points Delta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "points_delta"
+        ],
+        "title": "DeliverabilityCheckChange"
+      },
+      "DeliverabilityComparison": {
+        "properties": {
+          "before_report_id": {
+            "type": "string",
+            "title": "Before Report Id"
+          },
+          "after_report_id": {
+            "type": "string",
+            "title": "After Report Id"
+          },
+          "before_score": {
+            "type": "integer",
+            "title": "Before Score"
+          },
+          "after_score": {
+            "type": "integer",
+            "title": "After Score"
+          },
+          "score_delta": {
+            "type": "integer",
+            "title": "Score Delta"
+          },
+          "improved": {
+            "type": "integer",
+            "title": "Improved"
+          },
+          "regressed": {
+            "type": "integer",
+            "title": "Regressed"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCategoryChange"
+            },
+            "type": "array",
+            "title": "Categories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "before_report_id",
+          "after_report_id",
+          "before_score",
+          "after_score",
+          "score_delta",
+          "improved",
+          "regressed",
+          "unchanged",
+          "categories"
+        ],
+        "title": "DeliverabilityComparison"
+      },
+      "DeliverabilityEvidence": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "DeliverabilityEvidence",
+        "description": "Structured observation suitable for collapsed UI and API consumers."
+      },
+      "DeliverabilityPolicyEvaluationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "policy_id": {
+            "type": "string",
+            "title": "Policy Id"
+          },
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "score_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Delta"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "policy_id",
+          "report_id",
+          "passed",
+          "score",
+          "reasons",
+          "created_at"
+        ],
+        "title": "DeliverabilityPolicyEvaluationResponse"
+      },
+      "DeliverabilityPolicyResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "minimum_score": {
+            "type": "integer",
+            "title": "Minimum Score"
+          },
+          "maximum_regression": {
+            "type": "integer",
+            "title": "Maximum Regression"
+          },
+          "fail_on_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fail On Statuses"
+          },
+          "required_check_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Check Ids"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Capabilities"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "mailbox",
+          "enabled",
+          "minimum_score",
+          "maximum_regression",
+          "fail_on_statuses",
+          "required_check_ids",
+          "required_capabilities",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeliverabilityPolicyResponse"
+      },
+      "DeliverabilityPolicyWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mailbox": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Mailbox"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "minimum_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Minimum Score",
+            "default": 80
+          },
+          "maximum_regression": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Maximum Regression",
+            "default": 5
+          },
+          "fail_on_statuses": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "warning",
+                "fail"
+              ]
+            },
+            "type": "array",
+            "title": "Fail On Statuses"
+          },
+          "required_check_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Required Check Ids"
+          },
+          "required_capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Required Capabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "mailbox"
+        ],
+        "title": "DeliverabilityPolicyWrite"
+      },
+      "DeliverabilityProviderResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "adapter": {
+            "type": "string",
+            "title": "Adapter"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "config": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Config"
+          },
+          "has_secret": {
+            "type": "boolean",
+            "title": "Has Secret"
+          },
+          "last_status": {
+            "type": "string",
+            "title": "Last Status"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "adapter",
+          "enabled",
+          "config",
+          "has_secret",
+          "last_status",
+          "last_error",
+          "last_checked_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeliverabilityProviderResponse"
+      },
+      "DeliverabilityProviderWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "preview",
+              "placement",
+              "analysis"
+            ],
+            "title": "Kind"
+          },
+          "adapter": {
+            "type": "string",
+            "enum": [
+              "generic_http_preview",
+              "seed_imap",
+              "generic_http_analysis"
+            ],
+            "title": "Adapter"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "config": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Config"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 8192
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "adapter"
+        ],
+        "title": "DeliverabilityProviderWrite"
+      },
+      "DeliverabilityReport": {
+        "properties": {
+          "score_version": {
+            "type": "string",
+            "title": "Score Version",
+            "default": "2.2"
+          },
+          "report_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Id"
+          },
+          "raw_sha256": {
+            "type": "string",
+            "title": "Raw Sha256",
+            "default": ""
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "default": false
+          },
+          "is_baseline": {
+            "type": "boolean",
+            "title": "Is Baseline",
+            "default": false
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "excellent",
+              "good",
+              "needs_work",
+              "poor"
+            ],
+            "title": "Verdict"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          },
+          "sender_domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sender Domain"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCategory"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "top_recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Top Recommendations"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Limitations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "verdict",
+          "summary",
+          "mailbox",
+          "uid",
+          "folder",
+          "message_id",
+          "generated_at",
+          "categories",
+          "top_recommendations",
+          "limitations"
+        ],
+        "title": "DeliverabilityReport",
+        "description": "Versioned deliverability assessment for a received message."
+      },
+      "DeliverabilityReportList": {
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityReportSummary"
+            },
+            "type": "array",
+            "title": "Reports"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reports",
+          "total",
+          "page",
+          "page_size",
+          "has_more"
+        ],
+        "title": "DeliverabilityReportList"
+      },
+      "DeliverabilityReportSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder"
+          },
+          "message_id": {
+            "type": "string",
+            "title": "Message Id"
+          },
+          "raw_sha256": {
+            "type": "string",
+            "title": "Raw Sha256"
+          },
+          "score_version": {
+            "type": "string",
+            "title": "Score Version"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          },
+          "is_baseline": {
+            "type": "boolean",
+            "title": "Is Baseline"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mailbox",
+          "uid",
+          "folder",
+          "message_id",
+          "raw_sha256",
+          "score_version",
+          "score",
+          "verdict",
+          "is_baseline",
+          "created_at"
+        ],
+        "title": "DeliverabilityReportSummary"
+      },
+      "DeliverabilityRunCheck": {
+        "type": "string",
+        "enum": [
+          "dns",
+          "reputation",
+          "links",
+          "visual",
+          "placement",
+          "client_previews",
+          "ai_analysis"
+        ]
+      },
+      "DeliverabilityRunRequest": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityRunCheck"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "minItems": 1,
+            "title": "Checks"
+          }
+        },
+        "type": "object",
+        "title": "DeliverabilityRunRequest"
+      },
+      "DeliverabilityRunResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "partial",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "requested_checks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Requested Checks"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/DeliverabilityCapabilities"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityCategory"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Detail"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "report_id",
+          "status",
+          "requested_checks",
+          "capabilities",
+          "created_at"
+        ],
+        "title": "DeliverabilityRunResponse"
+      },
+      "DeliverabilityScheduleResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "interval_minutes": {
+            "type": "integer",
+            "title": "Interval Minutes"
+          },
+          "checks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "mailbox",
+          "enabled",
+          "interval_minutes",
+          "checks",
+          "policy_id",
+          "next_run_at",
+          "last_run_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "DeliverabilityScheduleResponse"
+      },
+      "DeliverabilityScheduleWrite": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mailbox": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Mailbox"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "interval_minutes": {
+            "type": "integer",
+            "maximum": 43200.0,
+            "minimum": 5.0,
+            "title": "Interval Minutes",
+            "default": 60
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityRunCheck"
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Checks"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "mailbox"
+        ],
+        "title": "DeliverabilityScheduleWrite"
+      },
+      "DeliverabilityTrend": {
+        "properties": {
+          "mailbox": {
+            "type": "string",
+            "title": "Mailbox"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/DeliverabilityTrendPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score"
+          },
+          "minimum_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Score"
+          },
+          "maximum_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maximum Score"
+          },
+          "score_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Delta"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mailbox",
+          "points",
+          "count",
+          "average_score",
+          "minimum_score",
+          "maximum_score",
+          "score_delta"
+        ],
+        "title": "DeliverabilityTrend"
+      },
+      "DeliverabilityTrendPoint": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "verdict": {
+            "type": "string",
+            "title": "Verdict"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "score",
+          "verdict",
+          "created_at"
+        ],
+        "title": "DeliverabilityTrendPoint"
       },
       "DisplayNameUpdateRequest": {
         "properties": {
@@ -8856,6 +11892,15 @@
             "type": "string",
             "title": "Display Name",
             "default": ""
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "deliverability"
+            ],
+            "title": "Purpose",
+            "default": "standard"
           }
         },
         "type": "object",
@@ -8919,6 +11964,15 @@
             "type": "boolean",
             "title": "Is Catchall",
             "default": false
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "standard",
+              "deliverability"
+            ],
+            "title": "Purpose",
+            "default": "standard"
           },
           "created_at": {
             "type": "string",

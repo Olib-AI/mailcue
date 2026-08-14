@@ -31,6 +31,8 @@ from app.auth.router import router as auth_router
 from app.auth.service import create_default_admin
 from app.config import settings
 from app.database import AsyncSessionLocal, Base, engine, get_db
+from app.deliverability.models import DeliverabilityReportRecord  # noqa: F401
+from app.deliverability.router import router as deliverability_router
 from app.domains.models import Domain
 from app.domains.router import router as domains_router
 from app.emails.disposable import load_cached_domains, update_disposable_domains
@@ -124,6 +126,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.warmup.service import scheduler_loop
 
     _app.state.warmup_scheduler_task = asyncio.create_task(scheduler_loop())
+    from app.deliverability.scheduler import scheduler_loop as deliverability_scheduler_loop
+
+    _app.state.deliverability_scheduler_task = asyncio.create_task(deliverability_scheduler_loop())
 
     async with AsyncSessionLocal() as session:
         await create_default_admin(session)
@@ -270,8 +275,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # ── Shutdown ─────────────────────────────────────────────────
     _app.state.warmup_scheduler_task.cancel()
+    _app.state.deliverability_scheduler_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await _app.state.warmup_scheduler_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await _app.state.deliverability_scheduler_task
     await engine.dispose()
     logger.info("MailCue API shut down.")
 
@@ -325,6 +333,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(emails_router, prefix="/api/v1")
     app.include_router(mailboxes_router, prefix="/api/v1")
+    app.include_router(deliverability_router, prefix="/api/v1")
     app.include_router(events_router, prefix="/api/v1")
     app.include_router(gpg_router, prefix="/api/v1")
     app.include_router(domains_router, prefix="/api/v1")

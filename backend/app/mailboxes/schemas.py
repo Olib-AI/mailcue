@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
@@ -20,6 +21,7 @@ class MailboxCreateRequest(BaseModel):
     password: str
     domain: str | None = None
     display_name: str = ""
+    purpose: Literal["standard", "deliverability"] = "standard"
 
     @field_validator("username")
     @classmethod
@@ -59,6 +61,7 @@ class MailboxResponse(BaseModel):
     domain: str
     is_active: bool
     is_catchall: bool = False
+    purpose: Literal["standard", "deliverability"] = "standard"
     created_at: datetime
     quota_mb: int = 500
     email_count: int = 0

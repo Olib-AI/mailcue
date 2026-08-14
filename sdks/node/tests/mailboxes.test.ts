@@ -54,14 +54,16 @@ describe('mailboxes resource', () => {
     const mc = new Mailcue({ apiKey: 'mc_test', fetch: f });
     const out = await mc.mailboxes.create({
       username: 'a',
-      password: 'pw',
+      password: 'a-secure-password',
       domain: 'b.com',
       displayName: 'A',
+      purpose: 'deliverability',
     });
     expect(out.address).toBe('a@b.com');
     expect(captured?.['display_name']).toBe('A');
     expect(captured?.['username']).toBe('a');
     expect(captured?.['domain']).toBe('b.com');
+    expect(captured?.['purpose']).toBe('deliverability');
   });
 
   it('encodes addresses with @ in the path', async () => {

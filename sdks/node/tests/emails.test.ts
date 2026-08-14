@@ -148,6 +148,43 @@ describe('emails resource', () => {
     const atts = body['attachments'] as Array<Record<string, string>>;
     expect(atts[0]!['data']).toBe(Buffer.from('hello', 'utf-8').toString('base64'));
   });
+
+  it('scores deliverability and camelizes the report', async () => {
+    const { fetch: f, calls } = makeRecorder(
+      () =>
+        new Response(
+          JSON.stringify({
+            score_version: '1.0',
+            score: 94,
+            verdict: 'excellent',
+            summary: 'Strong setup.',
+            mailbox: 'delivery@example.com',
+            uid: '42',
+            folder: 'INBOX',
+            message_id: '<id@example.com>',
+            sender_domain: 'example.com',
+            generated_at: '2026-08-14T12:00:00Z',
+            categories: [{ id: 'authentication', title: 'Authentication', score: 100, points: 40, max_points: 40, checks: [] }],
+            top_recommendations: [],
+            limitations: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f });
+
+    const report = await mc.emails.scoreDeliverability('42', {
+      mailbox: 'delivery@example.com',
+      folder: 'INBOX',
+    });
+
+    expect(report.scoreVersion).toBe('1.0');
+    expect(report.senderDomain).toBe('example.com');
+    expect(report.categories[0]!.maxPoints).toBe(40);
+    expect(calls[0]!.url).toBe(
+      'http://localhost:8088/api/v1/mailboxes/delivery%40example.com/emails/42/deliverability?folder=INBOX',
+    );
+  });
 });
 
 describe('emails.waitFor', () => {
@@ -260,4 +297,3 @@ describe('emails.waitFor', () => {
     expect(call.body).toEqual({ email: 'test@example.com' });
   });
 });
-

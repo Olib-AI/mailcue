@@ -6,12 +6,17 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/ui-store";
 import { useEmailThreads } from "@/hooks/use-email-threads";
+import { useMailboxes } from "@/hooks/use-mailboxes";
 
 function ThreadOrEmailDetail() {
   const selectedMailbox = useUIStore((s) => s.selectedMailbox);
   const selectedFolder = useUIStore((s) => s.selectedFolder);
   const selectedThreadId = useUIStore((s) => s.selectedThreadId);
   const mailViewMode = useUIStore((s) => s.mailViewMode);
+  const { data: mailboxData } = useMailboxes();
+  const isDeliverabilityMailbox = mailboxData?.mailboxes.some(
+    (mailbox) => mailbox.address === selectedMailbox && mailbox.purpose === "deliverability"
+  ) ?? false;
 
   // Only fetch threads when we actually need to resolve a thread; the underlying
   // query is already in-flight from the list, so this is a cache hit.
@@ -26,7 +31,7 @@ function ThreadOrEmailDetail() {
       ? data.threads.find((t) => t.thread_id === selectedThreadId)
       : undefined;
 
-  if (thread && thread.count > 1) {
+  if (!isDeliverabilityMailbox && thread && thread.count > 1) {
     return <ThreadDetail thread={thread} />;
   }
 

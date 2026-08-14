@@ -31,6 +31,7 @@ async def _engine_and_session():
     """
     # Ensure all models are registered on Base.metadata before create_all.
     import app.auth.models
+    import app.deliverability.models
     import app.domains.models
     import app.gpg.models
     import app.mailboxes.models

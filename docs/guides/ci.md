@@ -46,6 +46,31 @@ API_KEY=$(curl -s -X POST http://localhost:8088/api/v1/auth/api-keys \
 curl -H "X-API-Key: $API_KEY" http://localhost:8088/api/v1/emails?mailbox=admin@mailcue.local
 ```
 
+## Deliverability release gates
+
+Create a mailbox with `purpose: "deliverability"`, send the release candidate email to it, then score the received UID. Persisted policies can require a minimum score, block warning or failure states, require named checks, and limit regression from the selected baseline.
+
+```ts
+const report = await mailcue.emails.scoreDeliverability(uid, {
+  mailbox: 'delivery-ci@example.com',
+});
+
+const policy = await mailcue.deliverability.createPolicy({
+  name: 'Release email gate',
+  mailbox: 'delivery-ci@example.com',
+  minimumScore: 90,
+  maximumRegression: 3,
+  failOnStatuses: ['fail'],
+  requiredCheckIds: ['spf', 'dkim', 'dmarc'],
+  requiredCapabilities: ['local_analysis'],
+});
+
+const evaluation = await mailcue.deliverability.evaluatePolicy(policy.id, report.reportId!);
+if (!evaluation.passed) process.exit(1);
+```
+
+Network, visual, placement, preview, and AI-assisted checks are separate explicit runs. Require those capabilities in a policy only when the CI deployment is configured to provide them. The base score remains deterministic and does not depend on an external AI response.
+
 ## CI Platform Examples
 
 Ready-to-use configuration files for popular CI/CD platforms:

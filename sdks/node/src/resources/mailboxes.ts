@@ -31,6 +31,7 @@ export class MailboxesResource {
       display_name: params.displayName ?? '',
     };
     if (params.domain !== undefined) body['domain'] = params.domain;
+    if (params.purpose !== undefined) body['purpose'] = params.purpose;
     const reqOpts: Parameters<Transport['request']>[0] = {
       method: 'POST',
       path: '/api/v1/mailboxes',

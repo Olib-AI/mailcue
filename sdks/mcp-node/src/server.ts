@@ -20,7 +20,10 @@ import { buildInstructions } from './instructions.js';
 export const SERVER_VERSION = '0.1.0';
 
 type ToolResult = {
-  content: { type: 'text'; text: string }[];
+  content: Array<
+    | { type: 'text'; text: string }
+    | { type: 'image'; data: string; mimeType: string }
+  >;
   isError?: boolean;
 };
 
@@ -129,6 +132,57 @@ export function buildServer(config: McpConfig): McpServer {
     };
   };
 
+  const scoreDeliverability = async (mailbox: string, uid: string, folder: string) => {
+    const base = config.baseUrl.replace(/\/+$/, '');
+    const url = new URL(
+      `${base}/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/deliverability`,
+    );
+    url.searchParams.set('folder', folder);
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (config.apiKey) headers['X-API-Key'] = config.apiKey;
+    if (config.bearerToken) headers['Authorization'] = `Bearer ${config.bearerToken}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      let detail = `HTTP ${response.status}`;
+      try {
+        const body = (await response.json()) as { detail?: string };
+        if (body.detail) detail = body.detail;
+      } catch {
+        // Keep the bounded HTTP status when the server did not return JSON.
+      }
+      throw new ToolError(`MailCue deliverability request failed: ${detail}`);
+    }
+    return response.json() as Promise<unknown>;
+  };
+
+  const runDeliverabilityChecks = async (
+    mailbox: string,
+    uid: string,
+    folder: string,
+    checks: string[],
+  ) => {
+    const base = config.baseUrl.replace(/\/+$/, '');
+    const url = new URL(
+      `${base}/api/v1/mailboxes/${encodeURIComponent(mailbox)}/emails/${encodeURIComponent(uid)}/deliverability/runs`,
+    );
+    url.searchParams.set('folder', folder);
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    };
+    if (config.apiKey) headers['X-API-Key'] = config.apiKey;
+    if (config.bearerToken) headers['Authorization'] = `Bearer ${config.bearerToken}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ checks }),
+    });
+    if (!response.ok) {
+      throw new ToolError(`MailCue deliverability enrichment failed: HTTP ${response.status}`);
+    }
+    return response.json() as Promise<unknown>;
+  };
+
   server.registerTool(
     'list_emails',
     {
@@ -224,6 +278,250 @@ export function buildServer(config: McpConfig): McpServer {
       const folder = a.folder ?? 'INBOX';
       const email = await client.emails.get(a.uid, { mailbox, folder });
       return text(formatEmail(email));
+    }),
+  );
+
+  server.registerTool(
+    'score_email_deliverability',
+    {
+      title: 'Score email deliverability',
+      description:
+        'Score one received email from its original message bytes. Returns a 0 to 100 score, category breakdown, evidence, and prioritized fixes for authentication, content, headers, transport, and the local spam filter.',
+      inputSchema: {
+        ...mailboxArg,
+        uid: z.string().describe('The email uid returned by list_emails or search_emails.'),
+        folder: FOLDER,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { mailbox?: string; uid: string; folder?: string };
+      const mailbox = resolveMailbox(a.mailbox);
+      const report = await scoreDeliverability(mailbox, a.uid, a.folder ?? 'INBOX');
+      return text(JSON.stringify(report, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'run_email_deliverability_checks',
+    {
+      title: 'Run extended deliverability checks',
+      description:
+        'Run configured DNS, reputation, live-link, visual, placement, client-preview, or advisory AI analysis checks for one received email. Capabilities that are disabled or not configured are reported truthfully.',
+      inputSchema: {
+        ...mailboxArg,
+        uid: z.string().describe('The email uid returned by list_emails or search_emails.'),
+        folder: FOLDER,
+        checks: z
+          .array(
+            z.enum(['dns', 'reputation', 'links', 'visual', 'placement', 'client_previews', 'ai_analysis']),
+          )
+          .min(1)
+          .max(7)
+          .default(['dns', 'reputation']),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { mailbox?: string; uid: string; folder?: string; checks: string[] };
+      const mailbox = resolveMailbox(a.mailbox);
+      const result = await runDeliverabilityChecks(
+        mailbox,
+        a.uid,
+        a.folder ?? 'INBOX',
+        a.checks,
+      );
+      return text(JSON.stringify(result, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'get_deliverability_capabilities',
+    {
+      title: 'Get deliverability capabilities',
+      description:
+        'Show which local, network, visual, placement, real-client preview, and AI analysis capabilities are available, disabled, or not configured on this MailCue deployment.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async () => text(JSON.stringify(await client.deliverability.capabilities(), null, 2))),
+  );
+
+  server.registerTool(
+    'list_deliverability_reports',
+    {
+      title: 'List deliverability reports',
+      description: 'List persisted versioned score reports for a deliverability mailbox.',
+      inputSchema: {
+        ...mailboxArg,
+        page: z.number().int().min(1).optional(),
+        pageSize: z.number().int().min(1).max(200).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { mailbox?: string; page?: number; pageSize?: number };
+      const result = await client.deliverability.history(resolveMailbox(a.mailbox), {
+        ...(a.page !== undefined ? { page: a.page } : {}),
+        ...(a.pageSize !== undefined ? { pageSize: a.pageSize } : {}),
+      });
+      return text(JSON.stringify(result, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'list_deliverability_runs',
+    {
+      title: 'List extended deliverability runs',
+      description:
+        'List persisted DNS, link, visual, placement, client-preview, and advisory AI runs for one report.',
+      inputSchema: {
+        reportId: z.string().describe('The persisted report id returned by a scoring or history tool.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { reportId: string };
+      return text(
+        JSON.stringify(await client.deliverability.runsForReport(a.reportId), null, 2),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'get_deliverability_artifact',
+    {
+      title: 'Get deliverability image artifact',
+      description:
+        'Fetch a protected local render, attention estimate, or provider preview as MCP image content.',
+      inputSchema: {
+        artifactId: z.string().describe('The artifact id from an extended run evidence URL.'),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { artifactId: string };
+      const bytes = new Uint8Array(await client.deliverability.artifact(a.artifactId));
+      const mimeType =
+        bytes.length >= 8 &&
+        bytes[0] === 0x89 &&
+        bytes[1] === 0x50 &&
+        bytes[2] === 0x4e &&
+        bytes[3] === 0x47
+          ? 'image/png'
+          : bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+            ? 'image/jpeg'
+            : null;
+      if (mimeType === null) return toolError('The artifact is not a supported PNG or JPEG image.');
+      return {
+        content: [
+          {
+            type: 'image' as const,
+            data: Buffer.from(bytes).toString('base64'),
+            mimeType,
+          },
+        ],
+      };
+    }),
+  );
+
+  server.registerTool(
+    'compare_deliverability_reports',
+    {
+      title: 'Compare deliverability reports',
+      description:
+        'Compare one persisted report with an explicit earlier report, the selected baseline, or the previous report.',
+      inputSchema: {
+        reportId: z.string().uuid(),
+        beforeReportId: z.string().uuid().optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { reportId: string; beforeReportId?: string };
+      return text(
+        JSON.stringify(
+          await client.deliverability.comparison(a.reportId, a.beforeReportId),
+          null,
+          2,
+        ),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'create_deliverability_policy',
+    {
+      title: 'Create a deliverability policy',
+      description:
+        'Create a mailbox CI gate for minimum score, maximum regression, blocked statuses, required checks, and required deployment capabilities.',
+      inputSchema: {
+        ...mailboxArg,
+        name: z.string().min(1).max(120),
+        minimumScore: z.number().int().min(0).max(100).default(80),
+        maximumRegression: z.number().int().min(0).max(100).default(5),
+        failOnStatuses: z.array(z.enum(['warning', 'fail'])).default(['fail']),
+        requiredCheckIds: z.array(z.string()).max(100).default([]),
+        requiredCapabilities: z.array(z.string()).max(30).default([]),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as {
+        mailbox?: string;
+        name: string;
+        minimumScore: number;
+        maximumRegression: number;
+        failOnStatuses: Array<'warning' | 'fail'>;
+        requiredCheckIds: string[];
+        requiredCapabilities: string[];
+      };
+      const result = await client.deliverability.createPolicy({
+        mailbox: resolveMailbox(a.mailbox),
+        name: a.name,
+        minimumScore: a.minimumScore,
+        maximumRegression: a.maximumRegression,
+        failOnStatuses: a.failOnStatuses,
+        requiredCheckIds: a.requiredCheckIds,
+        requiredCapabilities: a.requiredCapabilities,
+      });
+      return text(JSON.stringify(result, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'evaluate_deliverability_policy',
+    {
+      title: 'Evaluate a deliverability policy',
+      description: 'Evaluate a persisted report against a CI policy and create an alert on failure.',
+      inputSchema: { policyId: z.string().uuid(), reportId: z.string().uuid() },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { policyId: string; reportId: string };
+      return text(
+        JSON.stringify(
+          await client.deliverability.evaluatePolicy(a.policyId, a.reportId),
+          null,
+          2,
+        ),
+      );
+    }),
+  );
+
+  server.registerTool(
+    'list_deliverability_alerts',
+    {
+      title: 'List deliverability alerts',
+      description: 'List policy, schedule, and provider alerts for the authenticated user.',
+      inputSchema: { acknowledged: z.boolean().optional() },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    run(async (args) => {
+      const a = args as { acknowledged?: boolean };
+      return text(
+        JSON.stringify(await client.deliverability.alerts(a.acknowledged), null, 2),
+      );
     }),
   );
 

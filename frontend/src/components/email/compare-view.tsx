@@ -344,7 +344,7 @@ function PairSelector({ refs, leftIndex, rightIndex, onLeftChange, onRightChange
         >
           {refs.map((ref, i) => (
             <option key={`${ref.mailbox}:${ref.uid}`} value={i}>
-              {ref.subject || "(no subject)"} — {ref.from_address}
+              {ref.subject || "(no subject)"} · {ref.from_address}
             </option>
           ))}
         </select>
@@ -358,7 +358,7 @@ function PairSelector({ refs, leftIndex, rightIndex, onLeftChange, onRightChange
         >
           {refs.map((ref, i) => (
             <option key={`${ref.mailbox}:${ref.uid}`} value={i}>
-              {ref.subject || "(no subject)"} — {ref.from_address}
+              {ref.subject || "(no subject)"} · {ref.from_address}
             </option>
           ))}
         </select>

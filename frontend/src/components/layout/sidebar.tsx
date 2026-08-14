@@ -20,6 +20,7 @@ import {
   AtSign,
   User,
   Flame,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MailCueLogo } from "@/components/mailcue-logo";
@@ -81,6 +82,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
   const isHttpBinPage = location.pathname.startsWith("/http-bin");
   const isForwardingRulesPage = location.pathname.startsWith("/forwarding-rules");
   const isAliasesPage = location.pathname.startsWith("/aliases");
+  const isDeliverabilityPage = location.pathname.startsWith("/deliverability");
 
   // Auto-select first mailbox if none selected
   if (!selectedMailbox && mailboxes.length > 0 && mailboxes[0]) {
@@ -139,7 +141,7 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
         <div className="px-2 space-y-0.5">
           {FOLDERS.map((folder) => {
             const Icon = FOLDER_ICONS[folder];
-            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage && !isMessagingPage && !isHttpBinPage && !isForwardingRulesPage && !isAliasesPage;
+            const isActive = selectedFolder === folder && !isAdminPage && !isSettingsPage && !isDevToolsPage && !isMessagingPage && !isHttpBinPage && !isForwardingRulesPage && !isAliasesPage && !isDeliverabilityPage;
             const selectedMb = mailboxes.find(
               (m) => m.address === selectedMailbox
             );
@@ -220,7 +222,11 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
                     )}
                   >
-                    <Mail className="h-3.5 w-3.5 shrink-0" />
+                    {mailbox.purpose === "deliverability" ? (
+                      <Gauge className="h-3.5 w-3.5 shrink-0 text-violet-500" />
+                    ) : (
+                      <Mail className="h-3.5 w-3.5 shrink-0" />
+                    )}
                     <span className="truncate">{mailbox.address}</span>
                     {mailbox.unread_count > 0 && (
                       <span className="ml-auto text-xs font-semibold text-primary">
@@ -243,6 +249,19 @@ function Sidebar({ onOpenShortcuts }: SidebarProps) {
               {isAdmin ? "Admin" : "Menu"}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => void navigate("/deliverability")}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors mt-1",
+              isDeliverabilityPage
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )}
+          >
+            <Gauge className="h-4 w-4 shrink-0" />
+            {!sidebarCollapsed && <span>Deliverability</span>}
+          </button>
           <button
             type="button"
             onClick={() => void navigate("/admin")}

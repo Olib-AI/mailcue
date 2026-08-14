@@ -66,8 +66,33 @@ DELETE /api/v1/mailboxes/:address                  # Delete mailbox (admin only)
 GET    /api/v1/mailboxes/:id/stats                 # Folder statistics
 GET    /api/v1/mailboxes/:address/emails           # List emails in mailbox
 GET    /api/v1/mailboxes/:address/emails/:uid      # Get specific email
+GET    /api/v1/mailboxes/:address/emails/:uid/deliverability # Score deliverability
+POST   /api/v1/mailboxes/:address/emails/:uid/deliverability/runs # Extended checks
 DELETE /api/v1/mailboxes/:address/emails/:uid      # Delete specific email
 ```
+
+Set `purpose` to `deliverability` when creating a mailbox to give it the
+scored report experience in the web UI. The value defaults to `standard` and
+does not change how the address receives mail.
+
+Report history, trends, baselines, comparisons, exports, artifacts, providers,
+policies, schedules, and alerts are under `/api/v1/deliverability`. See the
+[deliverability testing guide](deliverability.md) for contracts and security behavior.
+
+```json
+{
+  "username": "delivery-check",
+  "password": "use-a-long-random-password",
+  "domain": "example.com",
+  "purpose": "deliverability"
+}
+```
+
+The deliverability endpoint requires `email:read` and the same mailbox access
+as email detail. It returns a versioned 0 to 100 score, category scores,
+stable check IDs, evidence, point values, remediation, limitations, and
+prioritized recommendations. The report is computed from the original message
+bytes and receiver-generated authentication and spam-filter evidence.
 
 ## GPG Keys
 

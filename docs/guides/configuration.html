@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link active">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link ">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -609,8 +610,8 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 </tr>
 <tr>
 <td><code>MAILCUE_SMTP_PORT</code></td>
-<td><code>25</code></td>
-<td>SMTP server port (internal)</td>
+<td><code>10026</code></td>
+<td>Loopback-only Postfix submission port used by the MailCue API; bypasses inbound spam filtering while retaining DKIM signing</td>
 </tr>
 <tr>
 <td><code>MAILCUE_IMAP_HOST</code></td>
@@ -696,6 +697,81 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <td><code>MAILCUE_VALIDATION_RATE_LIMIT</code></td>
 <td><code>30/minute</code></td>
 <td>Per-client-IP validation API limit</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_RATE_LIMIT</code></td>
+<td><code>30/minute</code></td>
+<td>Per-client-IP deliverability scoring API limit</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_ENRICHMENT_RATE_LIMIT</code></td>
+<td><code>5/minute</code></td>
+<td>Per-client-IP extended-run API limit</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_NETWORK_CHECKS_ENABLED</code></td>
+<td><code>false</code></td>
+<td>Enable opt-in public DNS, reputation, and live-link runs</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_NETWORK_TIMEOUT_SECONDS</code></td>
+<td><code>5</code></td>
+<td>Per-operation network timeout for extended checks</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_NETWORK_CONCURRENCY</code></td>
+<td><code>4</code></td>
+<td>Maximum concurrent DNS, link, or seed operations, from 1 to 16</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_MAX_CONCURRENT_RUNS</code></td>
+<td><code>2</code></td>
+<td>Maximum extended runs executing concurrently per API worker</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_DNSBL_ZONES</code></td>
+<td><code>[]</code></td>
+<td>JSON list of operator-approved DNS blocklist zones</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_DOMAIN_DNSBL_ZONES</code></td>
+<td><code>[]</code></td>
+<td>JSON list of operator-approved sender and linked-domain reputation zones</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_REPORT_RETENTION_DAYS</code></td>
+<td><code>365</code></td>
+<td>Retain non-baseline reports for this many days; <code>0</code> disables pruning</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_ARTIFACT_RETENTION_DAYS</code></td>
+<td><code>30</code></td>
+<td>Retain non-baseline screenshots and provider images for this many days; <code>0</code> disables pruning</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_MAX_MESSAGE_BYTES</code></td>
+<td><code>26214400</code></td>
+<td>Maximum original message size accepted by the analyzer</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_VISUAL_CHECKS_ENABLED</code></td>
+<td><code>false</code></td>
+<td>Enable network-blocked local Chromium screenshots</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_CHROMIUM_PATH</code></td>
+<td><code>chromium</code></td>
+<td>Chromium executable used by local visual runs</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_VISUAL_TIMEOUT_SECONDS</code></td>
+<td><code>15</code></td>
+<td>Timeout for each screenshot variant</td>
+</tr>
+<tr>
+<td><code>MAILCUE_DELIVERABILITY_ARTIFACT_MAX_BYTES</code></td>
+<td><code>5242880</code></td>
+<td>Maximum stored bytes for one screenshot or preview artifact</td>
 </tr>
 <tr>
 <td><code>MAILCUE_ACME_EMAIL</code></td>

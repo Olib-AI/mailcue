@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy import delete, func, select
 
 from app.httpbin.models import HttpBinBin, HttpBinRequest
 
@@ -140,4 +140,4 @@ async def clear_requests(db: AsyncSession, bin_id: str) -> int:
     stmt = delete(HttpBinRequest).where(HttpBinRequest.bin_id == bin_id)
     result = await db.execute(stmt)
     await db.commit()
-    return cast("CursorResult[Any]", result).rowcount
+    return result.rowcount

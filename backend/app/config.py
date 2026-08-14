@@ -125,6 +125,21 @@ class Settings(BaseSettings):
     validation_probe_relay_host: str = ""
     validation_probe_relay_port: int = 2525
     validation_rate_limit: str = "30/minute"
+    deliverability_rate_limit: str = "30/minute"
+    deliverability_enrichment_rate_limit: str = "5/minute"
+    deliverability_network_checks_enabled: bool = False
+    deliverability_visual_checks_enabled: bool = False
+    deliverability_chromium_path: str = "chromium"
+    deliverability_visual_timeout_seconds: float = 15.0
+    deliverability_artifact_max_bytes: int = 5 * 1024 * 1024
+    deliverability_network_timeout_seconds: float = 5.0
+    deliverability_network_concurrency: int = 4
+    deliverability_max_concurrent_runs: int = 2
+    deliverability_max_message_bytes: int = 25 * 1024 * 1024
+    deliverability_dnsbl_zones: list[str] = []
+    deliverability_domain_dnsbl_zones: list[str] = []
+    deliverability_report_retention_days: int = 365
+    deliverability_artifact_retention_days: int = 30
 
     # ── Tunnels (optional outbound relay through remote VPS edges) ─
     tunnels_config_path: str = "/etc/mailcue-sidecar/tunnels.json"
@@ -137,6 +152,38 @@ class Settings(BaseSettings):
         if normalized not in {"test", "production"}:
             raise ValueError("mode must be exactly 'test' or 'production'")
         return normalized
+
+    @field_validator("deliverability_dnsbl_zones", "deliverability_domain_dnsbl_zones")
+    @classmethod
+    def _validate_dnsbl_zones(cls, values: list[str]) -> list[str]:
+        normalized = [value.strip().rstrip(".").lower() for value in values if value.strip()]
+        if len(normalized) > 20:
+            raise ValueError("deliverability DNSBL zone lists cannot exceed 20 entries")
+        for value in normalized:
+            labels = value.split(".")
+            if (
+                len(value) > 253
+                or len(labels) < 2
+                or any(
+                    not label
+                    or len(label) > 63
+                    or label.startswith("-")
+                    or label.endswith("-")
+                    or not all(character.isalnum() or character == "-" for character in label)
+                    for label in labels
+                )
+            ):
+                raise ValueError("deliverability DNSBL zones must be valid DNS names")
+        return list(dict.fromkeys(normalized))
+
+    @field_validator(
+        "deliverability_report_retention_days", "deliverability_artifact_retention_days"
+    )
+    @classmethod
+    def _validate_deliverability_retention(cls, value: int) -> int:
+        if not 0 <= value <= 3650:
+            raise ValueError("deliverability retention days must be between 0 and 3650")
+        return value
 
     @model_validator(mode="after")
     def _resolve_database_url(self) -> Settings:
@@ -154,6 +201,18 @@ class Settings(BaseSettings):
             raise ValueError("database timeouts must be non-negative")
         if self.validation_smtp_timeout_seconds <= 0 or self.validation_total_timeout_seconds <= 0:
             raise ValueError("validation timeouts must be positive")
+        if self.deliverability_network_timeout_seconds <= 0:
+            raise ValueError("deliverability network timeout must be positive")
+        if self.deliverability_visual_timeout_seconds <= 0:
+            raise ValueError("deliverability visual timeout must be positive")
+        if not 1 <= self.deliverability_network_concurrency <= 16:
+            raise ValueError("deliverability network concurrency must be between 1 and 16")
+        if not 1 <= self.deliverability_max_concurrent_runs <= 10:
+            raise ValueError("deliverability concurrent runs must be between 1 and 10")
+        if not 1024 <= self.deliverability_max_message_bytes <= 100 * 1024 * 1024:
+            raise ValueError("deliverability maximum message size must be between 1 KB and 100 MB")
+        if not 1024 <= self.deliverability_artifact_max_bytes <= 20 * 1024 * 1024:
+            raise ValueError("deliverability artifact size must be between 1 KB and 20 MB")
         if not 1 <= self.validation_probe_relay_port <= 65_535:
             raise ValueError("validation probe relay port must be between 1 and 65535")
         if self.database_url:

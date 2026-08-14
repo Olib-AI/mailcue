@@ -1,6 +1,6 @@
 # mailcue
 
-Official Node.js / TypeScript SDK for [MailCue](https://github.com/Olib-AI/mailcue) — the open-source email testing and production server.
+Official Node.js / TypeScript SDK for [MailCue](https://github.com/Olib-AI/mailcue), the open-source email testing and production server.
 
 Build against MailCue locally in test mode, then point at your production deployment by changing one option. No code changes required.
 
@@ -102,7 +102,24 @@ console.log(found.length);
 ## Mailboxes, domains, aliases, GPG, API keys, system
 
 ```ts
-await mc.mailboxes.create({ username: 'alice', password: 'secret', domain: 'example.com' });
+await mc.mailboxes.create({
+  username: 'delivery-check',
+  password: 'use-a-long-random-password',
+  domain: 'example.com',
+  purpose: 'deliverability',
+});
+
+const report = await mc.emails.scoreDeliverability('42', {
+  mailbox: 'delivery-check@example.com',
+  folder: 'INBOX',
+});
+console.log(report.score, report.topRecommendations);
+const run = await mc.emails.runDeliverabilityChecks('42', {
+  mailbox: 'delivery-check@example.com',
+  checks: ['dns', 'links', 'visual'],
+});
+const history = await mc.deliverability.history('delivery-check@example.com');
+await mc.deliverability.setBaseline(history.reports[0].id);
 const stats = await mc.mailboxes.stats('alice@example.com');
 
 await mc.domains.create({ name: 'example.com' });
@@ -181,8 +198,8 @@ const mc = new Mailcue({
 
 | Option        | Default                  | Notes                                          |
 | ------------- | ------------------------ | ---------------------------------------------- |
-| `apiKey`      | —                        | Either this or `bearerToken` is required.      |
-| `bearerToken` | —                        | JWT alternative to `apiKey`.                   |
+| `apiKey`      | (none)                   | Either this or `bearerToken` is required.      |
+| `bearerToken` | (none)                   | JWT alternative to `apiKey`.                   |
 | `baseUrl`     | `http://localhost:8088`  | Your MailCue server.                           |
 | `timeout`     | `30000`                  | Per-request timeout in ms.                     |
 | `maxRetries`  | `3`                      | Retries on `502 / 503 / 504` and network errors. |
@@ -191,4 +208,4 @@ const mc = new Mailcue({
 
 ## License
 
-MIT — see `LICENSE`. Source: <https://github.com/Olib-AI/mailcue>
+MIT. See `LICENSE`. Source: <https://github.com/Olib-AI/mailcue>

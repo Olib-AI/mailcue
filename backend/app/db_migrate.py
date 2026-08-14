@@ -24,7 +24,7 @@ from sqlalchemy.engine import URL, Connection, Engine, make_url
 
 from alembic import command
 
-EXPECTED_REVISION = "022_gpg_tenant_ownership"
+EXPECTED_REVISION = "028_deliverability_alerts"
 
 
 class MigrationError(RuntimeError):

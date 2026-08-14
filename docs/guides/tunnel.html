@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link active">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -480,8 +481,9 @@ Railway, Vercel, ...) block outbound TCP/25, which is the only port public
 MX servers accept mail on. The MailCue tunnel works around that by relaying
 SMTP egress through a small VPS that <strong>does</strong> have port-25 access - an OVH
 Eco / Kimsufi / Public Cloud instance is the canonical choice - and by
-making it trivial to add more such VPSes for IP rotation and per-tenant
-egress isolation.</p>
+making it possible to add standby VPSes for resilient egress. MailCue keeps a
+stable primary sending IP for reputation and uses another healthy edge only
+when the primary tunnel is unavailable.</p>
 <p>This crate ships <strong>two</strong> binaries:</p>
 <table>
 <thead>
@@ -500,7 +502,7 @@ egress isolation.</p>
 <tr>
 <td><code>mailcue-relay-sidecar</code></td>
 <td>Next to the MailCue mail container</td>
-<td>Exposes a loopback SMTP submission endpoint (default <code>127.0.0.1:2525</code>) that Postfix relays through. Multiplexes outbound mail across one or more configured edges.</td>
+<td>Exposes a loopback SMTP submission endpoint (default <code>127.0.0.1:2525</code>) that Postfix relays through. Selects the highest-weight healthy edge as primary and retains the others as failovers.</td>
 </tr>
 </tbody>
 </table>

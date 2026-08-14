@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -38,6 +38,9 @@ class Mailbox(Base):
     domain: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_catchall: Mapped[bool] = mapped_column(Boolean, default=False)
+    purpose: Mapped[Literal["standard", "deliverability"]] = mapped_column(
+        String(32), nullable=False, default="standard", server_default="standard"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     quota_mb: Mapped[int] = mapped_column(Integer, default=500)
     signature: Mapped[str] = mapped_column(Text, default="", server_default="")

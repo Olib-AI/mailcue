@@ -32,9 +32,11 @@ import { Avatar } from "@/components/ui/avatar";
 import { EmailRenderer } from "./email-renderer";
 import { EmailHeaders } from "./email-headers";
 import { EmailAnalysis } from "./email-analysis";
+import { DeliverabilityDetail } from "./deliverability-detail";
 import { AttachmentList } from "./attachment-list";
 import { GpgStatusBadge } from "@/components/gpg/gpg-status-badge";
-import { useEmail, useDeleteEmail, useToggleReadStatus, useMarkAsSpam, useMarkAsNotSpam } from "@/hooks/use-emails";
+import { useEmail, useDeleteEmail, useToggleReadStatus, useMarkAsSpam, useMarkAsNotSpam, useDeliverabilityReport } from "@/hooks/use-emails";
+import { useMailboxes } from "@/hooks/use-mailboxes";
 import { useUIStore } from "@/stores/ui-store";
 import { useCompareStore } from "@/stores/compare-store";
 
@@ -62,6 +64,16 @@ function EmailDetail() {
     selectedMailbox,
     selectedEmailUid,
     selectedFolder
+  );
+  const { data: mailboxData } = useMailboxes();
+  const isDeliverabilityMailbox = mailboxData?.mailboxes.some(
+    (mailbox) => mailbox.address === selectedMailbox && mailbox.purpose === "deliverability"
+  ) ?? false;
+  const deliverability = useDeliverabilityReport(
+    selectedMailbox,
+    selectedEmailUid,
+    selectedFolder,
+    isDeliverabilityMailbox
   );
   const deleteEmail = useDeleteEmail();
   const toggleRead = useToggleReadStatus();
@@ -182,6 +194,18 @@ function EmailDetail() {
   }
 
   const fromDisplay = email.from_name || extractDisplayName(email.from_address);
+
+  if (isDeliverabilityMailbox) {
+    return (
+      <DeliverabilityDetail
+        email={email}
+        report={deliverability.data}
+        isLoading={deliverability.isLoading}
+        isError={deliverability.isError}
+        onRetry={() => void deliverability.refetch()}
+      />
+    );
+  }
 
   return (
     <ScrollArea className="h-full">

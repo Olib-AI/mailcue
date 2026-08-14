@@ -47,7 +47,21 @@ Generate an API key from the web UI **Profile** page (or `POST /api/v1/auth/api-
 
 ## Tools
 
-`list_emails`, `search_emails`, `get_email`, `send_email`, `reply_email`, `delete_email`, `mailbox_stats` (plus `list_mailboxes` when not locked). The server also exposes MCP `instructions` that orient the agent on how to triage and reply safely.
+The deliverability tools are `score_email_deliverability`,
+`run_email_deliverability_checks`, `get_deliverability_capabilities`,
+`list_deliverability_reports`, `compare_deliverability_reports`,
+`list_deliverability_runs`,
+`get_deliverability_artifact`,
+`create_deliverability_policy`, `evaluate_deliverability_policy`, and
+`list_deliverability_alerts`. Extended runs can request DNS, reputation, links,
+local visuals, seed placement, client previews, or advisory AI analysis. The
+tool reports disabled or unconfigured capabilities instead of inventing a
+result.
+
+Mailbox tools include `list_emails`, `search_emails`, `get_email`, `send_email`,
+`reply_email`, `delete_email`, and `mailbox_stats`, plus `list_mailboxes` when
+not locked. The server also exposes MCP `instructions` that orient the agent on
+safe mailbox and deliverability workflows.
 
 For full details on the tools and the SDK, see [the MCP SDK](../../sdks/mcp-node/README.md).
 

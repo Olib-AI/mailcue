@@ -1,0 +1,5 @@
+# Authentication and spam verdicts are receiver-generated evidence. Never let
+# an internet sender choose values that the API or deliverability scorer trusts.
+/^Authentication-Results:/    IGNORE
+/^Received-SPF:/               IGNORE
+/^X-Spam-[^:]*:/               IGNORE

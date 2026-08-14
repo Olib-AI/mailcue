@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link ">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -515,6 +516,27 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-API-Key: </span><span class="nv">$API_KEY</span><span class="s2">&quot;</span><span class="w"> </span>http://localhost:8088/api/v1/emails?mailbox<span class="o">=</span>admin@mailcue.local
 </code></pre></div>
 
+<h2>Deliverability release gates</h2>
+<p>Create a mailbox with <code>purpose: "deliverability"</code>, send the release candidate email to it, then score the received UID. Persisted policies can require a minimum score, block warning or failure states, require named checks, and limit regression from the selected baseline.</p>
+<div class="codehilite"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">report</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">mailcue</span><span class="p">.</span><span class="nx">emails</span><span class="p">.</span><span class="nx">scoreDeliverability</span><span class="p">(</span><span class="nx">uid</span><span class="p">,</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nx">mailbox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;delivery-ci@example.com&#39;</span><span class="p">,</span>
+<span class="p">});</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">policy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">mailcue</span><span class="p">.</span><span class="nx">deliverability</span><span class="p">.</span><span class="nx">createPolicy</span><span class="p">({</span>
+<span class="w">  </span><span class="nx">name</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;Release email gate&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">mailbox</span><span class="o">:</span><span class="w"> </span><span class="s1">&#39;delivery-ci@example.com&#39;</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">minimumScore</span><span class="o">:</span><span class="w"> </span><span class="kt">90</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">maximumRegression</span><span class="o">:</span><span class="w"> </span><span class="kt">3</span><span class="p">,</span>
+<span class="w">  </span><span class="nx">failOnStatuses</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;fail&#39;</span><span class="p">],</span>
+<span class="w">  </span><span class="nx">requiredCheckIds</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;spf&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;dkim&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;dmarc&#39;</span><span class="p">],</span>
+<span class="w">  </span><span class="nx">requiredCapabilities</span><span class="o">:</span><span class="w"> </span><span class="p">[</span><span class="s1">&#39;local_analysis&#39;</span><span class="p">],</span>
+<span class="p">});</span>
+
+<span class="kd">const</span><span class="w"> </span><span class="nx">evaluation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">mailcue</span><span class="p">.</span><span class="nx">deliverability</span><span class="p">.</span><span class="nx">evaluatePolicy</span><span class="p">(</span><span class="nx">policy</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">report</span><span class="p">.</span><span class="nx">reportId</span><span class="o">!</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">evaluation</span><span class="p">.</span><span class="nx">passed</span><span class="p">)</span><span class="w"> </span><span class="nx">process</span><span class="p">.</span><span class="nx">exit</span><span class="p">(</span><span class="mf">1</span><span class="p">);</span>
+</code></pre></div>
+
+<p>Network, visual, placement, preview, and AI-assisted checks are separate explicit runs. Require those capabilities in a policy only when the CI deployment is configured to provide them. The base score remains deterministic and does not depend on an external AI response.</p>
 <h2>CI Platform Examples</h2>
 <p>Ready-to-use configuration files for popular CI/CD platforms:</p>
 <table>

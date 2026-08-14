@@ -5,7 +5,7 @@
 </p>
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server for
-[MailCue](https://github.com/Olib-AI/mailcue) — the open-source email testing and
+[MailCue](https://github.com/Olib-AI/mailcue), the open-source email testing and
 production server. It gives an AI agent **its own mailbox**: the agent can read,
 search, triage, send, reply to, and delete email directly, managing an inbox the
 way a person uses a mail client.
@@ -17,7 +17,7 @@ and the MCP TypeScript SDK. Talks to any MailCue server over its REST API.
 
 MailCue already exposes a full mail stack (Postfix + Dovecot + IMAP/SMTP) behind
 one API. This server turns that API into MCP tools so an agent can own and run a
-mailbox end-to-end — answering mail, keeping threads tidy, clearing the inbox —
+mailbox end-to-end: answering mail, keeping threads tidy, and clearing the inbox,
 better and faster than a human babysitting it.
 
 ## Install / run
@@ -37,10 +37,10 @@ All configuration is via environment variables:
 
 | Variable               | Required | Default                  | Description |
 | ---------------------- | -------- | ------------------------ | ----------- |
-| `MAILCUE_API_KEY`      | yes\*    | —                        | MailCue `X-API-Key` (`mc_...`). |
-| `MAILCUE_BEARER_TOKEN` | yes\*    | —                        | JWT alternative to the API key. |
+| `MAILCUE_API_KEY`      | yes\*    | (none)                   | MailCue `X-API-Key` (`mc_...`). |
+| `MAILCUE_BEARER_TOKEN` | yes\*    | (none)                   | JWT alternative to the API key. |
 | `MAILCUE_BASE_URL`     | no       | `http://localhost:8088`  | Your MailCue server URL. |
-| `MAILCUE_MAILBOX`      | no       | —                        | Lock the agent to a single mailbox (see below). |
+| `MAILCUE_MAILBOX`      | no       | (none)                   | Lock the agent to a single mailbox (see below). |
 
 \* Provide **either** `MAILCUE_API_KEY` (preferred) or `MAILCUE_BEARER_TOKEN`.
 
@@ -87,6 +87,16 @@ Drop `MAILCUE_MAILBOX` to let the agent work across every mailbox on the server.
 | `list_emails`    | List a folder's emails (newest first); returns uids. | no `mailbox` arg |
 | `search_emails`  | Full-text search a folder. | no `mailbox` arg |
 | `get_email`      | Fetch one full email by uid (body, headers, attachments). | no `mailbox` arg |
+| `score_email_deliverability` | Return the score, evidence, category breakdown, and prioritized fixes for one email. | no `mailbox` arg |
+| `run_email_deliverability_checks` | Run requested DNS, links, visuals, placement, previews, or advisory AI checks. | no `mailbox` arg |
+| `get_deliverability_capabilities` | Discover which checks are available, disabled, or not configured. | independent of mailbox |
+| `list_deliverability_reports` | List immutable, versioned report history. | no `mailbox` arg |
+| `list_deliverability_runs` | Reload persisted extended evidence for one report. | independent of mailbox |
+| `get_deliverability_artifact` | Retrieve a protected PNG or JPEG result as MCP image content. | independent of mailbox |
+| `compare_deliverability_reports` | Compare a report with a baseline, previous report, or explicit report. | independent of mailbox |
+| `create_deliverability_policy` | Create a reproducible score and regression gate. | no `mailbox` arg |
+| `evaluate_deliverability_policy` | Evaluate one persisted report against a policy. | independent of mailbox |
+| `list_deliverability_alerts` | List persistent policy and automation alerts. | independent of mailbox |
 | `send_email`     | Send a new email. | sends from the locked address; no `from` arg |
 | `reply_email`    | Reply by uid; threading + `Re:` subject set automatically. | replies from the locked address |
 | `delete_email`   | Permanently delete an email by uid. | no `mailbox` arg |
@@ -94,7 +104,7 @@ Drop `MAILCUE_MAILBOX` to let the agent work across every mailbox on the server.
 | `validate_email` | Validate structure, DNS status, mailbox SMTP availability, and disposable status. | independent of mailbox |
 | `list_mailboxes` | Discover available mailboxes. | **not available when locked** |
 
-uids are scoped to a `(mailbox, folder)` pair — read and act using the same
+uids are scoped to a `(mailbox, folder)` pair. Read and act using the same
 folder you listed from. HTML bodies are converted to readable text and long
 bodies are truncated; re-fetch with `get_email` for the full message.
 
@@ -117,5 +127,5 @@ npm run build      # bundles to dist/index.js (stdio entrypoint)
 
 ## License
 
-MIT — see `LICENSE`. Part of [MailCue](https://github.com/Olib-AI/mailcue) by
+MIT. See `LICENSE`. Part of [MailCue](https://github.com/Olib-AI/mailcue) by
 [Olib AI](https://www.olib.ai).

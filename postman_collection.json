@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "64fc05b3-938c-4930-a142-e47e92a717e9",
+    "_postman_id": "7a994058-0504-40f1-8bfe-0ed6301281af",
     "name": "MailCue API",
     "description": "Realistic email testing server REST API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -13,12 +13,7 @@
           "name": "Login",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
               "host": [
@@ -31,16 +26,7 @@
                 "login"
               ]
             },
-            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``."
           },
           "response": []
         },
@@ -48,12 +34,7 @@
           "name": "Login 2Fa",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login/2fa",
               "host": [
@@ -67,16 +48,7 @@
                 "2fa"
               ]
             },
-            "description": "Complete login by verifying a TOTP code after step 1.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"string\",\n  \"temp_token\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Complete login by verifying a TOTP code after step 1."
           },
           "response": []
         },
@@ -84,12 +56,7 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/register",
               "host": [
@@ -102,16 +69,7 @@
                 "register"
               ]
             },
-            "description": "Create a new user account. **Admin only.**",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"username\": \"string\",\n  \"email\": \"string\",\n  \"password\": \"string\",\n  \"is_admin\": false,\n  \"max_mailboxes\": 5\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Create a new user account. **Admin only.**"
           },
           "response": []
         },
@@ -119,12 +77,7 @@
           "name": "Change Password",
           "request": {
             "method": "PUT",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/password",
               "host": [
@@ -137,16 +90,7 @@
                 "password"
               ]
             },
-            "description": "Change the current user's password.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"current_password\": \"string\",\n  \"new_password\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Change the current user's password."
           },
           "response": []
         },
@@ -212,12 +156,7 @@
           "name": "Totp Confirm",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/confirm",
               "host": [
@@ -231,16 +170,7 @@
                 "confirm"
               ]
             },
-            "description": "Verify a TOTP code from the authenticator app and enable 2FA.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Verify a TOTP code from the authenticator app and enable 2FA."
           },
           "response": []
         },
@@ -248,12 +178,7 @@
           "name": "Totp Disable",
           "request": {
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
+            "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/disable",
               "host": [
@@ -267,16 +192,7 @@
                 "disable"
               ]
             },
-            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code.",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"password\": \"string\",\n  \"code\": \"string\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
+            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code."
           },
           "response": []
         },
@@ -318,7 +234,7 @@
                 "logout"
               ]
             },
-            "description": "Clear the httpOnly refresh_token cookie."
+            "description": "Revoke the user's active tokens and clear the refresh cookie."
           },
           "response": []
         },
@@ -855,7 +771,7 @@
             "description": "Send an email via the local SMTP server (Postfix).\n\nThe sender address (``from_address``) must belong to the\nauthenticated user's mailbox (admins may send from any).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"from_address\": \"string\",\n  \"from_name\": \"\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"body_type\": \"plain\",\n  \"attachments\": [\n    {\n      \"filename\": \"string\",\n      \"content_type\": \"string\",\n      \"data\": \"string\"\n    }\n  ],\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ],\n  \"bulk\": false,\n  \"list_unsubscribe\": {},\n  \"list_unsubscribe_post\": {}\n}",
+              "raw": "{\n  \"from_address\": \"string\",\n  \"from_name\": \"\",\n  \"to_addresses\": [\n    \"string\"\n  ],\n  \"cc_addresses\": [\n    \"string\"\n  ],\n  \"bcc_addresses\": [\n    \"string\"\n  ],\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"body_type\": \"plain\",\n  \"attachments\": [\n    {\n      \"filename\": \"string\",\n      \"content_type\": \"string\",\n      \"data\": \"string\"\n    }\n  ],\n  \"sign\": false,\n  \"encrypt\": false,\n  \"reply_to\": {},\n  \"in_reply_to\": {},\n  \"references\": [\n    \"string\"\n  ],\n  \"bulk\": false,\n  \"list_unsubscribe\": {},\n  \"list_unsubscribe_post\": {}\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1019,7 +935,7 @@
             "description": "Create a new mailbox and provision it on the mail server.\n\nAny authenticated user can create mailboxes up to their quota.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"domain\": {},\n  \"display_name\": \"\"\n}",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"domain\": {},\n  \"display_name\": \"\",\n  \"purpose\": \"standard\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1257,6 +1173,107 @@
               ]
             },
             "description": "Delete an email by UID from a specific mailbox."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Email Deliverability",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid/deliverability",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid",
+                "deliverability"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Score one received message from its original bytes.\n\nThe endpoint is available for every owned mailbox so API clients can run\ndiagnostics consistently. Mailboxes with purpose ``deliverability`` use\nthe same report as their primary message-detail experience in the web UI."
+          },
+          "response": []
+        },
+        {
+          "name": "Run Email Deliverability Enrichment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mailboxes/:mailbox_address/emails/:uid/deliverability/runs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "mailboxes",
+                ":mailbox_address",
+                "emails",
+                ":uid",
+                "deliverability",
+                "runs"
+              ],
+              "query": [
+                {
+                  "key": "folder",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "mailbox_address",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "uid",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Run explicitly enabled network, visual, preview, or placement enrichments.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"checks\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -1543,6 +1560,830 @@
       ]
     },
     {
+      "name": "Deliverability",
+      "item": [
+        {
+          "name": "Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/capabilities",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "capabilities"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/providers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "providers"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Provider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/providers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "providers"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"kind\": \"string\",\n  \"adapter\": \"string\",\n  \"enabled\": true,\n  \"config\": {},\n  \"secret\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Provider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/providers/:provider_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "providers",
+                ":provider_id"
+              ],
+              "variable": [
+                {
+                  "key": "provider_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"kind\": \"string\",\n  \"adapter\": \"string\",\n  \"enabled\": true,\n  \"config\": {},\n  \"secret\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Provider",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/providers/:provider_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "providers",
+                ":provider_id"
+              ],
+              "variable": [
+                {
+                  "key": "provider_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Schedules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "schedules"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Owned deliverability mailbox address"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Schedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/schedules",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "schedules"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"mailbox\": \"string\",\n  \"enabled\": true,\n  \"interval_minutes\": 60,\n  \"checks\": [\n    \"string\"\n  ],\n  \"policy_id\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Schedule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/schedules/:schedule_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "schedules",
+                ":schedule_id"
+              ],
+              "variable": [
+                {
+                  "key": "schedule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"mailbox\": \"string\",\n  \"enabled\": true,\n  \"interval_minutes\": 60,\n  \"checks\": [\n    \"string\"\n  ],\n  \"policy_id\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Schedule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/schedules/:schedule_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "schedules",
+                ":schedule_id"
+              ],
+              "variable": [
+                {
+                  "key": "schedule_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Alerts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "acknowledged",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Acknowledge",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/alerts/:alert_id/acknowledge",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "alerts",
+                ":alert_id",
+                "acknowledge"
+              ],
+              "variable": [
+                {
+                  "key": "alert_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Report Runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports/:report_id/runs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports",
+                ":report_id",
+                "runs"
+              ],
+              "variable": [
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Run Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/runs/:run_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "runs",
+                ":run_id"
+              ],
+              "variable": [
+                {
+                  "key": "run_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Artifact Content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/artifacts/:artifact_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "artifacts",
+                ":artifact_id"
+              ],
+              "variable": [
+                {
+                  "key": "artifact_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Policies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "policies"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Owned deliverability mailbox address"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create Policy",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/policies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "policies"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"mailbox\": \"string\",\n  \"enabled\": true,\n  \"minimum_score\": 80,\n  \"maximum_regression\": 5,\n  \"fail_on_statuses\": [\n    \"string\"\n  ],\n  \"required_check_ids\": [\n    \"string\"\n  ],\n  \"required_capabilities\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Policy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/policies/:policy_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "policies",
+                ":policy_id"
+              ],
+              "variable": [
+                {
+                  "key": "policy_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"mailbox\": \"string\",\n  \"enabled\": true,\n  \"minimum_score\": 80,\n  \"maximum_regression\": 5,\n  \"fail_on_statuses\": [\n    \"string\"\n  ],\n  \"required_check_ids\": [\n    \"string\"\n  ],\n  \"required_capabilities\": [\n    \"string\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Policy",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/policies/:policy_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "policies",
+                ":policy_id"
+              ],
+              "variable": [
+                {
+                  "key": "policy_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Policy Evaluation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/policies/:policy_id/evaluate/:report_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "policies",
+                ":policy_id",
+                "evaluate",
+                ":report_id"
+              ],
+              "variable": [
+                {
+                  "key": "policy_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Report History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Owned mailbox address"
+                },
+                {
+                  "key": "page",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "page_size",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Report Trend",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/trends",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "trends"
+              ],
+              "query": [
+                {
+                  "key": "mailbox",
+                  "value": "",
+                  "description": "Owned mailbox address"
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Report Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports/:report_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports",
+                ":report_id"
+              ],
+              "variable": [
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Export Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports/:report_id/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports",
+                ":report_id",
+                "export"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Update Report Baseline",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports/:report_id/baseline",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports",
+                ":report_id",
+                "baseline"
+              ],
+              "variable": [
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_baseline\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Report Comparison",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/deliverability/reports/:report_id/comparison",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "deliverability",
+                "reports",
+                ":report_id",
+                "comparison"
+              ],
+              "query": [
+                {
+                  "key": "before_report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ],
+              "variable": [
+                {
+                  "key": "report_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Events",
       "item": [
         {
@@ -1624,7 +2465,7 @@
                 "keys"
               ]
             },
-            "description": "List GPG keys for the current user's mailboxes only."
+            "description": "List GPG keys for owned mailboxes and all imported public keys."
           },
           "response": []
         },
@@ -1800,10 +2641,46 @@
                 "import"
               ]
             },
-            "description": "Import an armored PGP public key.\n\nIf ``mailbox_address`` is specified, the user must own that mailbox.",
+            "description": "Import an armored PGP public key.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"armored_key\": \"string\",\n  \"mailbox_address\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Fetch Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/gpg/keys/fetch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "gpg",
+                "keys",
+                "fetch"
+              ]
+            },
+            "description": "Search and import a GPG public key from keys.openpgp.org by email address.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"string\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2121,7 +2998,7 @@
             "description": "Update server-wide settings. **Admin only.**",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"hostname\": \"string\"\n}",
+              "raw": "{\n  \"hostname\": \"string\",\n  \"catch_all_enabled\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2648,6 +3525,27 @@
           "response": []
         },
         {
+          "name": "Get Effective Tunnel Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/tunnels/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "tunnels",
+                "status"
+              ]
+            },
+            "description": "Return file-managed tunnels plus live sidecar health. **Admin only.**"
+          },
+          "response": []
+        },
+        {
           "name": "List All Tunnels",
           "request": {
             "method": "GET",
@@ -2825,6 +3723,474 @@
               ]
             },
             "description": "Probe a tunnel edge with a 5-second TCP connect. **Admin only.**\n\nThe actual Noise IK handshake is the sidecar's responsibility -- this\nonly confirms the edge port is reachable from the API host."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Warmup",
+      "item": [
+        {
+          "name": "Providers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/providers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "providers"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List Accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "accounts"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Add Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "accounts"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"email\": \"string\",\n  \"provider\": \"custom\",\n  \"smtp_host\": \"string\",\n  \"smtp_port\": 587,\n  \"smtp_security\": \"starttls\",\n  \"imap_host\": \"string\",\n  \"imap_port\": 993,\n  \"imap_security\": \"ssl\",\n  \"username\": \"string\",\n  \"password\": \"string\",\n  \"enabled\": true,\n  \"ownership_confirmed\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Account",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/accounts/:account_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "accounts",
+                ":account_id"
+              ],
+              "variable": [
+                {
+                  "key": "account_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": {},\n  \"enabled\": {},\n  \"password\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/accounts/:account_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "accounts",
+                ":account_id"
+              ],
+              "variable": [
+                {
+                  "key": "account_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Test Account",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/accounts/:account_id/check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "accounts",
+                ":account_id",
+                "check"
+              ],
+              "variable": [
+                {
+                  "key": "account_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List Campaigns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Add Campaign",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"local_address\": \"string\",\n  \"account_ids\": [\n    \"string\"\n  ],\n  \"start_daily_volume\": 3,\n  \"daily_ramp\": 1,\n  \"max_daily_volume\": 20,\n  \"min_delay_minutes\": 30,\n  \"max_delay_minutes\": 120,\n  \"reply_rate\": 70,\n  \"active_hour_start\": 8,\n  \"active_hour_end\": 20,\n  \"timezone\": \"UTC\",\n  \"auto_clean_local_mailbox\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Edit Campaign",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns/:campaign_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns",
+                ":campaign_id"
+              ],
+              "variable": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"string\",\n  \"local_address\": \"string\",\n  \"account_ids\": [\n    \"string\"\n  ],\n  \"start_daily_volume\": 3,\n  \"daily_ramp\": 1,\n  \"max_daily_volume\": 20,\n  \"min_delay_minutes\": 30,\n  \"max_delay_minutes\": 120,\n  \"reply_rate\": 70,\n  \"active_hour_start\": 8,\n  \"active_hour_end\": 20,\n  \"timezone\": \"UTC\",\n  \"auto_clean_local_mailbox\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Campaign",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns/:campaign_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns",
+                ":campaign_id"
+              ],
+              "variable": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Clear Campaign Mailbox",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns/:campaign_id/clear-mailbox",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns",
+                ":campaign_id",
+                "clear-mailbox"
+              ],
+              "variable": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Control Campaign",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/campaigns/:campaign_id/:action",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "campaigns",
+                ":campaign_id",
+                ":action"
+              ],
+              "variable": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List Provider States",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/provider-states",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "provider-states"
+              ],
+              "query": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Resume Provider",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/provider-states/:state_id/resume",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "provider-states",
+                ":state_id",
+                "resume"
+              ],
+              "variable": [
+                {
+                  "key": "state_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "List Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/warmup/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "warmup",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "campaign_id",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": ""
           },
           "response": []
         }

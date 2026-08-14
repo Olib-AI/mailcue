@@ -26,6 +26,11 @@ GUIDES = [
         "desc": "REST endpoints, authentication, and API key scopes.",
     },
     {
+        "file": "deliverability.md",
+        "title": "Deliverability Testing",
+        "desc": "Scoring, DNS, reputation, visual previews, placement, policies, schedules, and provider contracts.",
+    },
+    {
         "file": "production.md",
         "title": "Production Deployment",
         "desc": "Hardened mode, DNS records, and TLS certificates.",

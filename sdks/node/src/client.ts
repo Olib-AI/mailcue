@@ -8,6 +8,7 @@ import { AliasesResource } from './resources/aliases.js';
 import { GpgResource } from './resources/gpg.js';
 import { ApiKeysResource } from './resources/apiKeys.js';
 import { SystemResource } from './resources/system.js';
+import { DeliverabilityResource } from './resources/deliverability.js';
 
 const SDK_VERSION = '0.1.0';
 const DEFAULT_BASE_URL = 'http://localhost:8088';
@@ -33,6 +34,7 @@ export class Mailcue {
   readonly apiKeys: ApiKeysResource;
   readonly system: SystemResource;
   readonly events: EventsClient;
+  readonly deliverability: DeliverabilityResource;
 
   private readonly transport: Transport;
 
@@ -70,6 +72,7 @@ export class Mailcue {
     this.apiKeys = new ApiKeysResource(this.transport);
     this.system = new SystemResource(this.transport);
     this.events = new EventsClient(this.transport);
+    this.deliverability = new DeliverabilityResource(this.transport);
   }
 }
 

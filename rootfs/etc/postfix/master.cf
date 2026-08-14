@@ -8,6 +8,9 @@ smtp      inet  n       -       n       -       -       smtpd
   -o smtpd_tls_security_level=may
   -o smtpd_sasl_auth_enable=no
   -o content_filter=spamassassin:dummy
+  # Remove sender-supplied verdict headers before local filters add trusted results.
+  # This is scoped to public SMTP. The post-scan reinjection service bypasses it.
+  -o header_checks=regexp:/etc/postfix/inbound_header_checks
   -o smtpd_milters=unix:/var/run/opendkim/opendkim.sock,unix:/var/run/opendmarc/opendmarc.sock
   -o non_smtpd_milters=unix:/var/run/opendkim/opendkim.sock,unix:/var/run/opendmarc/opendmarc.sock
 

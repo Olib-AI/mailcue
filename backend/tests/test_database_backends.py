@@ -100,7 +100,7 @@ def test_alembic_history_builds_complete_sqlite_schema(tmp_path: Path) -> None:
                 "SELECT name FROM sqlite_master WHERE type='index'"
             ).fetchall()
         }
-    assert revision == ("023_reset_mta_sts_verification",)
+    assert revision == ("028_deliverability_alerts",)
     assert "gpg_keys" in tables
     assert "warmup_campaign_accounts" in tables
     assert "ix_httpbin_requests_bin_created" in indexes

@@ -13,6 +13,7 @@ from pydantic import ValidationError as PydanticValidationError
 from app.auth.models import User
 from app.auth.utils import create_access_token
 from app.config import Settings, settings
+from app.deliverability.links import _public_addresses
 from app.dependencies import _user_from_jwt
 from app.emails.validation import _resolve_public_smtp_addresses
 from app.events.bus import EventBus
@@ -45,6 +46,18 @@ def test_maildir_builder_cannot_escape_storage_root(
     assert _safe_maildir_path("example.com", "alice").is_relative_to(tmp_path)
     with pytest.raises(ValueError):
         _safe_maildir_path("..", "etc")
+
+
+def test_public_smtp_strips_sender_supplied_verdict_headers() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    master = (repository_root / "rootfs/etc/postfix/master.cf").read_text()
+    checks = (repository_root / "rootfs/etc/postfix/inbound_header_checks").read_text()
+
+    public_smtp = master.split("# ---- Port 587", maxsplit=1)[0]
+    assert "header_checks=regexp:/etc/postfix/inbound_header_checks" in public_smtp
+    assert "/^Authentication-Results:/" in checks
+    assert "/^Received-SPF:/" in checks
+    assert "/^X-Spam-[^:]*:/" in checks
 
 
 async def test_event_bus_only_delivers_events_for_allowed_mailboxes() -> None:
@@ -145,6 +158,21 @@ async def test_smtp_probe_discards_private_destinations(
 
     monkeypatch.setattr(loop, "getaddrinfo", private_lookup)
     assert await _resolve_public_smtp_addresses("mx.example") == []
+
+
+async def test_deliverability_provider_resolution_rejects_mixed_public_and_private_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loop = asyncio.get_running_loop()
+
+    async def mixed_lookup(*_args: Any, **_kwargs: Any) -> list[Any]:
+        return [
+            (2, 1, 6, "", ("93.184.216.34", 443)),
+            (2, 1, 6, "", ("127.0.0.1", 443)),
+        ]
+
+    monkeypatch.setattr(loop, "getaddrinfo", mixed_lookup)
+    assert await _public_addresses("provider.example", 443) == []
 
 
 def test_forwarding_regex_timeout_fails_closed() -> None:

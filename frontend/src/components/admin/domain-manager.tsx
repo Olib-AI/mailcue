@@ -554,7 +554,7 @@ function DomainCard({ domain }: { domain: Domain }) {
                                             record.last_verified_at,
                                             now,
                                           )}{" "}
-                                          — has drifted since
+                                          : has drifted since
                                         </span>
                                       )}
                                   </div>

@@ -817,7 +817,7 @@ async def process_campaign(campaign_id: str) -> None:
             )
             .values(next_run_at=now + timedelta(minutes=5))
         )
-        if claim.rowcount != 1:  # type: ignore[attr-defined]
+        if claim.rowcount != 1:
             await db.rollback()
             return
         await db.commit()

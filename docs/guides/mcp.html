@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link ">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -540,7 +541,20 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <p>* Provide <strong>either</strong> <code>MAILCUE_API_KEY</code> (preferred) or <code>MAILCUE_BEARER_TOKEN</code>.</p>
 <p><strong>Single-mailbox lock:</strong> when <code>MAILCUE_MAILBOX</code> is set, the server removes the <code>mailbox</code> argument from every tool, forces sends to that address, and hides mailbox discovery, so the agent owns exactly one inbox and cannot reach any other. Leave it unset for a multi-mailbox operator agent.</p>
 <h2>Tools</h2>
-<p><code>list_emails</code>, <code>search_emails</code>, <code>get_email</code>, <code>send_email</code>, <code>reply_email</code>, <code>delete_email</code>, <code>mailbox_stats</code> (plus <code>list_mailboxes</code> when not locked). The server also exposes MCP <code>instructions</code> that orient the agent on how to triage and reply safely.</p>
+<p>The deliverability tools are <code>score_email_deliverability</code>,
+<code>run_email_deliverability_checks</code>, <code>get_deliverability_capabilities</code>,
+<code>list_deliverability_reports</code>, <code>compare_deliverability_reports</code>,
+<code>list_deliverability_runs</code>,
+<code>get_deliverability_artifact</code>,
+<code>create_deliverability_policy</code>, <code>evaluate_deliverability_policy</code>, and
+<code>list_deliverability_alerts</code>. Extended runs can request DNS, reputation, links,
+local visuals, seed placement, client previews, or advisory AI analysis. The
+tool reports disabled or unconfigured capabilities instead of inventing a
+result.</p>
+<p>Mailbox tools include <code>list_emails</code>, <code>search_emails</code>, <code>get_email</code>, <code>send_email</code>,
+<code>reply_email</code>, <code>delete_email</code>, and <code>mailbox_stats</code>, plus <code>list_mailboxes</code> when
+not locked. The server also exposes MCP <code>instructions</code> that orient the agent on
+safe mailbox and deliverability workflows.</p>
 <p>For full details on the tools and the SDK, see <a href="../../sdks/mcp-node/README.md">the MCP SDK</a>.</p>
 <p>See the main <a href="../../README.md">README</a> for the rest of the documentation.</p>
     </article>

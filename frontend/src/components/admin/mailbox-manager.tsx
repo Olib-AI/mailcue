@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -45,12 +46,13 @@ const createMailboxSchema = z.object({
       /^[a-zA-Z0-9._-]+$/,
       "Username can only contain letters, numbers, dots, hyphens, and underscores"
     ),
-  password: z.string().min(4, "Password must be at least 4 characters"),
+  password: z.string().min(12, "Password must be at least 12 characters"),
   domain: z.string().optional(),
   display_name: z
     .string()
     .max(255, "Sender name must be 255 characters or fewer")
     .optional(),
+  purpose: z.enum(["standard", "deliverability"]),
 });
 
 type CreateMailboxValues = z.infer<typeof createMailboxSchema>;
@@ -74,7 +76,13 @@ function MailboxManager() {
     formState: { errors },
   } = useForm<CreateMailboxValues>({
     resolver: zodResolver(createMailboxSchema),
-    defaultValues: { username: "", password: "", domain: "", display_name: "" },
+    defaultValues: {
+      username: "",
+      password: "",
+      domain: "",
+      display_name: "",
+      purpose: "standard",
+    },
   });
 
   const onCreateSubmit = (values: CreateMailboxValues) => {
@@ -84,6 +92,7 @@ function MailboxManager() {
         password: values.password,
         domain: values.domain || undefined,
         display_name: values.display_name?.trim() || undefined,
+        purpose: values.purpose,
       },
       {
         onSuccess: (result) => {
@@ -236,6 +245,11 @@ function MailboxManager() {
                           Catch-All
                         </Badge>
                       )}
+                      {mailbox.purpose === "deliverability" && (
+                        <Badge variant="outline" className="text-[10px] uppercase font-semibold text-violet-700 bg-violet-50 dark:bg-violet-950/20 dark:text-violet-300 border-violet-200 shrink-0">
+                          Deliverability
+                        </Badge>
+                      )}
                     </div>
                     {mailbox.display_name ? (
                       <div className="text-xs font-normal text-muted-foreground truncate">
@@ -319,6 +333,17 @@ function MailboxManager() {
           </DialogHeader>
 
           <form onSubmit={handleSubmit(onCreateSubmit)} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="mb-purpose">Mailbox purpose</Label>
+              <Select id="mb-purpose" {...register("purpose")}>
+                <option value="standard">Email testing inbox</option>
+                <option value="deliverability">Deliverability testing</option>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Deliverability testing shows a scored diagnostic report for each received email.
+              </p>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="mb-username">Username (local part)</Label>
               <Input

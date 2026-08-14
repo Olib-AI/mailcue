@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link ">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link active">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link ">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -633,8 +634,8 @@ database backup.</p>
 <h2>TLS Certificates</h2>
 <p>Production mode supports three approaches:</p>
 <ol>
-<li><strong>Let's Encrypt (automatic)</strong>: Set <code>MAILCUE_ACME_EMAIL=you@example.com</code> and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup.</li>
-<li><strong>External certificates</strong>: Set <code>MAILCUE_TLS_CERT_PATH</code> and <code>MAILCUE_TLS_KEY_PATH</code> to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning.</li>
+<li><strong>Let's Encrypt (automatic)</strong>: Set <code>MAILCUE_ACME_EMAIL=you@example.com</code> and ensure port 80 is reachable for HTTP-01 validation. Certbot runs automatically at startup. After <code>mta-sts.example.com</code> resolves, MailCue expands the certificate to cover both the mail and MTA-STS hostnames on the next container start.</li>
+<li><strong>External certificates</strong>: Set <code>MAILCUE_TLS_CERT_PATH</code> and <code>MAILCUE_TLS_KEY_PATH</code> to mount certs from a reverse proxy (Traefik, Caddy) or manual provisioning. The certificate must include both <code>mail.example.com</code> and <code>mta-sts.example.com</code>.</li>
 <li><strong>Upload via API</strong>: Use <code>PUT /api/v1/system/tls</code> to rotate a certificate after production has started with ACME or externally mounted certificates.</li>
 </ol>
 <h2>DNS Requirements</h2>
@@ -708,13 +709,20 @@ database backup.</p>
 </tr>
 <tr>
 <td>9</td>
+<td><strong>A / AAAA</strong></td>
+<td><code>mta-sts.example.com</code></td>
+<td><code>&lt;server-ip&gt;</code></td>
+<td>Makes the MTA-STS HTTPS policy reachable; either address family is sufficient</td>
+</tr>
+<tr>
+<td>10</td>
 <td><strong>TXT</strong></td>
 <td><code>_smtp._tls.example.com</code></td>
 <td><code>v=TLSRPTv1; rua=mailto:tls-reports@example.com</code></td>
 <td>TLS-RPT, TLS failure reporting (optional)</td>
 </tr>
 <tr>
-<td>10</td>
+<td>11</td>
 <td><strong>PTR</strong></td>
 <td><code>&lt;server-ip&gt;</code></td>
 <td><code>mail.example.com</code></td>
@@ -728,7 +736,8 @@ database backup.</p>
 
 <p>Extract the <code>p=...</code> value (concatenate if split across lines) and use it for record #5.</p>
 <p><strong>Important notes:</strong>
-- Records 1-6 and 10 are <strong>required</strong> for production email delivery.
+- Records 1-6 and 11 are <strong>required</strong> for production email delivery.
+- Records 8 and 9, plus a valid HTTPS certificate for <code>mta-sts.example.com</code>, are required when enabling MTA-STS.
 - The DKIM key is auto-generated at first startup and persists in the <code>dkim-data</code> volume. It will not change across restarts.
 - If your VPS provider blocks outbound port 25 (common on GCP, AWS), you will need a smarthost relay or a provider that allows it (OVH, Hetzner, Vultr).</p>
     </article>

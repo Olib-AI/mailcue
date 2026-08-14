@@ -3,6 +3,9 @@ import type { Transport } from '../transport.js';
 import { camelize, snakeify } from '../transport.js';
 import type {
   BulkInjectResponse,
+  DeliverabilityReport,
+  DeliverabilityRun,
+  DeliverabilityRunCheck,
   EmailDetail,
   EmailListResponse,
   EmailQueryParams,
@@ -178,6 +181,41 @@ export class EmailsResource {
     };
     if (options.signal) reqOpts.signal = options.signal;
     return this.transport.request<ArrayBuffer>(reqOpts);
+  }
+
+  async scoreDeliverability(
+    uid: string,
+    params: EmailQueryParams,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<DeliverabilityReport> {
+    const query: Record<string, unknown> = {};
+    if (params.folder !== undefined) query['folder'] = params.folder;
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'GET',
+      path: `/api/v1/mailboxes/${encodeURIComponent(params.mailbox)}/emails/${encodeURIComponent(uid)}/deliverability`,
+      query,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as DeliverabilityReport;
+  }
+
+  async runDeliverabilityChecks(
+    uid: string,
+    params: EmailQueryParams & { checks: DeliverabilityRunCheck[] },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<DeliverabilityRun> {
+    const query: Record<string, unknown> = {};
+    if (params.folder !== undefined) query['folder'] = params.folder;
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: `/api/v1/mailboxes/${encodeURIComponent(params.mailbox)}/emails/${encodeURIComponent(uid)}/deliverability/runs`,
+      query,
+      body: snakeify({ checks: params.checks }),
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as DeliverabilityRun;
   }
 
   async getAttachment(

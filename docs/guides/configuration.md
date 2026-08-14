@@ -50,6 +50,21 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_VALIDATION_PROBE_RELAY_HOST` | *(empty)* | MailCue tunnel sidecar used when direct port 25 is unavailable |
 | `MAILCUE_VALIDATION_PROBE_RELAY_PORT` | `2525` | MailCue tunnel sidecar SMTP RPC port |
 | `MAILCUE_VALIDATION_RATE_LIMIT` | `30/minute` | Per-client-IP validation API limit |
+| `MAILCUE_DELIVERABILITY_RATE_LIMIT` | `30/minute` | Per-client-IP deliverability scoring API limit |
+| `MAILCUE_DELIVERABILITY_ENRICHMENT_RATE_LIMIT` | `5/minute` | Per-client-IP extended-run API limit |
+| `MAILCUE_DELIVERABILITY_NETWORK_CHECKS_ENABLED` | `false` | Enable opt-in public DNS, reputation, and live-link runs |
+| `MAILCUE_DELIVERABILITY_NETWORK_TIMEOUT_SECONDS` | `5` | Per-operation network timeout for extended checks |
+| `MAILCUE_DELIVERABILITY_NETWORK_CONCURRENCY` | `4` | Maximum concurrent DNS, link, or seed operations, from 1 to 16 |
+| `MAILCUE_DELIVERABILITY_MAX_CONCURRENT_RUNS` | `2` | Maximum extended runs executing concurrently per API worker |
+| `MAILCUE_DELIVERABILITY_DNSBL_ZONES` | `[]` | JSON list of operator-approved DNS blocklist zones |
+| `MAILCUE_DELIVERABILITY_DOMAIN_DNSBL_ZONES` | `[]` | JSON list of operator-approved sender and linked-domain reputation zones |
+| `MAILCUE_DELIVERABILITY_REPORT_RETENTION_DAYS` | `365` | Retain non-baseline reports for this many days; `0` disables pruning |
+| `MAILCUE_DELIVERABILITY_ARTIFACT_RETENTION_DAYS` | `30` | Retain non-baseline screenshots and provider images for this many days; `0` disables pruning |
+| `MAILCUE_DELIVERABILITY_MAX_MESSAGE_BYTES` | `26214400` | Maximum original message size accepted by the analyzer |
+| `MAILCUE_DELIVERABILITY_VISUAL_CHECKS_ENABLED` | `false` | Enable network-blocked local Chromium screenshots |
+| `MAILCUE_DELIVERABILITY_CHROMIUM_PATH` | `chromium` | Chromium executable used by local visual runs |
+| `MAILCUE_DELIVERABILITY_VISUAL_TIMEOUT_SECONDS` | `15` | Timeout for each screenshot variant |
+| `MAILCUE_DELIVERABILITY_ARTIFACT_MAX_BYTES` | `5242880` | Maximum stored bytes for one screenshot or preview artifact |
 | `MAILCUE_ACME_EMAIL` | *(empty)* | Email for Let's Encrypt certificate provisioning (production mode) |
 | `MAILCUE_TLS_CERT_PATH` | *(empty)* | Path to externally mounted TLS certificate (PEM) |
 | `MAILCUE_TLS_KEY_PATH` | *(empty)* | Path to externally mounted TLS private key (PEM) |

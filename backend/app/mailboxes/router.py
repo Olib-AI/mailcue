@@ -1,19 +1,21 @@
 """Mailbox management router -- create, list, delete, stats, nested emails."""
 
-from __future__ import annotations
-
 import logging
 from urllib.parse import unquote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import scopes
+from app.config import settings
 from app.database import get_db
+from app.deliverability.schemas import DeliverabilityRunRequest, DeliverabilityRunResponse
+from app.deliverability.service import execute_run, get_or_create_report, get_report_record
 from app.dependencies import AuthContext, get_auth, require_scope
 from app.emails.schemas import (
     BulkDeleteRequest,
     BulkDeleteResponse,
+    DeliverabilityReport,
     EmailDetail,
     EmailListResponse,
     SpamActionRequest,
@@ -23,6 +25,7 @@ from app.emails.service import (
     bulk_delete_emails,
     delete_email,
     get_email,
+    get_email_raw,
     list_emails,
     move_email_to_folder,
     purge_mailbox,
@@ -47,6 +50,7 @@ from app.mailboxes.service import (
     get_mailbox_stats,
     list_mailboxes,
 )
+from app.rate_limit import limiter
 
 logger = logging.getLogger("mailcue.mailboxes")
 
@@ -110,6 +114,7 @@ async def list_all_mailboxes(
             domain=m.domain,
             is_active=m.is_active,
             is_catchall=m.is_catchall,
+            purpose=m.purpose,
             created_at=m.created_at,
             quota_mb=m.quota_mb,
             signature=m.signature,
@@ -163,6 +168,7 @@ async def create_new_mailbox(
         domain=mailbox.domain,
         is_active=mailbox.is_active,
         is_catchall=mailbox.is_catchall,
+        purpose=mailbox.purpose,
         created_at=mailbox.created_at,
         quota_mb=mailbox.quota_mb,
         signature=mailbox.signature,
@@ -288,6 +294,89 @@ async def get_mailbox_email(
     decoded = unquote(mailbox_address)
     return await get_email(
         mailbox=decoded, uid=uid, folder=folder, db=db, gpg_user_id=auth.user.id
+    )
+
+
+@router.get(
+    "/{mailbox_address}/emails/{uid}/deliverability",
+    response_model=DeliverabilityReport,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
+@limiter.limit(settings.deliverability_rate_limit)
+async def get_email_deliverability(
+    request: Request,
+    mailbox_address: str,
+    uid: str,
+    folder: str = Query("INBOX"),
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> DeliverabilityReport:
+    """Score one received message from its original bytes.
+
+    The endpoint is available for every owned mailbox so API clients can run
+    diagnostics consistently. Mailboxes with purpose ``deliverability`` use
+    the same report as their primary message-detail experience in the web UI.
+    """
+    await verify_mailbox_access(mailbox_address, auth, db)
+    decoded = unquote(mailbox_address)
+    mailbox = await get_mailbox_by_address(decoded, db)
+    raw = await get_email_raw(mailbox=decoded, uid=uid, folder=folder)
+    if len(raw) > settings.deliverability_max_message_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Message is too large for deliverability analysis.",
+        )
+    return await get_or_create_report(
+        db,
+        mailbox=mailbox,
+        user_id=auth.user.id,
+        uid=uid,
+        folder=folder,
+        raw=raw,
+    )
+
+
+@router.post(
+    "/{mailbox_address}/emails/{uid}/deliverability/runs",
+    response_model=DeliverabilityRunResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_READ))],
+)
+@limiter.limit(settings.deliverability_enrichment_rate_limit)
+async def run_email_deliverability_enrichment(
+    request: Request,
+    mailbox_address: str,
+    uid: str,
+    body: DeliverabilityRunRequest = Body(...),
+    folder: str = Query("INBOX"),
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> DeliverabilityRunResponse:
+    """Run explicitly enabled network, visual, preview, or placement enrichments."""
+    await verify_mailbox_access(mailbox_address, auth, db)
+    decoded = unquote(mailbox_address)
+    mailbox = await get_mailbox_by_address(decoded, db)
+    raw = await get_email_raw(mailbox=decoded, uid=uid, folder=folder)
+    if len(raw) > settings.deliverability_max_message_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Message is too large for deliverability analysis.",
+        )
+    report = await get_or_create_report(
+        db,
+        mailbox=mailbox,
+        user_id=auth.user.id,
+        uid=uid,
+        folder=folder,
+        raw=raw,
+    )
+    if report.report_id is None:
+        raise HTTPException(status_code=500, detail="Deliverability report was not persisted")
+    report_record = await get_report_record(db, report.report_id, user_id=auth.user.id)
+    return await execute_run(
+        db,
+        report=report_record,
+        raw=raw,
+        requested_checks=list(body.checks),
     )
 
 

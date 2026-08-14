@@ -17,8 +17,12 @@ const keys = {
   providers: ["warmup", "provider-states"] as const,
 };
 
-export function useWarmupAccounts() {
-  return useQuery({ queryKey: keys.accounts, queryFn: () => api.get<WarmupAccount[]>("/warmup/accounts") });
+export function useWarmupAccounts(enabled = true) {
+  return useQuery({
+    queryKey: keys.accounts,
+    queryFn: () => api.get<WarmupAccount[]>("/warmup/accounts"),
+    enabled,
+  });
 }
 
 export function useWarmupCampaigns() {

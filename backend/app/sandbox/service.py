@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from weakref import WeakSet
 
-from sqlalchemy import CursorResult, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.sandbox.models import (
@@ -312,7 +312,7 @@ async def delete_webhook_endpoint(
     stmt = delete(SandboxWebhookEndpoint).where(SandboxWebhookEndpoint.id == endpoint_id)
     result = await db.execute(stmt)
     await db.commit()
-    return cast("CursorResult[Any]", result).rowcount > 0
+    return result.rowcount > 0
 
 
 async def get_webhook_deliveries(

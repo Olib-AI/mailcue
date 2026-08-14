@@ -21,6 +21,11 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://olib-ai.github.io/mailcue/guides/deliverability.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://olib-ai.github.io/mailcue/guides/production.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>

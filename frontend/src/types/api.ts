@@ -104,6 +104,96 @@ export interface EmailDetail extends EmailSummary {
   gpg: GpgEmailInfo | null;
 }
 
+export type DeliverabilityStatus = "pass" | "warning" | "fail" | "info";
+export type DeliverabilityCategoryId =
+  | "authentication"
+  | "content"
+  | "headers"
+  | "transport"
+  | "spam_filter"
+  | "attachments"
+  | "dns"
+  | "reputation"
+  | "links"
+  | "visual"
+  | "placement"
+  | "client_previews"
+  | "ai_analysis";
+
+export interface DeliverabilityEvidence {
+  code: string;
+  title: string;
+  value: string | number | boolean | null;
+  score: number | null;
+  description: string | null;
+  recommendation: string | null;
+}
+
+export interface DeliverabilityCheck {
+  id: string;
+  category: DeliverabilityCategoryId;
+  title: string;
+  status: DeliverabilityStatus;
+  summary: string;
+  details: string[];
+  evidence: DeliverabilityEvidence[];
+  recommendation: string | null;
+  points: number;
+  max_points: number;
+}
+
+export interface DeliverabilityCategory {
+  id: DeliverabilityCategoryId;
+  title: string;
+  score: number | null;
+  points: number;
+  max_points: number;
+  checks: DeliverabilityCheck[];
+}
+
+export interface DeliverabilityReport {
+  score_version: string;
+  report_id: string | null;
+  raw_sha256: string;
+  cached: boolean;
+  is_baseline: boolean;
+  score: number;
+  verdict: "excellent" | "good" | "needs_work" | "poor";
+  summary: string;
+  mailbox: string;
+  uid: string;
+  folder: string;
+  message_id: string;
+  sender_domain: string | null;
+  generated_at: string;
+  categories: DeliverabilityCategory[];
+  top_recommendations: string[];
+  limitations: string[];
+}
+
+export interface DeliverabilityCapability {
+  id: string;
+  title: string;
+  description: string;
+  mode: "local" | "network" | "provider";
+  status: "available" | "disabled" | "not_configured" | "unavailable";
+  reason: string | null;
+}
+
+export interface DeliverabilityRun {
+  id: string;
+  report_id: string;
+  status: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled";
+  requested_checks: string[];
+  capabilities: { capabilities: DeliverabilityCapability[] };
+  categories: DeliverabilityCategory[];
+  error_code: string | null;
+  error_detail: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
 export interface EmailListResponse {
   total: number;
   page: number;
@@ -154,6 +244,7 @@ export interface Mailbox {
   domain: string;
   is_active: boolean;
   is_catchall?: boolean;
+  purpose: "standard" | "deliverability";
   created_at: string;
   email_count: number;
   unread_count: number;
@@ -167,6 +258,7 @@ export interface CreateMailboxRequest {
   password: string;
   domain?: string;
   display_name?: string;
+  purpose?: "standard" | "deliverability";
 }
 
 export interface MailboxListResponse {

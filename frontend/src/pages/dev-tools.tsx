@@ -892,7 +892,7 @@ function McpTab() {
               <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">
                 MAILCUE_MAILBOX=agent@your-domain
               </code>{" "}
-              to confine the agent to one inbox — it sends from that address and
+              to confine the agent to one inbox. It sends from that address and
               cannot access any other mailbox. Omit it for full multi-mailbox
               access.
             </p>

@@ -53,6 +53,93 @@ class EmailDetail(EmailSummary):
     gpg: GpgEmailInfo | None = None
 
 
+class DeliverabilityEvidence(BaseModel):
+    """Structured observation suitable for collapsed UI and API consumers."""
+
+    code: str
+    title: str
+    value: str | float | int | bool | None = None
+    score: float | None = None
+    description: str | None = None
+    recommendation: str | None = None
+
+
+class DeliverabilityCheck(BaseModel):
+    """One stable, actionable check in a deliverability report."""
+
+    id: str
+    category: Literal[
+        "authentication",
+        "content",
+        "headers",
+        "transport",
+        "spam_filter",
+        "attachments",
+        "dns",
+        "reputation",
+        "links",
+        "visual",
+        "placement",
+        "client_previews",
+        "ai_analysis",
+    ]
+    title: str
+    status: Literal["pass", "warning", "fail", "info"]
+    summary: str
+    details: list[str] = Field(default_factory=list)
+    evidence: list[DeliverabilityEvidence] = Field(default_factory=list)
+    recommendation: str | None = None
+    points: float = 0
+    max_points: float = 0
+
+
+class DeliverabilityCategory(BaseModel):
+    """Score and check rollup for one report category."""
+
+    id: Literal[
+        "authentication",
+        "content",
+        "headers",
+        "transport",
+        "spam_filter",
+        "attachments",
+        "dns",
+        "reputation",
+        "links",
+        "visual",
+        "placement",
+        "client_previews",
+        "ai_analysis",
+    ]
+    title: str
+    score: int | None
+    points: float
+    max_points: float
+    checks: list[DeliverabilityCheck]
+
+
+class DeliverabilityReport(BaseModel):
+    """Versioned deliverability assessment for a received message."""
+
+    score_version: str = "2.2"
+    report_id: str | None = None
+    raw_sha256: str = ""
+    cached: bool = False
+    is_baseline: bool = False
+    score: int
+    verdict: Literal["excellent", "good", "needs_work", "poor"]
+    summary: str
+    mailbox: str
+    uid: str
+    folder: str
+    message_id: str
+    sender_domain: str | None = None
+    generated_at: datetime
+    categories: list[DeliverabilityCategory]
+    top_recommendations: list[str]
+    limitations: list[str]
+
+
 class EmailListResponse(BaseModel):
     """Paginated list of email summaries."""
 

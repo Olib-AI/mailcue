@@ -277,6 +277,7 @@ async def create_mailbox(
         # Reactivate the soft-deleted row.
         existing.is_active = True
         existing.display_name = body.display_name or local_part
+        existing.purpose = body.purpose
         if user_id is not None:
             existing.user_id = user_id
         await db.commit()
@@ -289,6 +290,7 @@ async def create_mailbox(
             display_name=body.display_name or local_part,
             domain=domain,
             user_id=user_id,
+            purpose=body.purpose,
         )
         db.add(mailbox)
         await db.commit()

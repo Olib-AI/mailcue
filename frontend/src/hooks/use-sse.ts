@@ -43,7 +43,7 @@ export function useSSE(enabled: boolean): void {
             try {
               const data = JSON.parse(event.data) as EmailReceivedEvent;
               toast.info("New email received", {
-                description: `From: ${data.from} — ${data.subject}`,
+                description: `From: ${data.from} · ${data.subject}`,
               });
             } catch {
               // Data parse failure is non-critical

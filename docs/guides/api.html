@@ -460,6 +460,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
       <li><a href="architecture.html" class="sidebar-link ">Architecture</a></li>
       <li><a href="configuration.html" class="sidebar-link ">Configuration</a></li>
       <li><a href="api.html" class="sidebar-link active">API Reference</a></li>
+      <li><a href="deliverability.html" class="sidebar-link ">Deliverability Testing</a></li>
       <li><a href="production.html" class="sidebar-link ">Production Deployment</a></li>
       <li><a href="tunnel.html" class="sidebar-link ">SMTP Tunnel</a></li>
       <li><a href="clients.html" class="sidebar-link ">Email Clients & TLS Trust</a></li>
@@ -543,9 +544,30 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <span class="nx">GET</span><span class="w">    </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">id</span><span class="o">/</span><span class="nx">stats</span><span class="w">                 </span><span class="err">#</span><span class="w"> </span><span class="nx">Folder</span><span class="w"> </span><span class="nx">statistics</span>
 <span class="nx">GET</span><span class="w">    </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">address</span><span class="o">/</span><span class="nx">emails</span><span class="w">           </span><span class="err">#</span><span class="w"> </span><span class="nx">List</span><span class="w"> </span><span class="nx">emails</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="nx">mailbox</span>
 <span class="nx">GET</span><span class="w">    </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">address</span><span class="o">/</span><span class="nx">emails</span><span class="o">/</span><span class="p">:</span><span class="nx">uid</span><span class="w">      </span><span class="err">#</span><span class="w"> </span><span class="nx">Get</span><span class="w"> </span><span class="nx">specific</span><span class="w"> </span><span class="nx">email</span>
+<span class="nx">GET</span><span class="w">    </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">address</span><span class="o">/</span><span class="nx">emails</span><span class="o">/</span><span class="p">:</span><span class="nx">uid</span><span class="o">/</span><span class="nx">deliverability</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">Score</span><span class="w"> </span><span class="nx">deliverability</span>
+<span class="nx">POST</span><span class="w">   </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">address</span><span class="o">/</span><span class="nx">emails</span><span class="o">/</span><span class="p">:</span><span class="nx">uid</span><span class="o">/</span><span class="nx">deliverability</span><span class="o">/</span><span class="nx">runs</span><span class="w"> </span><span class="err">#</span><span class="w"> </span><span class="nx">Extended</span><span class="w"> </span><span class="nx">checks</span>
 <span class="nx">DELETE</span><span class="w"> </span><span class="o">/</span><span class="kn">api</span><span class="o">/</span><span class="nx">v1</span><span class="o">/</span><span class="nx">mailboxes</span><span class="o">/</span><span class="p">:</span><span class="nx">address</span><span class="o">/</span><span class="nx">emails</span><span class="o">/</span><span class="p">:</span><span class="nx">uid</span><span class="w">      </span><span class="err">#</span><span class="w"> </span><span class="nx">Delete</span><span class="w"> </span><span class="nx">specific</span><span class="w"> </span><span class="nx">email</span>
 </code></pre></div>
 
+<p>Set <code>purpose</code> to <code>deliverability</code> when creating a mailbox to give it the
+scored report experience in the web UI. The value defaults to <code>standard</code> and
+does not change how the address receives mail.</p>
+<p>Report history, trends, baselines, comparisons, exports, artifacts, providers,
+policies, schedules, and alerts are under <code>/api/v1/deliverability</code>. See the
+<a href="deliverability.html">deliverability testing guide</a> for contracts and security behavior.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;delivery-check&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;use-a-long-random-password&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;domain&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;example.com&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;purpose&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;deliverability&quot;</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>The deliverability endpoint requires <code>email:read</code> and the same mailbox access
+as email detail. It returns a versioned 0 to 100 score, category scores,
+stable check IDs, evidence, point values, remediation, limitations, and
+prioritized recommendations. The report is computed from the original message
+bytes and receiver-generated authentication and spam-filter evidence.</p>
 <h2>GPG Keys</h2>
 <div class="codehilite"><pre><span></span><code><span class="n">POST</span>   <span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">gpg</span><span class="o">/</span><span class="n">keys</span><span class="o">/</span><span class="n">generate</span>    <span class="c1"># Generate RSA or ECC keypair</span>
 <span class="n">POST</span>   <span class="o">/</span><span class="n">api</span><span class="o">/</span><span class="n">v1</span><span class="o">/</span><span class="n">gpg</span><span class="o">/</span><span class="n">keys</span><span class="o">/</span><span class="kn">import</span><span class="w">      </span><span class="c1"># Import armored PGP key</span>

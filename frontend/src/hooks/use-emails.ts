@@ -14,6 +14,8 @@ import type {
   InjectEmailRequest,
   UpdateFlagsRequest,
   SpamActionRequest,
+  DeliverabilityReport,
+  DeliverabilityRun,
 } from "@/types/api";
 
 // --- Query Keys ---
@@ -32,6 +34,8 @@ export const emailKeys = {
   details: () => [...emailKeys.all, "detail"] as const,
   detail: (mailbox: string, uid: string) =>
     [...emailKeys.details(), mailbox, uid] as const,
+  deliverability: (mailbox: string, uid: string, folder: string) =>
+    [...emailKeys.detail(mailbox, uid), "deliverability", folder] as const,
 };
 
 // --- Constants ---
@@ -101,6 +105,53 @@ export function useEmail(mailbox: string | null, uid: string | null, folder: str
     },
     enabled: !!mailbox && uid !== null,
     staleTime: 60_000,
+  });
+}
+
+export function useDeliverabilityReport(
+  mailbox: string | null,
+  uid: string | null,
+  folder: string = "INBOX",
+  enabled: boolean = true
+) {
+  return useQuery({
+    queryKey: emailKeys.deliverability(mailbox ?? "", uid ?? "", folder),
+    queryFn: () => {
+      const params = new URLSearchParams({ folder });
+      return api.get<DeliverabilityReport>(
+        `/mailboxes/${encodeURIComponent(mailbox ?? "")}/emails/${encodeURIComponent(uid ?? "")}/deliverability?${params.toString()}`
+      );
+    },
+    enabled: enabled && !!mailbox && uid !== null,
+    staleTime: 60_000,
+  });
+}
+
+export function useRunDeliverabilityChecks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      mailbox: string;
+      uid: string;
+      folder?: string;
+      checks: Array<"dns" | "reputation" | "links" | "visual" | "placement" | "client_previews" | "ai_analysis">;
+    }) => {
+      const params = new URLSearchParams({ folder: input.folder ?? "INBOX" });
+      return api.post<DeliverabilityRun>(
+        `/mailboxes/${encodeURIComponent(input.mailbox)}/emails/${encodeURIComponent(input.uid)}/deliverability/runs?${params.toString()}`,
+        { checks: input.checks }
+      );
+    },
+    onSuccess: (run) => queryClient.invalidateQueries({ queryKey: ["deliverability", "runs", run.report_id] }),
+  });
+}
+
+export function useDeliverabilityRuns(reportId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["deliverability", "runs", reportId],
+    queryFn: () => api.get<DeliverabilityRun[]>(`/deliverability/reports/${reportId}/runs`),
+    enabled: !!reportId,
+    staleTime: 30_000,
   });
 }
 

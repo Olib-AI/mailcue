@@ -736,7 +736,9 @@ async def validate_email(email: str) -> EmailValidationResponse:
     # trying every direct MX/IP first can exceed the caller's request timeout.
     # The total budget also bounds multi-address direct probes.
     sender_email = f"validate-probe@{settings.domain}"
-    probe_transport = "mailcue_tunnel" if settings.validation_probe_relay_host else "direct"
+    probe_transport: Literal["mailcue_tunnel", "direct"] = (
+        "mailcue_tunnel" if settings.validation_probe_relay_host else "direct"
+    )
     logger.info(
         "Starting email mailbox validation: domain=%s transport=%s",
         domain,
