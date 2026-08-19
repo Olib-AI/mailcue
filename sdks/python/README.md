@@ -25,12 +25,18 @@ client = Mailcue(api_key="mc_xxx")  # base_url defaults to http://localhost:8088
 
 result = client.emails.send(
     from_="hello@example.com",
+    from_name="Acme Support",
     to=["user@example.com"],
     subject="Welcome",
     html="<h1>Hi there</h1>",
 )
 print(result.message_id)
 ```
+
+`from_name` is the display name recipients see. Leave it out and the server
+falls back to the display name set on the mailbox; if that is unset too, the
+message goes out as a bare address and mail clients show
+`hello@example.com` instead of a name.
 
 Need async? Use `AsyncMailcue` — same surface, all methods become coroutines:
 
