@@ -96,6 +96,7 @@ def _send_payload(
     from_: str,
     to: List[str],
     subject: str,
+    from_name: Optional[str],
     html: Optional[str],
     text: Optional[str],
     cc: Optional[List[str]],
@@ -131,6 +132,11 @@ def _send_payload(
         "sign": gpg_sign,
         "encrypt": gpg_encrypt,
     }
+    # Without this the server falls back to a bare `From: addr@domain` and mail
+    # clients show the address instead of the sender's name. The API has always
+    # accepted it and the Node SDK has always sent it; only this client did not.
+    if from_name:
+        payload["from_name"] = from_name
     if cc:
         payload["cc_addresses"] = list(cc)
     if bcc:
@@ -207,6 +213,7 @@ class Emails(SyncResource):
         from_: str,
         to: List[str],
         subject: str,
+        from_name: Optional[str] = None,
         html: Optional[str] = None,
         text: Optional[str] = None,
         cc: Optional[List[str]] = None,
@@ -219,9 +226,14 @@ class Emails(SyncResource):
     ) -> SendResult:
         """Send an email through Postfix.
 
+        `from_name` is the display name recipients see. Without it the message
+        goes out as a bare address and clients show `hello@example.com` rather
+        than `Acme Support`.
+
         Example:
             >>> client.emails.send(
             ...     from_="hello@example.com",
+            ...     from_name="Acme Support",
             ...     to=["user@example.com"],
             ...     subject="Welcome",
             ...     html="<h1>Hi</h1>",
@@ -231,6 +243,7 @@ class Emails(SyncResource):
             from_=from_,
             to=to,
             subject=subject,
+            from_name=from_name,
             html=html,
             text=text,
             cc=cc,
@@ -461,6 +474,7 @@ class AsyncEmails(AsyncResource):
         from_: str,
         to: List[str],
         subject: str,
+        from_name: Optional[str] = None,
         html: Optional[str] = None,
         text: Optional[str] = None,
         cc: Optional[List[str]] = None,
@@ -476,6 +490,7 @@ class AsyncEmails(AsyncResource):
             from_=from_,
             to=to,
             subject=subject,
+            from_name=from_name,
             html=html,
             text=text,
             cc=cc,

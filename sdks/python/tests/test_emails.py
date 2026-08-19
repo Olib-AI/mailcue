@@ -35,6 +35,56 @@ def test_send_basic_html(make_client, captured_requests) -> None:  # type: ignor
     assert "attachments" not in payload
 
 
+def test_send_includes_from_name(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
+    """A display name must reach the API, or recipients see a bare address."""
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json={"message_id": "<named@local>"})
+
+    client = make_client(handler)
+    client.emails.send(
+        from_="hello@example.com",
+        from_name="Acme Support",
+        to=["user@example.com"],
+        subject="Welcome",
+        text="hi",
+    )
+    payload = json.loads(captured_requests[0].content)
+    assert payload["from_name"] == "Acme Support"
+    assert payload["from_address"] == "hello@example.com"
+
+
+def test_send_omits_from_name_when_not_given(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
+    """Absent is absent - the server decides the fallback, not this client."""
+
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json={"message_id": "<plain@local>"})
+
+    client = make_client(handler)
+    client.emails.send(
+        from_="hello@example.com", to=["user@example.com"], subject="Welcome", text="hi"
+    )
+    payload = json.loads(captured_requests[0].content)
+    assert "from_name" not in payload
+
+
+async def test_async_send_includes_from_name(make_async_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json={"message_id": "<async-named@local>"})
+
+    client, _http = make_async_client(handler)
+    async with client:
+        await client.emails.send(
+            from_="a@b.com",
+            from_name="Async Sender",
+            to=["c@d.com"],
+            subject="Hi",
+            text="hello",
+        )
+    payload = json.loads(captured_requests[0].content)
+    assert payload["from_name"] == "Async Sender"
+
+
 def test_send_plain_text_with_cc_and_attachment(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
     def handler(_req: httpx.Request) -> httpx.Response:
         return httpx.Response(202, json={"message_id": "<x@local>"})
