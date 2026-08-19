@@ -17,7 +17,7 @@ import {
 } from './format.js';
 import { buildInstructions } from './instructions.js';
 
-export const SERVER_VERSION = '0.1.0';
+export const SERVER_VERSION = '0.1.4';
 
 type ToolResult = {
   content: Array<
