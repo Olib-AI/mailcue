@@ -546,6 +546,12 @@ export function buildServer(config: McpConfig): McpServer {
         text: z.string().optional().describe('Plain-text body.'),
         html: z.string().optional().describe('HTML body.'),
         replyTo: z.string().optional().describe('Optional Reply-To address.'),
+        fromName: z
+          .string()
+          .optional()
+          .describe(
+            'Display name recipients see. Omit to use the name set on the mailbox, which is almost always what you want.',
+          ),
       },
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
@@ -558,6 +564,7 @@ export function buildServer(config: McpConfig): McpServer {
         text?: string;
         html?: string;
         replyTo?: string;
+        fromName?: string;
       };
       if (a.text === undefined && a.html === undefined) {
         throw new ToolError('Provide at least one of "text" or "html".');
@@ -568,6 +575,9 @@ export function buildServer(config: McpConfig): McpServer {
       if (a.text !== undefined) params.text = a.text;
       if (a.html !== undefined) params.html = a.html;
       if (a.replyTo !== undefined) params.replyTo = a.replyTo;
+      // Left unset the server falls back to the mailbox's own display name, so
+      // this is an override rather than the source of the name.
+      if (a.fromName !== undefined) params.fromName = a.fromName;
       const res = await client.emails.send(params);
       return text(
         JSON.stringify({ status: 'sent', messageId: res.messageId, message: res.message }, null, 2),
