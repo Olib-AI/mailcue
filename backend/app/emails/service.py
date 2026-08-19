@@ -497,6 +497,30 @@ async def get_attachment(
 # ── Send email ───────────────────────────────────────────────────
 
 
+async def _mailbox_display_name(address: str, db: AsyncSession | None) -> str:
+    """The display name stored on the sending mailbox, if it adds anything.
+
+    A mailbox is created with ``display_name`` defaulting to the local part, so
+    most rows carry "agent" for agent@example.com. Putting that in the From
+    header produces ``"agent" <agent@example.com>``, which is noisier than the
+    bare address and tells the recipient nothing. Only a name someone actually
+    chose is used.
+    """
+    if db is None:
+        return ""
+    from app.mailboxes.service import get_mailbox_by_address
+
+    try:
+        mailbox = await get_mailbox_by_address(address, db)
+    except Exception:
+        # A missing or unreadable mailbox must never stop a send: the caller
+        # has already been authorised against this address.
+        return ""
+    name = (mailbox.display_name or "").strip()
+    local_part = address.split("@", 1)[0]
+    return "" if name.lower() == local_part.lower() else name
+
+
 async def send_email(
     request: SendEmailRequest,
     db: AsyncSession | None = None,
@@ -554,8 +578,9 @@ async def send_email(
     else:
         msg = body_part
 
-    if request.from_name:
-        msg["From"] = email.utils.formataddr((request.from_name, request.from_address))
+    from_name = request.from_name or await _mailbox_display_name(request.from_address, db)
+    if from_name:
+        msg["From"] = email.utils.formataddr((from_name, request.from_address))
     else:
         msg["From"] = request.from_address
     msg["To"] = ", ".join(request.to_addresses)

@@ -97,3 +97,88 @@ async def test_signed_message_retains_ui_bodies_and_valid_mime_structure(monkeyp
     assert detail.is_signed is True
     assert detail.text_body == "Readable plain body"
     assert detail.html_body == "<p>Readable HTML body</p>"
+
+
+# ── From header: display name resolution ─────────────────────────
+
+
+def _sent_from_header(smtp_send) -> str:
+    """The From header of the message handed to SMTP."""
+    return smtp_send.await_args.args[0]["From"]
+
+
+async def _send_with(monkeypatch, *, from_name: str = "", display_name=None, db=None):
+    smtp_send = AsyncMock()
+    monkeypatch.setattr(email_service.aiosmtplib, "send", smtp_send)
+    monkeypatch.setattr(email_service.event_bus, "publish", AsyncMock())
+
+    if display_name is not None:
+        async def fake_lookup(address: str, _db):
+            return SimpleNamespace(display_name=display_name)
+
+        monkeypatch.setattr(
+            "app.mailboxes.service.get_mailbox_by_address", fake_lookup
+        )
+
+    request = SendEmailRequest(
+        from_address="agent@example.com",
+        from_name=from_name,
+        to_addresses=["recipient@example.net"],
+        subject="Display name",
+        body="Hello",
+        body_type="plain",
+    )
+    await email_service.send_email(request, db=db)
+    return _sent_from_header(smtp_send)
+
+
+@pytest.mark.asyncio
+async def test_from_name_on_the_request_wins(monkeypatch) -> None:
+    header = await _send_with(
+        monkeypatch, from_name="Explicit Name", display_name="Mailbox Name",
+        db=object()
+    )
+    assert header == "Explicit Name <agent@example.com>"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_the_mailbox_display_name(monkeypatch) -> None:
+    """A name someone chose on the mailbox should reach the recipient."""
+    header = await _send_with(monkeypatch, display_name="Olib AI Agent", db=object())
+    assert header == "Olib AI Agent <agent@example.com>"
+
+
+@pytest.mark.asyncio
+async def test_default_display_name_is_not_used(monkeypatch) -> None:
+    """Mailboxes default display_name to the local part. `"agent" <agent@...>`
+    is noisier than the bare address, so it is treated as unset."""
+    header = await _send_with(monkeypatch, display_name="agent", db=object())
+    assert header == "agent@example.com"
+
+
+@pytest.mark.asyncio
+async def test_no_db_session_sends_bare_address(monkeypatch) -> None:
+    header = await _send_with(monkeypatch, db=None)
+    assert header == "agent@example.com"
+
+
+@pytest.mark.asyncio
+async def test_lookup_failure_never_blocks_a_send(monkeypatch) -> None:
+    smtp_send = AsyncMock()
+    monkeypatch.setattr(email_service.aiosmtplib, "send", smtp_send)
+    monkeypatch.setattr(email_service.event_bus, "publish", AsyncMock())
+
+    async def boom(_address: str, _db):
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr("app.mailboxes.service.get_mailbox_by_address", boom)
+
+    request = SendEmailRequest(
+        from_address="agent@example.com",
+        to_addresses=["recipient@example.net"],
+        subject="Still sends",
+        body="Hello",
+        body_type="plain",
+    )
+    assert await email_service.send_email(request, db=object())
+    assert _sent_from_header(smtp_send) == "agent@example.com"
