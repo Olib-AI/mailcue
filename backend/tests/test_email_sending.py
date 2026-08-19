@@ -113,12 +113,11 @@ async def _send_with(monkeypatch, *, from_name: str = "", display_name=None, db=
     monkeypatch.setattr(email_service.event_bus, "publish", AsyncMock())
 
     if display_name is not None:
+
         async def fake_lookup(address: str, _db):
             return SimpleNamespace(display_name=display_name)
 
-        monkeypatch.setattr(
-            "app.mailboxes.service.get_mailbox_by_address", fake_lookup
-        )
+        monkeypatch.setattr("app.mailboxes.service.get_mailbox_by_address", fake_lookup)
 
     request = SendEmailRequest(
         from_address="agent@example.com",
@@ -135,8 +134,7 @@ async def _send_with(monkeypatch, *, from_name: str = "", display_name=None, db=
 @pytest.mark.asyncio
 async def test_from_name_on_the_request_wins(monkeypatch) -> None:
     header = await _send_with(
-        monkeypatch, from_name="Explicit Name", display_name="Mailbox Name",
-        db=object()
+        monkeypatch, from_name="Explicit Name", display_name="Mailbox Name", db=object()
     )
     assert header == "Explicit Name <agent@example.com>"
 
