@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -650,32 +651,32 @@ async def test_a_wholly_failed_sample_blocks_the_remainder(
 # ── Route resolution ─────────────────────────────────────────────
 
 
-def test_literal_validation_paths_are_not_shadowed_by_the_uid_route() -> None:
+@pytest.mark.asyncio
+async def test_literal_validation_paths_are_not_shadowed_by_the_uid_route(
+    client: AsyncClient,
+) -> None:
     """GET /emails/{uid} matches any single segment, including literal names.
 
-    These routes were unreachable in production because they were registered
+    These paths were unreachable in production because they were registered
     after the path-parameter route, so every request resolved to "fetch the
-    email whose uid is 'suppressed-domains'".
+    email whose uid is 'suppressed-domains'" and came back demanding a
+    mailbox query parameter.
+
+    Asserted through real requests rather than by inspecting app.routes:
+    FastAPI stopped flattening included routers into that list, so structural
+    checks pass or fail on the installed version rather than on the routing.
     """
-    from app.main import app
-
     for path in (
         "/api/v1/emails/validation-calibration",
         "/api/v1/emails/suppressed-domains",
         "/api/v1/emails/send-canaries",
     ):
-        matched = [
-            route
-            for route in app.routes
-            if getattr(route, "path", None) == path and "GET" in getattr(route, "methods", set())
-        ]
-        assert matched, f"no GET route registered for {path}"
+        response = await client.get(path)
+        assert response.status_code == 200, (
+            f"{path} returned {response.status_code}: {response.text[:200]}"
+        )
 
-    paths = [getattr(route, "path", "") for route in app.routes]
-    uid_route = paths.index("/api/v1/emails/{uid}")
-    for path in (
-        "/api/v1/emails/validation-calibration",
-        "/api/v1/emails/suppressed-domains",
-        "/api/v1/emails/send-canaries",
-    ):
-        assert paths.index(path) < uid_route, f"{path} is registered after /emails/{{uid}}"
+    # The parameterised route still works for an actual uid.
+    shadowed = await client.get("/api/v1/emails/some-uid")
+    assert shadowed.status_code == 422
+    assert "mailbox" in shadowed.text
