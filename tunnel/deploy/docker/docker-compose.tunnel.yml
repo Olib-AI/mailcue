@@ -40,7 +40,7 @@
 
 services:
   mailcue-sidecar:
-    image: ghcr.io/olib-ai/mailcue-relay-sidecar:latest
+    image: ghcr.io/olib-ai/mailcue-relay-sidecar:${MAILCUE_TUNNEL_VERSION:-latest}
     container_name: mailcue-sidecar
     hostname: mailcue-sidecar
     restart: unless-stopped
