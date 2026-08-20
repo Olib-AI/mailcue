@@ -448,8 +448,8 @@ The install script is idempotent - re-running it replaces the binary
 and the systemd unit, preserving state (`/var/lib/mailcue-edge/server.key`,
 `/etc/mailcue-edge/authorized_clients`, env-var drop-ins).
 
-Re-run the installer and refresh the Compose service to follow the current
-release channels. No version needs to be edited in this file:
+Re-run the installer to follow the current edge release channel. No version
+needs to be edited in this file:
 
 ```sh
 sudo EDGE_RELEASE_URL=https://github.com/Olib-AI/mailcue/releases/download/tunnel-latest \
@@ -457,18 +457,8 @@ sudo EDGE_RELEASE_URL=https://github.com/Olib-AI/mailcue/releases/download/tunne
 sudo systemctl daemon-reload
 sudo systemctl restart mailcue-relay-edge
 sudo systemctl is-active mailcue-relay-edge
-
-docker compose \
-  -f docker-compose.yml \
-  -f tunnel/deploy/docker/docker-compose.tunnel.yml \
-  pull mailcue-sidecar
-docker compose \
-  -f docker-compose.yml \
-  -f tunnel/deploy/docker/docker-compose.tunnel.yml \
-  up -d mailcue-sidecar
 ```
 
-This tracks the `tunnel-latest` edge release and the sidecar's `latest` image.
-For a reproducible rollback, set `EDGE_RELEASE_URL` to a specific release and
-pin the matching sidecar image tag. Releases attach a `SHA256SUMS` file you
-can verify before installing.
+This tracks the `tunnel-latest` edge release. For a reproducible rollback,
+set `EDGE_RELEASE_URL` to a specific release. Releases attach a `SHA256SUMS`
+file you can verify before installing.
