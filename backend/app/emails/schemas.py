@@ -496,6 +496,12 @@ class EmailValidationBatchItem(BaseModel):
     # this domain, of which at most one can be a live mailbox.
     permutation_variant: bool = False
     catch_all_risk: EmailValidationCatchAllRisk | None = None
+    # RCPT latency for this recipient against the destination's baseline for
+    # recipients it does not have. The gap between them is the strongest
+    # available evidence that a mailbox lookup actually happened, so it is
+    # reported for callers who want to audit or recalibrate a score.
+    target_latency_ms: float | None = None
+    control_median_latency_ms: float | None = None
     error: str | None = None
 
 

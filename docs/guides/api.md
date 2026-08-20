@@ -91,6 +91,20 @@ provider and at that domain, and is then adjusted for the local part and for
 passive domain signals. `contributions` itemises every adjustment.
 `validation-calibration` measures whether those probabilities held up.
 
+The largest term is usually `probe_timing`. Comparing how long the destination
+took to answer for the real recipient against how long it took for recipients
+known not to exist reveals whether a mailbox lookup happened at all, and on a
+314-address cohort with 45 confirmed hard bounces that separated the list
+better than every other signal combined: holding the domain constant,
+recipients whose answer was slower than the controls bounced at 2.9% while the
+rest bounced at 44.1%. `target_latency_ms` and `control_median_latency_ms` are
+returned on batch results so the comparison can be audited.
+
+Provider priors are deliberately close together. An earlier version spread
+them from 0.05 to 0.35 based on how each receiver was expected to treat
+unknown recipients; measurement contradicted that, so the priors were
+compressed around the observed base rate and the ranking left to the probe.
+
 `validate-batch` is the better entry point for a list. Addresses at a shared
 domain reveal that domain's naming convention and any generated name variants,
 neither of which is visible one address at a time. Pass `target_bounce_rate`

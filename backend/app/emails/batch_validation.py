@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,6 +164,12 @@ async def validate_batch(
             # The destination's accept-all behaviour is already known, so the
             # remaining addresses only need their own recipient answer.
             reuse_controls = 0 if lead_outcome.response.mailbox.catch_all is not None else None
+            # How fast this destination answers for a recipient it does not
+            # have is a property of the destination, so the lead's measurement
+            # is the baseline every other address at the domain is compared
+            # against. Without it the timing evidence, which is the strongest
+            # signal available, would only ever apply to the first address.
+            control_baseline = lead_outcome.response.mailbox.control_median_latency_ms
 
             async def process_address(member: _AddressWork) -> None:
                 async with address_semaphore:
@@ -176,6 +182,15 @@ async def validate_batch(
                     except Exception as exc:
                         logger.warning("Batch validation failed for %s: %s", member.email, exc)
                         return
+                    if (
+                        outcome.response.mailbox.control_median_latency_ms is None
+                        and control_baseline is not None
+                    ):
+                        outcome.response.mailbox.control_median_latency_ms = control_baseline
+                        if outcome.probe is not None:
+                            outcome.probe = replace(
+                                outcome.probe, control_median_latency_ms=control_baseline
+                            )
                     if (
                         outcome.response.mailbox.catch_all is None
                         and lead_outcome.response.mailbox.catch_all is not None
@@ -232,7 +247,7 @@ async def validate_batch(
         local_delta = outcome.local_part_delta
         local_notes = list(outcome.local_part_notes)
         if matches_pattern is True:
-            local_delta -= 0.5
+            local_delta -= 0.3
             local_notes.append("Matches the naming convention used by this domain in the batch.")
         elif matches_pattern is False:
             local_delta += 0.7
@@ -287,6 +302,8 @@ async def validate_batch(
                 matches_domain_pattern=matches_pattern,
                 permutation_variant=is_permutation,
                 catch_all_risk=risk,
+                target_latency_ms=response.mailbox.target_latency_ms,
+                control_median_latency_ms=response.mailbox.control_median_latency_ms,
             )
         )
 

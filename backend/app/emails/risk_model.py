@@ -39,10 +39,33 @@ HOLD_THRESHOLD = 0.10
 
 # Pseudo-observation weights. The provider level pools far more traffic than a
 # single domain, so it takes more evidence to move and lends more stability to
-# the domains beneath it.
-_PROVIDER_PRIOR_STRENGTH = 40.0
-_DOMAIN_PRIOR_STRENGTH = 20.0
-_GLOBAL_PRIOR = 0.125
+# the domains beneath it. Both were lowered after the seeded priors turned out
+# to be worse than the observed rates they were meant to stand in for.
+_PROVIDER_PRIOR_STRENGTH = 25.0
+_DOMAIN_PRIOR_STRENGTH = 15.0
+_GLOBAL_PRIOR = 0.14
+
+# Measured against a 314-address cohort with 45 confirmed hard bounces.
+#
+# Comparing the target's RCPT latency against control recipients at the same
+# destination turned out to be the strongest evidence available, by a wide
+# margin. Holding the domain constant, recipients whose lookup was slower than
+# the controls bounced at 2.9% while the rest bounced at 44.1%; within Google
+# Workspace alone the split was 0.6% against 46.5%. The destination performs a
+# directory lookup for a mailbox it has and short-circuits for one it does
+# not, and the delay leaks which happened.
+#
+# The signal is only evidence when both latencies were actually measured. An
+# address probed without controls has not been shown to lack a lookup, so it
+# gets neither adjustment.
+_TIMING_LOOKUP_OBSERVED = -1.8
+_TIMING_NO_LOOKUP = 1.2
+# Ratio of target to control latency above which a lookup is considered seen.
+_TIMING_RATIO = 1.8
+
+# Local-part evidence is real but far weaker than the probe, so its raw deltas
+# are damped rather than applied at face value.
+_LOCAL_PART_SCALE = 0.5
 
 
 @dataclass(frozen=True)
@@ -242,32 +265,31 @@ def compute_risk(
                     "rejected, so the destination validates recipients.",
                 )
             )
-        elif probe.uniform_accept_all and provider.fronts_backend:
-            log_odds += 0.5
-            contributions.append(
-                RiskContribution(
-                    "gateway_accept_all",
-                    0.5,
-                    f"{provider.name} fronts a separate mailbox backend and accepted every "
-                    "control recipient.",
-                )
-            )
         if (
             probe.target_latency_ms is not None
             and probe.control_median_latency_ms is not None
             and probe.control_median_latency_ms > 0
         ):
             ratio = probe.target_latency_ms / probe.control_median_latency_ms
-            # A directory lookup for a real mailbox takes measurably longer
-            # than returning a blanket acceptance.
-            if ratio >= 1.8:
-                log_odds -= 0.4
+            if ratio >= _TIMING_RATIO:
+                log_odds += _TIMING_LOOKUP_OBSERVED
                 contributions.append(
                     RiskContribution(
                         "probe_timing",
-                        -0.4,
-                        "The target recipient took materially longer to answer than the "
-                        "controls, which indicates a directory lookup.",
+                        _TIMING_LOOKUP_OBSERVED,
+                        f"The target took {ratio:.1f} times longer to answer than the control "
+                        "recipients, so the destination looked this mailbox up rather than "
+                        "accepting blindly.",
+                    )
+                )
+            else:
+                log_odds += _TIMING_NO_LOOKUP
+                contributions.append(
+                    RiskContribution(
+                        "probe_timing",
+                        _TIMING_NO_LOOKUP,
+                        "The target was answered as quickly as recipients known not to exist, "
+                        "so no mailbox lookup took place.",
                     )
                 )
         if probe.sender_reputation_signal:
@@ -285,11 +307,12 @@ def compute_risk(
             )
 
     if local_part_delta:
-        log_odds += local_part_delta
+        scaled = round(local_part_delta * _LOCAL_PART_SCALE, 3)
+        log_odds += scaled
         contributions.append(
             RiskContribution(
                 "local_part",
-                local_part_delta,
+                scaled,
                 "; ".join(local_part_notes or []) or "Local-part shape adjustment.",
             )
         )

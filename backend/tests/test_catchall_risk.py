@@ -250,9 +250,52 @@ def test_provider_prior_applies_with_no_history_at_all() -> None:
     gateway = compute_risk(provider=PROOFPOINT)
     workspace = compute_risk(provider=GOOGLE)
     assert gateway.source == "provider_prior"
-    # A gateway that may not know the recipient directory is a much worse bet
-    # than a provider that answers RCPT honestly.
-    assert gateway.score > workspace.score * 2
+    # The priors are deliberately close together. A wide spread between
+    # providers was measured to be wrong, and worse than useless: it moved
+    # scores confidently in a direction the outcomes did not support. Ranking
+    # is left to the probe evidence.
+    assert 0.10 <= workspace.score <= gateway.score <= 0.20
+
+
+def test_observed_lookup_latency_dominates_the_provider_prior() -> None:
+    """Timing is the strongest evidence available, so it has to outweigh priors.
+
+    Holding the domain constant, recipients answered more slowly than known
+    nonexistent controls bounced at 2.9% against 44.1% for the rest.
+    """
+    looked_up = compute_risk(
+        provider=GOOGLE,
+        probe=ProbeEvidence(
+            accepted=True,
+            control_total=3,
+            control_accepted=3,
+            target_latency_ms=180.0,
+            control_median_latency_ms=20.0,
+        ),
+    )
+    blanket = compute_risk(
+        provider=GOOGLE,
+        probe=ProbeEvidence(
+            accepted=True,
+            control_total=3,
+            control_accepted=3,
+            target_latency_ms=21.0,
+            control_median_latency_ms=20.0,
+        ),
+    )
+    assert looked_up.score < 0.04 < 0.20 < blanket.score
+    assert looked_up.recommended_action == "send"
+    assert blanket.recommended_action == "hold"
+
+
+def test_unmeasured_latency_is_not_read_as_a_missing_lookup() -> None:
+    # An address probed without controls has not been shown to lack a lookup.
+    unmeasured = compute_risk(
+        provider=GOOGLE,
+        probe=ProbeEvidence(accepted=True, control_total=0, target_latency_ms=30.0),
+    )
+    assert not any(item.label == "probe_timing" for item in unmeasured.contributions)
+    assert unmeasured.score == GOOGLE.accept_all_bounce_prior
 
 
 def test_domain_outcomes_pull_the_estimate_off_the_provider_prior() -> None:

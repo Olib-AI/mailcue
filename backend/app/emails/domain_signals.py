@@ -236,24 +236,25 @@ def _score(signals: DomainSignals) -> None:
             delta += 0.6
             notes.append(f"Domain is {signals.age_days} days old.")
         elif signals.age_days > 3650:
-            delta -= 0.4
+            delta -= 0.2
             notes.append("Domain has been registered for over ten years.")
     if signals.expires_in_days is not None and signals.expires_in_days < 30:
         delta += 0.8
         notes.append(f"Domain registration expires in {signals.expires_in_days} days.")
     if not signals.has_spf:
-        delta += 0.35
+        # The clearest passive signal in the measured cohort: 30% of addresses
+        # at domains without SPF bounced, against a 14% base rate.
+        delta += 0.6
         notes.append("Domain publishes no SPF record.")
+    # Authentication and transport-security records were originally read as
+    # evidence of a maintained mail domain. Measurement did not support it:
+    # DMARC-publishing domains bounced at 13.5% against a 14.3% base rate, and
+    # MTA-STS publishers bounced at 19.2%, worse than average. Both are now
+    # reported for context without moving the estimate.
     if signals.has_dmarc:
-        delta -= 0.25
-        if signals.dmarc_policy in {"quarantine", "reject"}:
-            delta -= 0.2
-        notes.append("Domain publishes DMARC, indicating managed mail.")
+        notes.append("Domain publishes DMARC.")
     if signals.has_mta_sts:
-        delta -= 0.45
-        notes.append("Domain publishes MTA-STS, indicating actively managed mail.")
-    if signals.has_tls_rpt:
-        delta -= 0.15
+        notes.append("Domain publishes MTA-STS.")
     if signals.wildcard_dns and not signals.has_dmarc:
         delta += 0.3
         notes.append("Domain resolves wildcard hostnames.")
