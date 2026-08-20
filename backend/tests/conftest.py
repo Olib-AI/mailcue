@@ -22,6 +22,24 @@ def anyio_backend():
     return "asyncio"
 
 
+@pytest.fixture(autouse=True)
+def _no_outbound_signal_lookups():
+    """Keep the passive-signal collectors offline during tests.
+
+    RDAP is an outbound HTTP call, and the signal cache would otherwise carry
+    results between tests that mock DNS differently.
+    """
+    from app.config import settings
+    from app.emails import domain_signals
+
+    original = settings.validation_rdap_enabled
+    settings.validation_rdap_enabled = False
+    domain_signals.clear_cache()
+    yield
+    settings.validation_rdap_enabled = original
+    domain_signals.clear_cache()
+
+
 @pytest.fixture()
 async def _engine_and_session():
     """Create a single in-memory SQLite engine shared across all connections.

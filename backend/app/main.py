@@ -130,6 +130,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.deliverability.scheduler import scheduler_loop as deliverability_scheduler_loop
 
     _app.state.deliverability_scheduler_task = asyncio.create_task(deliverability_scheduler_loop())
+    # Staged sends have to advance on their own: the hold window closes long
+    # after the request that created the batch returned.
+    from app.emails.canary_scheduler import scheduler_loop as canary_scheduler_loop
+
+    _app.state.canary_scheduler_task = asyncio.create_task(canary_scheduler_loop())
+    # Bounces the server receives are the only ground truth for a recipient no
+    # probe could classify, so they are folded back in automatically.
+    from app.emails.bounce_scanner import scanner_loop as bounce_scanner_loop
+
+    _app.state.bounce_scanner_task = asyncio.create_task(bounce_scanner_loop())
 
     async with AsyncSessionLocal() as session:
         await create_default_admin(session)
@@ -277,10 +287,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # ── Shutdown ─────────────────────────────────────────────────
     _app.state.warmup_scheduler_task.cancel()
     _app.state.deliverability_scheduler_task.cancel()
+    _app.state.canary_scheduler_task.cancel()
+    _app.state.bounce_scanner_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await _app.state.warmup_scheduler_task
     with contextlib.suppress(asyncio.CancelledError):
         await _app.state.deliverability_scheduler_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await _app.state.canary_scheduler_task
+    with contextlib.suppress(asyncio.CancelledError):
+        await _app.state.bounce_scanner_task
     await engine.dispose()
     logger.info("MailCue API shut down.")
 

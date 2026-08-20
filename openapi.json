@@ -1531,6 +1531,456 @@
         ]
       }
     },
+    "/api/v1/emails/validate-batch": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Validate Email Batch Endpoint",
+        "description": "Validate a list of addresses, using batch-level evidence and a bounce budget.\n\nAddresses at the same domain reveal that domain's naming convention and any\ngenerated name variants, neither of which is visible one address at a time.",
+        "operationId": "validate_email_batch_endpoint_api_v1_emails_validate_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailValidationBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailValidationBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/emails/validation-calibration": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Get Validation Calibration",
+        "description": "Report how well issued risk scores matched the outcomes that followed.\n\nA score is only a probability once it has been checked against reality.",
+        "operationId": "get_validation_calibration_api_v1_emails_validation_calibration_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 365,
+              "minimum": 1,
+              "default": 90,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(tenant|global)$",
+              "default": "tenant",
+              "title": "Scope"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailValidationCalibrationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/bounces/ingest": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Ingest Bounce",
+        "description": "Extract delivery outcomes from a raw notification and record them.\n\nBounces the server already receives are the only labelled data that exists\nfor an accept-all recipient, so they are ingested automatically rather than\nwaiting for a caller to report each one by hand.",
+        "operationId": "ingest_bounce_api_v1_emails_bounces_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailBounceIngestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailBounceIngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/emails/suppressed-domains": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "List Suppressed Domains",
+        "description": "List recipient domains paused after their measured bounce rate crossed the limit.",
+        "operationId": "list_suppressed_domains_api_v1_emails_suppressed_domains_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainSuppressionListResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/emails/send-canaries": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Create Send Canary",
+        "description": "Stage a send so a sample proves each domain before the rest is committed.\n\nThere is no way to recall a message once it leaves the MTA, so the only\ncontrol available is how much of the batch is committed at once.",
+        "operationId": "create_send_canary_api_v1_emails_send_canaries_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSendCanaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCanaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "List Send Canaries",
+        "description": "List staged sends for the calling tenant, newest first.",
+        "operationId": "list_send_canaries_api_v1_emails_send_canaries_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCanaryListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/send-canaries/{canary_id}": {
+      "get": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Get Send Canary",
+        "description": "Return the state of one staged send.",
+        "operationId": "get_send_canary_api_v1_emails_send_canaries__canary_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "canary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Canary Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCanaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/send-canaries/{canary_id}/decide": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Decide Send Canary",
+        "description": "Resolve a staged send now instead of waiting for its hold window.",
+        "operationId": "decide_send_canary_api_v1_emails_send_canaries__canary_id__decide_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "canary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Canary Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCanaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/emails/send-canaries/{canary_id}/cancel": {
+      "post": {
+        "tags": [
+          "Emails"
+        ],
+        "summary": "Cancel Send Canary",
+        "description": "Cancel a staged send before its remaining recipients go out.",
+        "operationId": "cancel_send_canary_api_v1_emails_send_canaries__canary_id__cancel_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "canary_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Canary Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCanaryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/mailboxes": {
       "get": {
         "tags": [
@@ -6952,164 +7402,12 @@
       }
     },
     "/httpbin/{bin_id}": {
-      "put": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "head": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "options": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
+        "operationId": "capture_root_httpbin__bin_id__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -7147,7 +7445,121 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
+        "operationId": "capture_root_httpbin__bin_id__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -7185,7 +7597,45 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Root",
-        "operationId": "capture_root_httpbin__bin_id__put",
+        "operationId": "capture_root_httpbin__bin_id__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Root",
+        "operationId": "capture_root_httpbin__bin_id__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -7220,200 +7670,12 @@
       }
     },
     "/httpbin/{bin_id}/{path}": {
-      "put": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "head": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "HTTP Bin Catch-All"
-        ],
-        "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
-        "parameters": [
-          {
-            "name": "bin_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bin Id"
-            }
-          },
-          {
-            "name": "path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
       "options": {
         "tags": [
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -7460,7 +7722,148 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -7507,7 +7910,54 @@
           "HTTP Bin Catch-All"
         ],
         "summary": "Capture Path",
-        "operationId": "capture_path_httpbin__bin_id___path__put",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
+        "parameters": [
+          {
+            "name": "bin_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Bin Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "HTTP Bin Catch-All"
+        ],
+        "summary": "Capture Path",
+        "operationId": "capture_path_httpbin__bin_id___path__options",
         "parameters": [
           {
             "name": "bin_id",
@@ -8369,6 +8819,107 @@
         ],
         "title": "ChangePasswordRequest",
         "description": "Change the current user's password."
+      },
+      "CreateSendCanaryRequest": {
+        "properties": {
+          "recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Recipients"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body",
+            "default": ""
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "from_name": {
+            "type": "string",
+            "title": "From Name",
+            "default": ""
+          },
+          "body_type": {
+            "type": "string",
+            "enum": [
+              "plain",
+              "html"
+            ],
+            "title": "Body Type",
+            "default": "plain"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "sample_size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Size"
+          },
+          "hold_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10080.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hold Minutes"
+          },
+          "bounce_threshold": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Bounce Threshold",
+            "default": 0.0
+          },
+          "auto_release": {
+            "type": "boolean",
+            "title": "Auto Release",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipients",
+          "from_address",
+          "subject"
+        ],
+        "title": "CreateSendCanaryRequest",
+        "description": "Stage a send so a small sample proves the domain before the rest goes out."
       },
       "DeliverabilityAlertList": {
         "properties": {
@@ -10383,6 +10934,75 @@
         "title": "DomainResponse",
         "description": "Basic domain information."
       },
+      "DomainSuppressionEntry": {
+        "properties": {
+          "domain": {
+            "type": "string",
+            "title": "Domain"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "hard_bounces": {
+            "type": "integer",
+            "title": "Hard Bounces"
+          },
+          "observations": {
+            "type": "integer",
+            "title": "Observations"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "domain",
+          "reason",
+          "hard_bounces",
+          "observations",
+          "created_at"
+        ],
+        "title": "DomainSuppressionEntry",
+        "description": "A recipient domain paused after its measured bounce rate crossed the limit."
+      },
+      "DomainSuppressionListResponse": {
+        "properties": {
+          "suppressions": {
+            "items": {
+              "$ref": "#/components/schemas/DomainSuppressionEntry"
+            },
+            "type": "array",
+            "title": "Suppressions"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suppressions",
+          "total"
+        ],
+        "title": "DomainSuppressionListResponse",
+        "description": "Currently suppressed recipient domains."
+      },
       "EffectiveTunnelStatus": {
         "properties": {
           "id": {
@@ -10531,6 +11151,106 @@
         ],
         "title": "EffectiveTunnelStatusResponse",
         "description": "Sidecar reachability and its effective tunnel configuration."
+      },
+      "EmailBounceIngestRecipient": {
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "delivered",
+              "hard_bounce",
+              "soft_bounce"
+            ],
+            "title": "Outcome"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Code"
+          },
+          "diagnostic_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnostic Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recipient",
+          "outcome"
+        ],
+        "title": "EmailBounceIngestRecipient",
+        "description": "One recipient outcome extracted from a notification."
+      },
+      "EmailBounceIngestRequest": {
+        "properties": {
+          "raw_message": {
+            "type": "string",
+            "maxLength": 2000000,
+            "minLength": 1,
+            "title": "Raw Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "raw_message"
+        ],
+        "title": "EmailBounceIngestRequest",
+        "description": "Submit a raw delivery status notification for outcome extraction."
+      },
+      "EmailBounceIngestResponse": {
+        "properties": {
+          "is_dsn": {
+            "type": "boolean",
+            "title": "Is Dsn"
+          },
+          "recorded": {
+            "type": "integer",
+            "title": "Recorded"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/EmailBounceIngestRecipient"
+            },
+            "type": "array",
+            "title": "Recipients",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "is_dsn",
+          "recorded"
+        ],
+        "title": "EmailBounceIngestResponse",
+        "description": "Outcome of parsing and recording one notification."
       },
       "EmailDetail": {
         "properties": {
@@ -10859,6 +11579,374 @@
         "title": "EmailSummary",
         "description": "Lightweight representation used in list views."
       },
+      "EmailValidationBatchItem": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "invalid",
+              "undetermined",
+              "disposable",
+              "catch_all"
+            ],
+            "title": "Status"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "deliverable",
+              "undeliverable",
+              "risky",
+              "unknown"
+            ],
+            "title": "Verdict"
+          },
+          "deliverable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deliverable"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "risk_score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Risk Score"
+          },
+          "recommended_action": {
+            "type": "string",
+            "enum": [
+              "send",
+              "caution",
+              "hold"
+            ],
+            "title": "Recommended Action"
+          },
+          "matches_domain_pattern": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matches Domain Pattern"
+          },
+          "permutation_variant": {
+            "type": "boolean",
+            "title": "Permutation Variant",
+            "default": false
+          },
+          "catch_all_risk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailValidationCatchAllRisk"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "status",
+          "verdict",
+          "reason",
+          "risk_score",
+          "recommended_action"
+        ],
+        "title": "EmailValidationBatchItem",
+        "description": "One address inside a batch validation."
+      },
+      "EmailValidationBatchRequest": {
+        "properties": {
+          "emails": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Emails"
+          },
+          "target_bounce_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Bounce Rate"
+          },
+          "include_domain_signals": {
+            "type": "boolean",
+            "title": "Include Domain Signals",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "emails"
+        ],
+        "title": "EmailValidationBatchRequest",
+        "description": "Validate many addresses together so batch-level evidence can be used."
+      },
+      "EmailValidationBatchResponse": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EmailValidationBatchItem"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EmailValidationBatchSummary"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailValidationBudgetSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "results",
+          "summary"
+        ],
+        "title": "EmailValidationBatchResponse",
+        "description": "Result of validating a batch of addresses."
+      },
+      "EmailValidationBatchSummary": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "valid": {
+            "type": "integer",
+            "title": "Valid"
+          },
+          "invalid": {
+            "type": "integer",
+            "title": "Invalid"
+          },
+          "catch_all": {
+            "type": "integer",
+            "title": "Catch All"
+          },
+          "undetermined": {
+            "type": "integer",
+            "title": "Undetermined"
+          },
+          "disposable": {
+            "type": "integer",
+            "title": "Disposable"
+          },
+          "mean_risk_score": {
+            "type": "number",
+            "title": "Mean Risk Score"
+          },
+          "projected_bounce_rate": {
+            "type": "number",
+            "title": "Projected Bounce Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "valid",
+          "invalid",
+          "catch_all",
+          "undetermined",
+          "disposable",
+          "mean_risk_score",
+          "projected_bounce_rate"
+        ],
+        "title": "EmailValidationBatchSummary",
+        "description": "Aggregate counts for a batch validation."
+      },
+      "EmailValidationBudgetSelection": {
+        "properties": {
+          "target_bounce_rate": {
+            "type": "number",
+            "title": "Target Bounce Rate"
+          },
+          "projected_bounce_rate": {
+            "type": "number",
+            "title": "Projected Bounce Rate"
+          },
+          "included": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Included"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Excluded"
+          },
+          "included_count": {
+            "type": "integer",
+            "title": "Included Count"
+          },
+          "excluded_count": {
+            "type": "integer",
+            "title": "Excluded Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_bounce_rate",
+          "projected_bounce_rate",
+          "included",
+          "excluded",
+          "included_count",
+          "excluded_count"
+        ],
+        "title": "EmailValidationBudgetSelection",
+        "description": "Addresses that fit inside a target blended bounce rate."
+      },
+      "EmailValidationCalibrationBin": {
+        "properties": {
+          "lower": {
+            "type": "number",
+            "title": "Lower"
+          },
+          "upper": {
+            "type": "number",
+            "title": "Upper"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "predicted_mean": {
+            "type": "number",
+            "title": "Predicted Mean"
+          },
+          "observed_rate": {
+            "type": "number",
+            "title": "Observed Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lower",
+          "upper",
+          "count",
+          "predicted_mean",
+          "observed_rate"
+        ],
+        "title": "EmailValidationCalibrationBin",
+        "description": "One reliability-diagram bucket."
+      },
+      "EmailValidationCalibrationResponse": {
+        "properties": {
+          "sample_size": {
+            "type": "integer",
+            "title": "Sample Size"
+          },
+          "brier_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier Score"
+          },
+          "mean_predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Predicted"
+          },
+          "observed_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Rate"
+          },
+          "bins": {
+            "items": {
+              "$ref": "#/components/schemas/EmailValidationCalibrationBin"
+            },
+            "type": "array",
+            "title": "Bins",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "sample_size"
+        ],
+        "title": "EmailValidationCalibrationResponse",
+        "description": "Measured agreement between issued scores and the outcomes that followed."
+      },
       "EmailValidationCatchAllRisk": {
         "properties": {
           "score": {
@@ -10891,7 +11979,10 @@
             "enum": [
               "no_history",
               "exact_history",
-              "domain_history"
+              "domain_history",
+              "shared_domain_history",
+              "provider_history",
+              "provider_prior"
             ],
             "title": "Source"
           },
@@ -10903,6 +11994,50 @@
           "explanation": {
             "type": "string",
             "title": "Explanation"
+          },
+          "base_rate": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Base Rate",
+            "default": 0.125
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "provider_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Rate"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "default": 0.3
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/EmailValidationRiskContribution"
+            },
+            "type": "array",
+            "title": "Contributions",
+            "default": []
           }
         },
         "type": "object",
@@ -10915,7 +12050,66 @@
           "explanation"
         ],
         "title": "EmailValidationCatchAllRisk",
-        "description": "Historical hard-bounce estimate for an SMTP accept-all recipient."
+        "description": "Hard-bounce estimate for an SMTP accept-all recipient.\n\n``score`` is a probability, and ``base_rate`` shows the pooled rate before\nany per-address adjustment so callers can see how much of the estimate came\nfrom evidence about this address rather than about its destination."
+      },
+      "EmailValidationControlProbe": {
+        "properties": {
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Code"
+          },
+          "smtp_response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Response"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "mailbox_absent",
+              "mailbox_present",
+              "temporary",
+              "policy",
+              "unknown"
+            ],
+            "title": "Verdict"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "shape",
+          "verdict"
+        ],
+        "title": "EmailValidationControlProbe",
+        "description": "One synthetic recipient probed alongside the address under test."
       },
       "EmailValidationDisposable": {
         "properties": {
@@ -11050,6 +12244,100 @@
         "title": "EmailValidationDns",
         "description": "Result of DNS domain MX/NS records checks."
       },
+      "EmailValidationDomainSignals": {
+        "properties": {
+          "age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Days"
+          },
+          "expires_in_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In Days"
+          },
+          "has_spf": {
+            "type": "boolean",
+            "title": "Has Spf",
+            "default": false
+          },
+          "has_dmarc": {
+            "type": "boolean",
+            "title": "Has Dmarc",
+            "default": false
+          },
+          "dmarc_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dmarc Policy"
+          },
+          "has_mta_sts": {
+            "type": "boolean",
+            "title": "Has Mta Sts",
+            "default": false
+          },
+          "has_tls_rpt": {
+            "type": "boolean",
+            "title": "Has Tls Rpt",
+            "default": false
+          },
+          "wildcard_dns": {
+            "type": "boolean",
+            "title": "Wildcard Dns",
+            "default": false
+          },
+          "parked": {
+            "type": "boolean",
+            "title": "Parked",
+            "default": false
+          },
+          "inferred_backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inferred Backend"
+          },
+          "risk_delta": {
+            "type": "number",
+            "title": "Risk Delta",
+            "default": 0.0
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "EmailValidationDomainSignals",
+        "description": "Passive domain-level evidence collected without contacting the MX."
+      },
       "EmailValidationFeedbackRequest": {
         "properties": {
           "email": {
@@ -11122,6 +12410,63 @@
         ],
         "title": "EmailValidationFeedbackResponse",
         "description": "Acknowledgement for a stored validation feedback event."
+      },
+      "EmailValidationLocalPart": {
+        "properties": {
+          "shape": {
+            "type": "string",
+            "title": "Shape"
+          },
+          "is_role_account": {
+            "type": "boolean",
+            "title": "Is Role Account",
+            "default": false
+          },
+          "is_placeholder": {
+            "type": "boolean",
+            "title": "Is Placeholder",
+            "default": false
+          },
+          "is_trap_marker": {
+            "type": "boolean",
+            "title": "Is Trap Marker",
+            "default": false
+          },
+          "has_plus_tag": {
+            "type": "boolean",
+            "title": "Has Plus Tag",
+            "default": false
+          },
+          "gibberish_score": {
+            "type": "number",
+            "title": "Gibberish Score",
+            "default": 0.0
+          },
+          "digit_ratio": {
+            "type": "number",
+            "title": "Digit Ratio",
+            "default": 0.0
+          },
+          "risk_delta": {
+            "type": "number",
+            "title": "Risk Delta",
+            "default": 0.0
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "shape"
+        ],
+        "title": "EmailValidationLocalPart",
+        "description": "Offline risk signals derived from the local part."
       },
       "EmailValidationMailbox": {
         "properties": {
@@ -11200,11 +12545,170 @@
               }
             ],
             "title": "Error"
+          },
+          "enhanced_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enhanced Status"
+          },
+          "mx_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mx Host"
+          },
+          "target_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Latency Ms"
+          },
+          "control_median_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Control Median Latency Ms"
+          },
+          "control_probes": {
+            "items": {
+              "$ref": "#/components/schemas/EmailValidationControlProbe"
+            },
+            "type": "array",
+            "title": "Control Probes",
+            "default": []
+          },
+          "controls_accepted": {
+            "type": "integer",
+            "title": "Controls Accepted",
+            "default": 0
+          },
+          "controls_rejected": {
+            "type": "integer",
+            "title": "Controls Rejected",
+            "default": 0
+          },
+          "controls_inconclusive": {
+            "type": "integer",
+            "title": "Controls Inconclusive",
+            "default": 0
+          },
+          "selective_recipient_validation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selective Recipient Validation"
+          },
+          "order_degraded": {
+            "type": "boolean",
+            "title": "Order Degraded",
+            "default": false
+          },
+          "sender_reputation_signal": {
+            "type": "boolean",
+            "title": "Sender Reputation Signal",
+            "default": false
           }
         },
         "type": "object",
         "title": "EmailValidationMailbox",
         "description": "Result of SMTP probe check."
+      },
+      "EmailValidationProvider": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "hosted_mailbox",
+              "security_gateway",
+              "consumer",
+              "self_hosted",
+              "forwarder",
+              "parked",
+              "unroutable",
+              "unknown"
+            ],
+            "title": "Category"
+          },
+          "matched_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Host"
+          },
+          "fronts_backend": {
+            "type": "boolean",
+            "title": "Fronts Backend",
+            "default": false
+          },
+          "accept_all_bounce_prior": {
+            "type": "number",
+            "title": "Accept All Bounce Prior"
+          },
+          "inferred_backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inferred Backend"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "category",
+          "accept_all_bounce_prior"
+        ],
+        "title": "EmailValidationProvider",
+        "description": "Receiving provider inferred from the domain's MX records."
       },
       "EmailValidationRequest": {
         "properties": {
@@ -11293,6 +12797,36 @@
                 "type": "null"
               }
             ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailValidationProvider"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "local_part": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailValidationLocalPart"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain_signals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailValidationDomainSignals"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -11311,6 +12845,30 @@
         ],
         "title": "EmailValidationResponse",
         "description": "Full detailed response of the email validation."
+      },
+      "EmailValidationRiskContribution": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "delta": {
+            "type": "number",
+            "title": "Delta"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "delta"
+        ],
+        "title": "EmailValidationRiskContribution",
+        "description": "One named adjustment applied to the base rate, expressed in log-odds."
       },
       "EmailValidationSyntax": {
         "properties": {
@@ -12599,6 +14157,271 @@
         ],
         "title": "SendAttachment",
         "description": "Base64-encoded file attachment for outgoing emails."
+      },
+      "SendCanaryListResponse": {
+        "properties": {
+          "canaries": {
+            "items": {
+              "$ref": "#/components/schemas/SendCanaryResponse"
+            },
+            "type": "array",
+            "title": "Canaries"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "canaries",
+          "total"
+        ],
+        "title": "SendCanaryListResponse",
+        "description": "Paginated staged sends for the calling tenant."
+      },
+      "SendCanaryRecipient": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "sample",
+              "held"
+            ],
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sent",
+              "delivered",
+              "hard_bounce",
+              "soft_bounce",
+              "released",
+              "blocked",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "risk_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Score"
+          },
+          "smtp_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Code"
+          },
+          "enhanced_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enhanced Status"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "role",
+          "status"
+        ],
+        "title": "SendCanaryRecipient",
+        "description": "One recipient inside a staged send."
+      },
+      "SendCanaryResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "probing",
+              "released",
+              "blocked",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "sample_size": {
+            "type": "integer",
+            "title": "Sample Size"
+          },
+          "hold_minutes": {
+            "type": "integer",
+            "title": "Hold Minutes"
+          },
+          "bounce_threshold": {
+            "type": "number",
+            "title": "Bounce Threshold"
+          },
+          "auto_release": {
+            "type": "boolean",
+            "title": "Auto Release"
+          },
+          "from_address": {
+            "type": "string",
+            "title": "From Address"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "sample_sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sample Sent At"
+          },
+          "decision_due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Due At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "total_recipients": {
+            "type": "integer",
+            "title": "Total Recipients"
+          },
+          "sample_recipients": {
+            "type": "integer",
+            "title": "Sample Recipients"
+          },
+          "held_recipients": {
+            "type": "integer",
+            "title": "Held Recipients"
+          },
+          "hard_bounces": {
+            "type": "integer",
+            "title": "Hard Bounces"
+          },
+          "soft_bounces": {
+            "type": "integer",
+            "title": "Soft Bounces"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/SendCanaryRecipient"
+            },
+            "type": "array",
+            "title": "Recipients",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "sample_size",
+          "hold_minutes",
+          "bounce_threshold",
+          "auto_release",
+          "from_address",
+          "subject",
+          "created_at",
+          "total_recipients",
+          "sample_recipients",
+          "held_recipients",
+          "hard_bounces",
+          "soft_bounces"
+        ],
+        "title": "SendCanaryResponse",
+        "description": "State of one staged send."
       },
       "SendEmailRequest": {
         "properties": {

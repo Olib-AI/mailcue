@@ -125,6 +125,26 @@ class Settings(BaseSettings):
     validation_probe_relay_host: str = ""
     validation_probe_relay_port: int = 2525
     validation_rate_limit: str = "30/minute"
+    # Number of nonexistent control recipients probed per accept-all check. One
+    # control cannot distinguish a uniform accept-all from a receiver that only
+    # rejects obviously-synthetic local parts.
+    validation_control_probe_count: int = 3
+    validation_rdap_enabled: bool = True
+    validation_rdap_timeout_seconds: float = 3.0
+    validation_domain_signal_timeout_seconds: float = 6.0
+    validation_domain_signals_enabled: bool = True
+    # Catch-all behaviour is a property of the recipient domain, not of the
+    # tenant querying it, so aggregates are shared once enough distinct tenants
+    # have contributed to make a single tenant's traffic unidentifiable.
+    validation_cross_tenant_risk_enabled: bool = True
+    validation_cross_tenant_min_tenants: int = 3
+    validation_cross_tenant_min_samples: int = 12
+    validation_batch_max_addresses: int = 500
+    validation_dsn_ingest_enabled: bool = True
+    canary_enabled: bool = True
+    canary_default_sample_size: int = 2
+    canary_default_hold_minutes: int = 15
+    canary_max_hold_minutes: int = 1440
     deliverability_rate_limit: str = "30/minute"
     deliverability_enrichment_rate_limit: str = "5/minute"
     deliverability_network_checks_enabled: bool = False
@@ -215,6 +235,24 @@ class Settings(BaseSettings):
             raise ValueError("deliverability artifact size must be between 1 KB and 20 MB")
         if not 1 <= self.validation_probe_relay_port <= 65_535:
             raise ValueError("validation probe relay port must be between 1 and 65535")
+        if not 1 <= self.validation_control_probe_count <= 5:
+            raise ValueError("validation control probe count must be between 1 and 5")
+        if self.validation_rdap_timeout_seconds <= 0:
+            raise ValueError("validation RDAP timeout must be positive")
+        if self.validation_domain_signal_timeout_seconds <= 0:
+            raise ValueError("validation domain signal timeout must be positive")
+        if self.validation_cross_tenant_min_tenants < 2:
+            raise ValueError("cross-tenant risk requires at least two contributing tenants")
+        if self.validation_cross_tenant_min_samples < 1:
+            raise ValueError("cross-tenant risk requires at least one sample")
+        if not 1 <= self.validation_batch_max_addresses <= 5_000:
+            raise ValueError("validation batch size must be between 1 and 5000")
+        if not 1 <= self.canary_default_sample_size <= 50:
+            raise ValueError("canary sample size must be between 1 and 50")
+        if not 1 <= self.canary_default_hold_minutes <= self.canary_max_hold_minutes:
+            raise ValueError("canary hold must be positive and within the maximum hold")
+        if not 1 <= self.canary_max_hold_minutes <= 10_080:
+            raise ValueError("canary maximum hold must be between 1 minute and 7 days")
         if self.database_url:
             url = make_url(self.database_url)
             # Bare PostgreSQL URLs are common in hosting-provider secrets.  Use

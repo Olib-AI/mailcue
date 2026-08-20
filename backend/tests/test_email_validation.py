@@ -14,6 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.models import User
+from app.config import settings
 from app.emails.disposable import (
     is_disposable_domain,
     is_forwarding_alias_domain,
@@ -39,6 +40,24 @@ def _public_smtp_dns(monkeypatch: pytest.MonkeyPatch) -> None:
         return ["192.0.2.1"]
 
     monkeypatch.setattr("app.emails.validation._resolve_public_smtp_addresses", resolve)
+
+
+def _rcpt_router(
+    target: str,
+    target_reply: tuple[int, str],
+    control_reply: tuple[int, str],
+) -> Any:
+    """Answer RCPT by recipient rather than by call order.
+
+    The prober interleaves control recipients around the target so that
+    per-connection degradation can be told apart from recipient validation, so
+    a fixed reply sequence would encode the probe order into every test.
+    """
+
+    def _reply(recipient: str, *_args: Any, **_kwargs: Any) -> tuple[int, str]:
+        return target_reply if recipient.lower() == target.lower() else control_reply
+
+    return _reply
 
 
 OWNER_ID = "perm-owner-id-validation"
@@ -222,10 +241,10 @@ async def test_validate_mailbox_success(mock_smtp_class: MagicMock) -> None:
 
     # Setup connection, ehlo, mail response, and rcpt response (250 OK)
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
-        (250, "Recipient OK"),  # Target email
-        (550, "No such user"),  # Catch-all check (rejected, meaning NOT catch-all)
-    ]
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "test@example.com", (250, "Recipient OK"), (550, "No such user")
+    )
 
     res = await validate_mailbox(
         domain="example.com",
@@ -238,6 +257,10 @@ async def test_validate_mailbox_success(mock_smtp_class: MagicMock) -> None:
     assert res.smtp_code == 250
     assert res.catch_all is False
     assert res.error is None
+    # Every synthetic recipient was refused, so the destination validates
+    # recipients rather than accepting everything.
+    assert res.selective_recipient_validation is True
+    assert res.controls_rejected == settings.validation_control_probe_count
 
 
 @pytest.mark.asyncio
@@ -249,10 +272,10 @@ async def test_validate_mailbox_catch_all(mock_smtp_class: MagicMock) -> None:
     mock_smtp_class.return_value = mock_smtp
 
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
-        (250, "Recipient OK"),  # Target email
-        (250, "Recipient OK"),  # Catch-all check accepts random address too!
-    ]
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "test@example.com", (250, "Recipient OK"), (250, "Recipient OK")
+    )
 
     res = await validate_mailbox(
         domain="example.com",
@@ -263,6 +286,8 @@ async def test_validate_mailbox_catch_all(mock_smtp_class: MagicMock) -> None:
 
     assert res.is_valid is True
     assert res.catch_all is True
+    assert res.selective_recipient_validation is False
+    assert res.controls_accepted == settings.validation_control_probe_count
 
 
 @pytest.mark.asyncio
@@ -275,10 +300,12 @@ async def test_validate_mailbox_unknown_control_stays_inconclusive(
     mock_smtp.close = MagicMock()
     mock_smtp_class.return_value = mock_smtp
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "person@example.com",
         (250, "Recipient OK"),
         (451, "4.7.1 Temporary policy deferral"),
-    ]
+    )
 
     result = await validate_mailbox(
         domain="example.com",
@@ -289,6 +316,7 @@ async def test_validate_mailbox_unknown_control_stays_inconclusive(
 
     assert result.is_valid is True
     assert result.catch_all is None
+    assert result.selective_recipient_validation is None
 
 
 @pytest.mark.asyncio
@@ -297,6 +325,7 @@ async def test_validate_mailbox_rejected(mock_smtp_class: MagicMock) -> None:
     mock_smtp = AsyncMock()
     mock_smtp.is_connected = True
     mock_smtp.close = MagicMock()
+    mock_smtp.supports_extension = MagicMock(return_value=False)
     mock_smtp_class.return_value = mock_smtp
 
     mock_smtp.mail.return_value = (250, "Sender OK")
@@ -320,6 +349,7 @@ async def test_validate_mailbox_policy_rejection_is_unknown(mock_smtp_class: Mag
     mock_smtp = AsyncMock()
     mock_smtp.is_connected = True
     mock_smtp.close = MagicMock()
+    mock_smtp.supports_extension = MagicMock(return_value=False)
     mock_smtp.mail.return_value = (250, "Sender OK")
     mock_smtp.rcpt.return_value = (550, "5.7.1 Message rejected by policy")
     mock_smtp_class.return_value = mock_smtp
@@ -436,10 +466,10 @@ async def test_validate_api_endpoint_success(client: AsyncClient) -> None:
     mock_smtp.is_connected = True
     mock_smtp.close = MagicMock()
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
-        (250, "Recipient OK"),  # Target email
-        (550, "No such user"),  # Not catch-all
-    ]
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "good@mailcue.io", (250, "Recipient OK"), (550, "No such user")
+    )
 
     with (
         patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
@@ -536,10 +566,10 @@ async def test_api_key_permissions_gating(perm_client: tuple[AsyncClient, Any]) 
     mock_smtp.is_connected = True
     mock_smtp.close = MagicMock()
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
-        (250, "Recipient OK"),
-        (550, "No such user"),
-    ]
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "test@mailcue.io", (250, "Recipient OK"), (550, "No such user")
+    )
 
     with (
         patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
@@ -577,6 +607,7 @@ async def test_validate_mailbox_greylisting(mock_smtp_class: MagicMock) -> None:
     mock_smtp_class.return_value = mock_smtp
 
     # Setup connection, ehlo, mail response, and rcpt response (450 Greylisted)
+    mock_smtp.supports_extension = MagicMock(return_value=False)
     mock_smtp.mail.return_value = (250, "Sender OK")
     mock_smtp.rcpt.return_value = (
         450,
@@ -657,10 +688,10 @@ async def test_validate_email_catch_all_mapping() -> None:
     mock_smtp.is_connected = True
     mock_smtp.close = MagicMock()
     mock_smtp.mail.return_value = (250, "Sender OK")
-    mock_smtp.rcpt.side_effect = [
-        (250, "Recipient OK"),  # Target email accepted
-        (250, "Recipient OK"),  # Random email also accepted (catch-all!)
-    ]
+    mock_smtp.supports_extension = MagicMock(return_value=False)
+    mock_smtp.rcpt.side_effect = _rcpt_router(
+        "good@mailcue.io", (250, "Recipient OK"), (250, "Recipient OK")
+    )
 
     with (
         patch("app.emails.validation._resolver.resolve", side_effect=mock_resolve),
@@ -851,14 +882,13 @@ async def test_feedback_calibrates_catch_all_risk(
     result = response.json()
     assert result["deliverable"] is None
     assert result["status"] == "catch_all"
-    assert result["catch_all_risk"] == {
-        "score": 0.02,
-        "level": "low",
-        "recommended_action": "send",
-        "source": "exact_history",
-        "sample_size": 1,
-        "explanation": "This exact recipient has a recent reported delivery.",
-    }
+    risk = result["catch_all_risk"]
+    assert risk["score"] == 0.02
+    assert risk["level"] == "low"
+    assert risk["recommended_action"] == "send"
+    assert risk["source"] == "exact_history"
+    assert risk["sample_size"] == 1
+    assert "recent confirmed delivery" in risk["explanation"]
 
 
 @patch("app.emails.disposable.get_cache_file_path")

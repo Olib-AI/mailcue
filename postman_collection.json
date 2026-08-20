@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "136be1ae-7895-40a8-a760-34630feb6e4c",
+    "_postman_id": "b4679e44-4575-4254-ac47-8278dcbb656a",
     "name": "MailCue API",
     "description": "Realistic email testing server REST API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -1002,6 +1002,283 @@
                 }
               }
             }
+          },
+          "response": []
+        },
+        {
+          "name": "Validate Email Batch Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/validate-batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "validate-batch"
+              ]
+            },
+            "description": "Validate a list of addresses, using batch-level evidence and a bounce budget.\n\nAddresses at the same domain reveal that domain's naming convention and any\ngenerated name variants, neither of which is visible one address at a time.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emails\": [\n    \"string\"\n  ],\n  \"target_bounce_rate\": {},\n  \"include_domain_signals\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Validation Calibration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/validation-calibration",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "validation-calibration"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "",
+                  "description": ""
+                },
+                {
+                  "key": "scope",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Report how well issued risk scores matched the outcomes that followed.\n\nA score is only a probability once it has been checked against reality."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest Bounce",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/bounces/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "bounces",
+                "ingest"
+              ]
+            },
+            "description": "Extract delivery outcomes from a raw notification and record them.\n\nBounces the server already receives are the only labelled data that exists\nfor an accept-all recipient, so they are ingested automatically rather than\nwaiting for a caller to report each one by hand.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"raw_message\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Suppressed Domains",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/suppressed-domains",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "suppressed-domains"
+              ]
+            },
+            "description": "List recipient domains paused after their measured bounce rate crossed the limit."
+          },
+          "response": []
+        },
+        {
+          "name": "List Send Canaries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send-canaries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send-canaries"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List staged sends for the calling tenant, newest first."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Send Canary",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send-canaries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send-canaries"
+              ]
+            },
+            "description": "Stage a send so a sample proves each domain before the rest is committed.\n\nThere is no way to recall a message once it leaves the MTA, so the only\ncontrol available is how much of the batch is committed at once.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"recipients\": [\n    \"string\"\n  ],\n  \"from_address\": \"string\",\n  \"subject\": \"string\",\n  \"body\": \"\",\n  \"name\": \"\",\n  \"from_name\": \"\",\n  \"body_type\": \"plain\",\n  \"reply_to\": {},\n  \"sample_size\": {},\n  \"hold_minutes\": {},\n  \"bounce_threshold\": 0.0,\n  \"auto_release\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Send Canary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send-canaries/:canary_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send-canaries",
+                ":canary_id"
+              ],
+              "variable": [
+                {
+                  "key": "canary_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Return the state of one staged send."
+          },
+          "response": []
+        },
+        {
+          "name": "Decide Send Canary",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send-canaries/:canary_id/decide",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send-canaries",
+                ":canary_id",
+                "decide"
+              ],
+              "variable": [
+                {
+                  "key": "canary_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Resolve a staged send now instead of waiting for its hold window."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Send Canary",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/send-canaries/:canary_id/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "send-canaries",
+                ":canary_id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "canary_id",
+                  "value": "",
+                  "description": ""
+                }
+              ]
+            },
+            "description": "Cancel a staged send before its remaining recipients go out."
           },
           "response": []
         }
