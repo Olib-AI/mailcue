@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import delete, func, select
 
+from app.database import dml_rowcount
 from app.httpbin.models import HttpBinBin, HttpBinRequest
 
 if TYPE_CHECKING:
@@ -140,4 +141,4 @@ async def clear_requests(db: AsyncSession, bin_id: str) -> int:
     stmt = delete(HttpBinRequest).where(HttpBinRequest.bin_id == bin_id)
     result = await db.execute(stmt)
     await db.commit()
-    return result.rowcount
+    return dml_rowcount(result)

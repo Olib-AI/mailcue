@@ -267,6 +267,32 @@ async def test_validate_mailbox_catch_all(mock_smtp_class: MagicMock) -> None:
 
 @pytest.mark.asyncio
 @patch("aiosmtplib.SMTP")
+async def test_validate_mailbox_unknown_control_stays_inconclusive(
+    mock_smtp_class: MagicMock,
+) -> None:
+    mock_smtp = AsyncMock()
+    mock_smtp.is_connected = True
+    mock_smtp.close = MagicMock()
+    mock_smtp_class.return_value = mock_smtp
+    mock_smtp.mail.return_value = (250, "Sender OK")
+    mock_smtp.rcpt.side_effect = [
+        (250, "Recipient OK"),
+        (451, "4.7.1 Temporary policy deferral"),
+    ]
+
+    result = await validate_mailbox(
+        domain="example.com",
+        mx_records=["10 mail.example.com."],
+        target_email="person@example.com",
+        sender_email="sender@mailcue.local",
+    )
+
+    assert result.is_valid is True
+    assert result.catch_all is None
+
+
+@pytest.mark.asyncio
+@patch("aiosmtplib.SMTP")
 async def test_validate_mailbox_rejected(mock_smtp_class: MagicMock) -> None:
     mock_smtp = AsyncMock()
     mock_smtp.is_connected = True
@@ -767,6 +793,72 @@ async def test_validate_email_returns_unknown_within_total_probe_budget() -> Non
     assert result.verdict == "unknown"
     assert result.mailbox.reason_code == "smtp_probe_timeout"
     assert result.mailbox.transport == "mailcue_tunnel"
+
+
+@pytest.mark.asyncio
+async def test_feedback_calibrates_catch_all_risk(
+    perm_client: tuple[AsyncClient, Any],
+) -> None:
+    client, factory = perm_client
+    async with factory() as session:
+        key = await _make_key_local(session, scopes=["email:validate"])
+    headers = {"X-API-Key": key}
+
+    inconsistent = await client.post(
+        "/api/v1/emails/validation-feedback",
+        json={"email": "known@mailcue.io", "outcome": "hard_bounce", "smtp_code": 250},
+        headers=headers,
+    )
+    assert inconsistent.status_code == 422
+
+    feedback = await client.post(
+        "/api/v1/emails/validation-feedback",
+        json={"email": "known@mailcue.io", "outcome": "delivered", "smtp_code": 250},
+        headers=headers,
+    )
+    assert feedback.status_code == 200
+    assert feedback.json() == {"recorded": True, "outcome": "delivered"}
+
+    dns_result = EmailValidationDns(
+        is_valid=True,
+        has_mx=True,
+        has_ns=True,
+        has_a=True,
+        mx_records=["10 mx.mailcue.io."],
+        status="valid",
+    )
+    mailbox_result = EmailValidationMailbox(
+        is_valid=True,
+        smtp_code=250,
+        catch_all=True,
+        transport="direct",
+        reason_code="mailbox_accepted",
+    )
+    with (
+        patch("app.emails.validation.validate_dns", new=AsyncMock(return_value=dns_result)),
+        patch(
+            "app.emails.validation.validate_mailbox", new=AsyncMock(return_value=mailbox_result)
+        ),
+        patch("app.emails.validation.settings.validation_probe_relay_host", ""),
+    ):
+        response = await client.post(
+            "/api/v1/emails/validate",
+            json={"email": "known@mailcue.io"},
+            headers=headers,
+        )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["deliverable"] is None
+    assert result["status"] == "catch_all"
+    assert result["catch_all_risk"] == {
+        "score": 0.02,
+        "level": "low",
+        "recommended_action": "send",
+        "source": "exact_history",
+        "sample_size": 1,
+        "explanation": "This exact recipient has a recent reported delivery.",
+    }
 
 
 @patch("app.emails.disposable.get_cache_file_path")

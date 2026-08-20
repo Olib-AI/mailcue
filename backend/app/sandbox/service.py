@@ -11,6 +11,7 @@ from weakref import WeakSet
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
+from app.database import dml_rowcount
 from app.sandbox.models import (
     SandboxConversation,
     SandboxMessage,
@@ -312,7 +313,7 @@ async def delete_webhook_endpoint(
     stmt = delete(SandboxWebhookEndpoint).where(SandboxWebhookEndpoint.id == endpoint_id)
     result = await db.execute(stmt)
     await db.commit()
-    return result.rowcount > 0
+    return dml_rowcount(result) > 0
 
 
 async def get_webhook_deliveries(

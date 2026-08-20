@@ -17,7 +17,7 @@ import {
 } from './format.js';
 import { buildInstructions } from './instructions.js';
 
-export const SERVER_VERSION = '0.1.4';
+export const SERVER_VERSION = '0.1.6';
 
 type ToolResult = {
   content: Array<
@@ -684,7 +684,7 @@ export function buildServer(config: McpConfig): McpServer {
     {
       title: 'Validate email address',
       description:
-        'Validate an email address structure, DNS status, mailbox SMTP availability, and disposable status.',
+        'Validate structure, DNS, SMTP acceptance, disposable status, and feedback-backed catch-all risk.',
       inputSchema: {
         email: z.string().describe('The email address to validate.'),
       },
@@ -693,6 +693,32 @@ export function buildServer(config: McpConfig): McpServer {
     run(async (args) => {
       const a = args as { email: string };
       const res = await client.emails.validate(a.email);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'record_validation_feedback',
+    {
+      title: 'Record email validation feedback',
+      description:
+        'Record an organic delivery, hard bounce, or soft bounce to improve tenant-specific catch-all risk scoring.',
+      inputSchema: {
+        email: z.string().describe('The recipient email address.'),
+        outcome: z.enum(['delivered', 'hard_bounce', 'soft_bounce']),
+        smtpCode: z.number().int().min(100).max(599).optional(),
+        enhancedStatus: z.string().max(16).optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as {
+        email: string;
+        outcome: 'delivered' | 'hard_bounce' | 'soft_bounce';
+        smtpCode?: number;
+        enhancedStatus?: string;
+      };
+      const res = await client.emails.recordValidationFeedback(a);
       return text(JSON.stringify(res, null, 2));
     }),
   );

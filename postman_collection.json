@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "7a994058-0504-40f1-8bfe-0ed6301281af",
+    "_postman_id": "136be1ae-7895-40a8-a760-34630feb6e4c",
     "name": "MailCue API",
     "description": "Realistic email testing server REST API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -13,7 +13,12 @@
           "name": "Login",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
               "host": [
@@ -26,7 +31,16 @@
                 "login"
               ]
             },
-            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``."
+            "description": "Authenticate with username + password.\n\nReturns an access token in the response body and sets the refresh\ntoken as an ``httpOnly`` cookie for the web UI.\n\nIf the user has TOTP enabled, returns a ``LoginStepResponse`` with\na short-lived temp token instead; the client must call ``/login/2fa``.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -34,7 +48,12 @@
           "name": "Login 2Fa",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login/2fa",
               "host": [
@@ -48,7 +67,16 @@
                 "2fa"
               ]
             },
-            "description": "Complete login by verifying a TOTP code after step 1."
+            "description": "Complete login by verifying a TOTP code after step 1.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"string\",\n  \"temp_token\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -56,7 +84,12 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/register",
               "host": [
@@ -69,7 +102,16 @@
                 "register"
               ]
             },
-            "description": "Create a new user account. **Admin only.**"
+            "description": "Create a new user account. **Admin only.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"string\",\n  \"email\": \"string\",\n  \"password\": \"string\",\n  \"is_admin\": false,\n  \"max_mailboxes\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -77,7 +119,12 @@
           "name": "Change Password",
           "request": {
             "method": "PUT",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/password",
               "host": [
@@ -90,7 +137,16 @@
                 "password"
               ]
             },
-            "description": "Change the current user's password."
+            "description": "Change the current user's password.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_password\": \"string\",\n  \"new_password\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -156,7 +212,12 @@
           "name": "Totp Confirm",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/confirm",
               "host": [
@@ -170,7 +231,16 @@
                 "confirm"
               ]
             },
-            "description": "Verify a TOTP code from the authenticator app and enable 2FA."
+            "description": "Verify a TOTP code from the authenticator app and enable 2FA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -178,7 +248,12 @@
           "name": "Totp Disable",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/totp/disable",
               "host": [
@@ -192,7 +267,16 @@
                 "disable"
               ]
             },
-            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code."
+            "description": "Disable TOTP 2FA. Requires the current password and a valid TOTP code.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"string\",\n  \"code\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
@@ -877,6 +961,41 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Email Validation Feedback",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/emails/validation-feedback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "emails",
+                "validation-feedback"
+              ]
+            },
+            "description": "Record an organic delivery result used to calibrate catch-all risk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"string\",\n  \"outcome\": \"string\",\n  \"smtp_code\": {},\n  \"enhanced_status\": {}\n}",
               "options": {
                 "raw": {
                   "language": "json"

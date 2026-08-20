@@ -15,6 +15,8 @@ from app.emails.schemas import (
     BulkInjectResponse,
     EmailDetail,
     EmailListResponse,
+    EmailValidationFeedbackRequest,
+    EmailValidationFeedbackResponse,
     EmailValidationRequest,
     EmailValidationResponse,
     InjectEmailRequest,
@@ -30,7 +32,8 @@ from app.emails.service import (
     list_emails,
     send_email,
 )
-from app.emails.validation import validate_email
+from app.emails.validation import validate_email, validate_syntax
+from app.emails.validation_feedback import assess_catch_all_risk, record_validation_feedback
 from app.mailboxes.router import verify_mailbox_access
 from app.mailboxes.service import get_mailbox_by_address
 from app.rate_limit import limiter
@@ -255,6 +258,45 @@ async def delete_single_email(
 async def validate_email_endpoint(
     request: Request,
     body: EmailValidationRequest = Body(...),
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
 ) -> EmailValidationResponse:
     """Validate email address format, DNS domain MX/NS, SMTP availability, and disposable status."""
-    return await validate_email(body.email)
+    result = await validate_email(body.email)
+    if result.status == "catch_all" and result.syntax.domain:
+        risk = await assess_catch_all_risk(
+            db,
+            user_id=auth.user.id,
+            email=result.email,
+            domain=result.syntax.domain,
+        )
+        return result.model_copy(update={"catch_all_risk": risk})
+    return result
+
+
+@router.post(
+    "/validation-feedback",
+    response_model=EmailValidationFeedbackResponse,
+    dependencies=[Depends(require_scope(scopes.EMAIL_VALIDATE))],
+)
+@limiter.limit(settings.validation_rate_limit)
+async def create_email_validation_feedback(
+    request: Request,
+    body: EmailValidationFeedbackRequest = Body(...),
+    auth: AuthContext = Depends(get_auth),
+    db: AsyncSession = Depends(get_db),
+) -> EmailValidationFeedbackResponse:
+    """Record an organic delivery result used to calibrate catch-all risk."""
+    syntax = validate_syntax(body.email)
+    if not syntax.is_valid or not syntax.domain:
+        raise HTTPException(status_code=422, detail="A valid public email address is required")
+    await record_validation_feedback(
+        db,
+        user_id=auth.user.id,
+        email=body.email,
+        domain=syntax.domain,
+        outcome=body.outcome,
+        smtp_code=body.smtp_code,
+        enhanced_status=body.enhanced_status,
+    )
+    return EmailValidationFeedbackResponse(recorded=True, outcome=body.outcome)

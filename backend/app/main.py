@@ -36,6 +36,7 @@ from app.deliverability.router import router as deliverability_router
 from app.domains.models import Domain
 from app.domains.router import router as domains_router
 from app.emails.disposable import load_cached_domains, update_disposable_domains
+from app.emails.models import EmailValidationFeedback  # noqa: F401
 from app.emails.router import router as emails_router
 from app.events.bus import event_bus
 from app.events.router import router as events_router

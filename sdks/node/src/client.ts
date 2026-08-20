@@ -10,7 +10,7 @@ import { ApiKeysResource } from './resources/apiKeys.js';
 import { SystemResource } from './resources/system.js';
 import { DeliverabilityResource } from './resources/deliverability.js';
 
-const SDK_VERSION = '0.1.5';
+const SDK_VERSION = '0.1.6';
 const DEFAULT_BASE_URL = 'http://localhost:8088';
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RETRIES = 3;

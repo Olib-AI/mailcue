@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.gpg.schemas import GpgEmailInfo
 
@@ -299,6 +300,48 @@ class EmailValidationDisposable(BaseModel):
     error: str | None = None
 
 
+class EmailValidationCatchAllRisk(BaseModel):
+    """Historical hard-bounce estimate for an SMTP accept-all recipient."""
+
+    score: float = Field(ge=0, le=1)
+    level: Literal["low", "medium", "high", "unknown"]
+    recommended_action: Literal["send", "caution", "hold"]
+    source: Literal["no_history", "exact_history", "domain_history"]
+    sample_size: int = Field(ge=0)
+    explanation: str
+
+
+class EmailValidationFeedbackRequest(BaseModel):
+    """Record an organic delivery outcome for future catch-all scoring."""
+
+    email: str
+    outcome: Literal["delivered", "hard_bounce", "soft_bounce"]
+    smtp_code: int | None = Field(default=None, ge=100, le=599)
+    enhanced_status: str | None = Field(default=None, max_length=16)
+
+    @model_validator(mode="after")
+    def validate_status_classes(self) -> EmailValidationFeedbackRequest:
+        expected_class = {"delivered": 2, "soft_bounce": 4, "hard_bounce": 5}[self.outcome]
+        if self.smtp_code is not None and self.smtp_code // 100 != expected_class:
+            raise ValueError(f"smtp_code must be {expected_class}xx for outcome {self.outcome}")
+        if self.enhanced_status:
+            if not re.fullmatch(r"[245]\.\d{1,3}\.\d{1,3}", self.enhanced_status):
+                raise ValueError("enhanced_status must use RFC 3463 class.subject.detail format")
+            first = self.enhanced_status.split(".", 1)[0]
+            if int(first) != expected_class:
+                raise ValueError(
+                    f"enhanced_status must start with {expected_class}. for outcome {self.outcome}"
+                )
+        return self
+
+
+class EmailValidationFeedbackResponse(BaseModel):
+    """Acknowledgement for a stored validation feedback event."""
+
+    recorded: bool
+    outcome: Literal["delivered", "hard_bounce", "soft_bounce"]
+
+
 class EmailValidationResponse(BaseModel):
     """Full detailed response of the email validation."""
 
@@ -313,3 +356,4 @@ class EmailValidationResponse(BaseModel):
     dns: EmailValidationDns
     mailbox: EmailValidationMailbox
     disposable: EmailValidationDisposable
+    catch_all_risk: EmailValidationCatchAllRisk | None = None

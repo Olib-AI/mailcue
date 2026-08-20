@@ -33,6 +33,7 @@ async def _engine_and_session():
     import app.auth.models
     import app.deliverability.models
     import app.domains.models
+    import app.emails.models
     import app.gpg.models
     import app.mailboxes.models
     import app.sandbox.models

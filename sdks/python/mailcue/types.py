@@ -293,9 +293,14 @@ class EmailValidationDns(_Base):
     has_mx: bool
     has_ns: bool
     has_a: bool
+    has_aaaa: bool = False
+    null_mx: bool = False
     mx_records: List[str] = Field(default_factory=list)
     ns_records: List[str] = Field(default_factory=list)
     a_records: List[str] = Field(default_factory=list)
+    aaaa_records: List[str] = Field(default_factory=list)
+    status: Literal["valid", "invalid", "undetermined"] = "invalid"
+    error_code: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -306,6 +311,8 @@ class EmailValidationMailbox(_Base):
     smtp_code: Optional[int] = None
     smtp_response: Optional[str] = None
     catch_all: Optional[bool] = None
+    transport: Literal["direct", "mailcue_tunnel", "none"] = "none"
+    reason_code: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -313,7 +320,26 @@ class EmailValidationDisposable(_Base):
     """Disposable domain check results."""
 
     is_disposable: bool
+    is_forwarding_alias: bool = False
     error: Optional[str] = None
+
+
+class EmailValidationCatchAllRisk(_Base):
+    """Feedback-backed hard-bounce estimate for an accept-all recipient."""
+
+    score: float
+    level: Literal["low", "medium", "high", "unknown"]
+    recommended_action: Literal["send", "caution", "hold"]
+    source: Literal["no_history", "exact_history", "domain_history"]
+    sample_size: int
+    explanation: str
+
+
+class EmailValidationFeedbackResponse(_Base):
+    """Acknowledgement returned after recording a delivery outcome."""
+
+    recorded: bool
+    outcome: Literal["delivered", "hard_bounce", "soft_bounce"]
 
 
 class EmailValidationResponse(_Base):
@@ -322,7 +348,12 @@ class EmailValidationResponse(_Base):
     email: str
     is_valid: bool
     status: Literal["valid", "invalid", "undetermined", "disposable", "catch_all"]
+    verdict: Literal["deliverable", "undeliverable", "risky", "unknown"] = "unknown"
+    deliverable: Optional[bool] = None
+    confidence: float = 0.0
+    reason: str = ""
     syntax: EmailValidationSyntax
     dns: EmailValidationDns
     mailbox: EmailValidationMailbox
     disposable: EmailValidationDisposable
+    catch_all_risk: Optional[EmailValidationCatchAllRisk] = None

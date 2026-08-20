@@ -456,8 +456,20 @@ async def validate_mailbox(
                             try:
                                 sender_code, _ = await smtp.mail(sender)
                                 if 200 <= sender_code < 300:
-                                    rand_code, _ = await smtp.rcpt(random_mailbox)
-                                    catch_all = rand_code in (250, 251)
+                                    try:
+                                        rand_code, rand_msg = await smtp.rcpt(random_mailbox)
+                                    except aiosmtplib.SMTPResponseException as exc:
+                                        rand_code = int(exc.code or 0)
+                                        rand_msg = exc.message
+                                    rand_text = _smtp_text(rand_msg)
+                                    if rand_code in (250, 251):
+                                        catch_all = True
+                                    elif _is_mailbox_rejection(rand_code, rand_text):
+                                        catch_all = False
+                                    else:
+                                        # A temporary or policy response does not prove
+                                        # that the domain rejects nonexistent recipients.
+                                        catch_all = None
                                     break
                             except aiosmtplib.SMTPResponseException:
                                 with contextlib.suppress(Exception):

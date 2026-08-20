@@ -348,6 +348,28 @@ def test_validate_email(make_client, captured_requests) -> None:  # type: ignore
     assert payload["email"] == "test@example.com"
 
 
+def test_record_validation_feedback(make_client, captured_requests) -> None:  # type: ignore[no-untyped-def]
+    def handler(_req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"recorded": True, "outcome": "hard_bounce"})
+
+    client = make_client(handler)
+    result = client.emails.record_validation_feedback(
+        "missing@example.net",
+        "hard_bounce",
+        smtp_code=550,
+        enhanced_status="5.1.1",
+    )
+    assert result.recorded is True
+    request = captured_requests[0]
+    assert request.url.path == "/api/v1/emails/validation-feedback"
+    assert json.loads(request.content) == {
+        "email": "missing@example.net",
+        "outcome": "hard_bounce",
+        "smtp_code": 550,
+        "enhanced_status": "5.1.1",
+    }
+
+
 async def test_async_validate_email(make_async_client) -> None:  # type: ignore[no-untyped-def]
     response_body = {
         "email": "test@example.com",

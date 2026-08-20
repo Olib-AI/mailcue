@@ -101,7 +101,8 @@ Drop `MAILCUE_MAILBOX` to let the agent work across every mailbox on the server.
 | `reply_email`    | Reply by uid; threading + `Re:` subject set automatically. | replies from the locked address |
 | `delete_email`   | Permanently delete an email by uid. | no `mailbox` arg |
 | `mailbox_stats`  | Per-folder total / unread counts. | no `mailbox` arg |
-| `validate_email` | Validate structure, DNS status, mailbox SMTP availability, and disposable status. | independent of mailbox |
+| `validate_email` | Validate structure, DNS, SMTP acceptance, disposable status, and catch-all risk. | independent of mailbox |
+| `record_validation_feedback` | Record an organic delivery or bounce for tenant-specific catch-all scoring. | independent of mailbox |
 | `list_mailboxes` | Discover available mailboxes. | **not available when locked** |
 
 uids are scoped to a `(mailbox, folder)` pair. Read and act using the same

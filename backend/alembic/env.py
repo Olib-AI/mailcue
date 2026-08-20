@@ -21,6 +21,7 @@ from app.config import settings
 from app.database import Base
 from app.deliverability.models import DeliverabilityReportRecord  # noqa: F401
 from app.domains.models import Domain  # noqa: F401
+from app.emails.models import EmailValidationFeedback  # noqa: F401
 from app.forwarding.models import ForwardingRule  # noqa: F401
 from app.gpg.models import GpgKey  # noqa: F401
 from app.httpbin.models import HttpBinBin, HttpBinRequest  # noqa: F401

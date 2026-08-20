@@ -85,6 +85,19 @@ found = client.emails.wait_for(
 assert len(found) == 1
 ```
 
+## Email validation and catch-all feedback
+
+```python
+result = client.emails.validate("person@example.com")
+if result.catch_all_risk:
+    print(result.catch_all_risk.recommended_action, result.catch_all_risk.score)
+
+# Feed organic provider/DSN outcomes back into tenant-specific scoring.
+client.emails.record_validation_feedback(
+    "person@example.com", "hard_bounce", smtp_code=550, enhanced_status="5.1.1"
+)
+```
+
 ## Attachments
 
 `attachments` accepts raw `bytes`, `str`, or a `pathlib.Path`. The SDK
@@ -170,7 +183,7 @@ You can also inject your own `httpx.Client` / `httpx.AsyncClient` via
 
 | Resource | Methods |
 |----------|---------|
-| `client.emails` | `send`, `list`, `get`, `get_raw`, `get_attachment`, `delete`, `inject`, `bulk_inject` |
+| `client.emails` | `send`, `list`, `get`, `get_raw`, `get_attachment`, `delete`, `inject`, `bulk_inject`, `validate`, `record_validation_feedback` |
 | `client.mailboxes` | `list`, `create`, `delete`, `stats`, `purge`, `list_emails` |
 | `client.domains` | `list`, `create`, `get`, `verify_dns`, `delete` |
 | `client.aliases` | `list`, `create`, `get`, `update`, `delete` |

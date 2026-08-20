@@ -625,9 +625,14 @@ export interface EmailValidationDns {
   hasMx: boolean;
   hasNs: boolean;
   hasA: boolean;
+  hasAaaa: boolean;
+  nullMx: boolean;
   mxRecords: string[];
   nsRecords: string[];
   aRecords: string[];
+  aaaaRecords: string[];
+  status: 'valid' | 'invalid' | 'undetermined';
+  errorCode?: string | null;
   error?: string | null;
 }
 
@@ -636,20 +641,51 @@ export interface EmailValidationMailbox {
   smtpCode?: number | null;
   smtpResponse?: string | null;
   catchAll?: boolean | null;
+  transport: 'direct' | 'mailcue_tunnel' | 'none';
+  reasonCode?: string | null;
   error?: string | null;
 }
 
 export interface EmailValidationDisposable {
   isDisposable: boolean;
+  isForwardingAlias: boolean;
   error?: string | null;
+}
+
+export interface EmailValidationCatchAllRisk {
+  score: number;
+  level: 'low' | 'medium' | 'high' | 'unknown';
+  recommendedAction: 'send' | 'caution' | 'hold';
+  source: 'no_history' | 'exact_history' | 'domain_history';
+  sampleSize: number;
+  explanation: string;
+}
+
+export type EmailValidationFeedbackOutcome = 'delivered' | 'hard_bounce' | 'soft_bounce';
+
+export interface EmailValidationFeedbackParams {
+  email: string;
+  outcome: EmailValidationFeedbackOutcome;
+  smtpCode?: number;
+  enhancedStatus?: string;
+}
+
+export interface EmailValidationFeedbackResponse {
+  recorded: boolean;
+  outcome: EmailValidationFeedbackOutcome;
 }
 
 export interface EmailValidationResponse {
   email: string;
   isValid: boolean;
   status: 'valid' | 'invalid' | 'undetermined' | 'disposable' | 'catch_all';
+  verdict: 'deliverable' | 'undeliverable' | 'risky' | 'unknown';
+  deliverable: boolean | null;
+  confidence: number;
+  reason: string;
   syntax: EmailValidationSyntax;
   dns: EmailValidationDns;
   mailbox: EmailValidationMailbox;
   disposable: EmailValidationDisposable;
+  catchAllRisk?: EmailValidationCatchAllRisk | null;
 }

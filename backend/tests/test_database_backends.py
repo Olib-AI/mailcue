@@ -100,11 +100,13 @@ def test_alembic_history_builds_complete_sqlite_schema(tmp_path: Path) -> None:
                 "SELECT name FROM sqlite_master WHERE type='index'"
             ).fetchall()
         }
-    assert revision == ("028_deliverability_alerts",)
+    assert revision == ("029_email_validation_feedback",)
     assert "gpg_keys" in tables
     assert "warmup_campaign_accounts" in tables
+    assert "email_validation_feedback" in tables
     assert "ix_httpbin_requests_bin_created" in indexes
     assert "ix_sandbox_messages_provider_created" in indexes
+    assert "ix_validation_feedback_user_email_time" in indexes
 
 
 def test_scale_migration_normalizes_existing_warmup_data(tmp_path: Path) -> None:

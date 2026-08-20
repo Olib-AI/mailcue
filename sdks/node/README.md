@@ -99,6 +99,21 @@ const found = await mc.emails.waitFor({
 console.log(found.length);
 ```
 
+## Email validation and catch-all feedback
+
+```ts
+const result = await mc.emails.validate('person@example.com');
+console.log(result.catchAllRisk?.recommendedAction, result.catchAllRisk?.score);
+
+// Feed organic provider/DSN outcomes back into tenant-specific scoring.
+await mc.emails.recordValidationFeedback({
+  email: 'person@example.com',
+  outcome: 'hard_bounce',
+  smtpCode: 550,
+  enhancedStatus: '5.1.1',
+});
+```
+
 ## Mailboxes, domains, aliases, GPG, API keys, system
 
 ```ts

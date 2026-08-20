@@ -62,7 +62,9 @@ ${scope}
   }
 - mailbox_stats  Per-folder counts (total / unread) for a mailbox.
 - validate_email Validate email address structure, DNS status, mailbox SMTP
-                 availability, and disposable status.
+                 acceptance, disposable status, and catch-all risk.
+- record_validation_feedback Record a real delivery or bounce outcome so
+                 future catch-all risk estimates improve.
 
 # How to work
 1. To answer "what's in my inbox" or "any new mail", call list_emails (or
@@ -78,7 +80,7 @@ ${scope}
    task clearly calls for it.
 6. Bodies may be truncated in tool output; re-fetch with get_email for the full
    text when you need it.
-7. Always validate email addresses using validate_email before sending to
-   ensure they are valid and deliverable, preventing bounces or IP flag risks.`;
+7. Validate addresses before sending. Treat deliverable=null and catch-all
+   results as probabilistic; use catch_all_risk.recommended_action when present.`;
 
 }

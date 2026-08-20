@@ -296,4 +296,29 @@ describe('emails.waitFor', () => {
     expect(call.method).toBe('POST');
     expect(call.body).toEqual({ email: 'test@example.com' });
   });
+
+  it('records validation feedback and snake-cases diagnostics', async () => {
+    const { fetch: f, calls } = makeRecorder(
+      () =>
+        new Response(JSON.stringify({ recorded: true, outcome: 'hard_bounce' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    const mc = new Mailcue({ apiKey: 'mc_test', fetch: f });
+    const result = await mc.emails.recordValidationFeedback({
+      email: 'missing@example.net',
+      outcome: 'hard_bounce',
+      smtpCode: 550,
+      enhancedStatus: '5.1.1',
+    });
+    expect(result).toEqual({ recorded: true, outcome: 'hard_bounce' });
+    expect(calls[0]!.url).toBe('http://localhost:8088/api/v1/emails/validation-feedback');
+    expect(calls[0]!.body).toEqual({
+      email: 'missing@example.net',
+      outcome: 'hard_bounce',
+      smtp_code: 550,
+      enhanced_status: '5.1.1',
+    });
+  });
 });

@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select, update
 
 from app.config import settings
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, dml_rowcount
 from app.deliverability.models import (
     DeliverabilityAlert,
     DeliverabilityArtifact,
@@ -47,7 +47,7 @@ async def _prune_expired_data() -> tuple[int, int]:
                     DeliverabilityArtifact.run_id.not_in(baseline_run_ids),
                 )
             )
-            artifacts_deleted = result.rowcount
+            artifacts_deleted = dml_rowcount(result)
         if settings.deliverability_report_retention_days:
             cutoff = now - timedelta(days=settings.deliverability_report_retention_days)
             result = await db.execute(
@@ -56,7 +56,7 @@ async def _prune_expired_data() -> tuple[int, int]:
                     DeliverabilityReportRecord.is_baseline.is_(False),
                 )
             )
-            reports_deleted = result.rowcount
+            reports_deleted = dml_rowcount(result)
         await db.commit()
     return reports_deleted, artifacts_deleted
 
@@ -95,7 +95,7 @@ async def _claim_due_schedule() -> tuple[DeliverabilitySchedule, Mailbox, dateti
                 next_run_at=claimed_at + timedelta(minutes=schedule.interval_minutes),
             )
         )
-        if claim.rowcount != 1:
+        if dml_rowcount(claim) != 1:
             await db.rollback()
             return None
         await db.commit()

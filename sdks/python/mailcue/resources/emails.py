@@ -7,7 +7,7 @@ import base64
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Dict, List, Literal, Mapping, Optional, Union
 
 from mailcue.exceptions import TimeoutError as MailcueTimeoutError
 from mailcue.resources._base import AsyncResource, SyncResource
@@ -16,6 +16,7 @@ from mailcue.types import (
     EmailDetail,
     EmailListResponse,
     EmailSummary,
+    EmailValidationFeedbackResponse,
     EmailValidationResponse,
     SendResult,
 )
@@ -464,6 +465,23 @@ class Emails(SyncResource):
         response = self._transport.request("POST", "/emails/validate", json={"email": email})
         return EmailValidationResponse.model_validate(response.json())
 
+    def record_validation_feedback(
+        self,
+        email: str,
+        outcome: Literal["delivered", "hard_bounce", "soft_bounce"],
+        *,
+        smtp_code: Optional[int] = None,
+        enhanced_status: Optional[str] = None,
+    ) -> EmailValidationFeedbackResponse:
+        """Record an organic delivery outcome for catch-all risk calibration."""
+        payload: Dict[str, Any] = {"email": email, "outcome": outcome}
+        if smtp_code is not None:
+            payload["smtp_code"] = smtp_code
+        if enhanced_status is not None:
+            payload["enhanced_status"] = enhanced_status
+        response = self._transport.request("POST", "/emails/validation-feedback", json=payload)
+        return EmailValidationFeedbackResponse.model_validate(response.json())
+
 
 class AsyncEmails(AsyncResource):
     """Asynchronous ``emails`` resource."""
@@ -658,3 +676,22 @@ class AsyncEmails(AsyncResource):
         """Async variant of :meth:`Emails.validate`."""
         response = await self._transport.request("POST", "/emails/validate", json={"email": email})
         return EmailValidationResponse.model_validate(response.json())
+
+    async def record_validation_feedback(
+        self,
+        email: str,
+        outcome: Literal["delivered", "hard_bounce", "soft_bounce"],
+        *,
+        smtp_code: Optional[int] = None,
+        enhanced_status: Optional[str] = None,
+    ) -> EmailValidationFeedbackResponse:
+        """Async variant of :meth:`Emails.record_validation_feedback`."""
+        payload: Dict[str, Any] = {"email": email, "outcome": outcome}
+        if smtp_code is not None:
+            payload["smtp_code"] = smtp_code
+        if enhanced_status is not None:
+            payload["enhanced_status"] = enhanced_status
+        response = await self._transport.request(
+            "POST", "/emails/validation-feedback", json=payload
+        )
+        return EmailValidationFeedbackResponse.model_validate(response.json())

@@ -21,7 +21,7 @@ use tokio::sync::mpsc;
 use tokio::time::timeout;
 use tracing::{info, warn};
 
-use mailcue_relay_proto::{Frame, ProbeStatus, RelayOpts, RelayStatus};
+use mailcue_relay_proto::{Frame, ProbeOutcome, ProbeStatus, RelayOpts, RelayStatus};
 
 use crate::config::{PartialFailurePolicy, SidecarConfig};
 use crate::pool::Pool;
@@ -318,33 +318,7 @@ impl SmtpRelay {
                     control_status = ?control.as_ref().map(|value| &value.status),
                     "tunnel recipient probe completed",
                 );
-                let upstream_code = target.smtp_code.unwrap_or(0);
-                let mx = smtp_safe(&target.mx);
-                match target.status {
-                    ProbeStatus::Accepted
-                        if control
-                            .as_ref()
-                            .is_some_and(|value| value.status == ProbeStatus::Accepted) =>
-                    {
-                        Some(SmtpReply::new(
-                            252,
-                            format!("252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"),
-                        ))
-                    }
-                    ProbeStatus::Accepted => Some(SmtpReply::new(
-                        250,
-                        format!(
-                            "250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"
-                        ),
-                    )),
-                    ProbeStatus::Rejected => Some(SmtpReply::new(
-                        550,
-                        format!(
-                            "550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"
-                        ),
-                    )),
-                    ProbeStatus::Unknown => None,
-                }
+                probe_smtp_reply(&target, control.as_ref())
             }
             Ok(Ok(other)) => {
                 warn!(tunnel = %tunnel.id, request_id, frame = ?other, "unexpected recipient probe frame");
@@ -482,6 +456,30 @@ fn smtp_safe(value: &str) -> String {
         .collect()
 }
 
+fn probe_smtp_reply(target: &ProbeOutcome, control: Option<&ProbeOutcome>) -> Option<SmtpReply> {
+    let upstream_code = target.smtp_code.unwrap_or(0);
+    let mx = smtp_safe(&target.mx);
+    match (target.status, control.map(|value| value.status)) {
+        (ProbeStatus::Accepted, Some(ProbeStatus::Accepted)) => Some(SmtpReply::new(
+            252,
+            format!("252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"),
+        )),
+        (ProbeStatus::Accepted, Some(ProbeStatus::Rejected)) => Some(SmtpReply::new(
+            250,
+            format!("250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"),
+        )),
+        (ProbeStatus::Rejected, _) => Some(SmtpReply::new(
+            550,
+            format!("550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"),
+        )),
+        // A missing, temporary, or policy-rejected control cannot establish
+        // that this is a normal recipient-validating MX.
+        (ProbeStatus::Accepted, None | Some(ProbeStatus::Unknown)) | (ProbeStatus::Unknown, _) => {
+            None
+        }
+    }
+}
+
 /// Outcome of attempting one tunnel: either an application-level
 /// per-recipient result (deliver / fail), or a tunnel-level error
 /// (handshake / protocol / timeout) that we should treat as "skip this
@@ -600,7 +598,35 @@ pub fn map_outcomes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mailcue_relay_proto::{RecipientResult, RelayStatus};
+    use mailcue_relay_proto::{ProbeOutcome, RecipientResult, RelayStatus};
+
+    fn probe(status: ProbeStatus) -> ProbeOutcome {
+        ProbeOutcome {
+            mx: "mx.test".into(),
+            smtp_code: Some(250),
+            smtp_msg: "test".into(),
+            status,
+        }
+    }
+
+    #[test]
+    fn accepted_target_requires_definitive_control() {
+        let target = probe(ProbeStatus::Accepted);
+        assert!(probe_smtp_reply(&target, None).is_none());
+        assert!(probe_smtp_reply(&target, Some(&probe(ProbeStatus::Unknown))).is_none());
+        assert_eq!(
+            probe_smtp_reply(&target, Some(&probe(ProbeStatus::Rejected)))
+                .expect("definitive control")
+                .code,
+            250
+        );
+        assert_eq!(
+            probe_smtp_reply(&target, Some(&probe(ProbeStatus::Accepted)))
+                .expect("accept-all control")
+                .code,
+            252
+        );
+    }
 
     fn ok(addr: &str) -> RecipientResult {
         RecipientResult {

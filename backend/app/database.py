@@ -7,9 +7,10 @@ asynchronous PostgreSQL access.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 from sqlalchemy import event
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import Result, make_url
 from sqlalchemy.engine.interfaces import DBAPIConnection
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -68,6 +69,16 @@ AsyncSessionLocal = async_sessionmaker(
 
 class Base(DeclarativeBase):
     """Shared declarative base for all ORM models."""
+
+
+def dml_rowcount(result: Result[Any]) -> int:
+    """Return a non-negative affected-row count for a DML execution result.
+
+    SQLAlchemy's async execute API is typed as the generic ``Result`` even
+    though INSERT/UPDATE/DELETE statements return a cursor result with the
+    DB-API ``rowcount`` attribute at runtime.
+    """
+    return max(0, int(getattr(result, "rowcount", 0) or 0))
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:

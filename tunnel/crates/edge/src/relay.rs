@@ -257,7 +257,6 @@ pub async fn handle_probe(
         .resolve_mx(&domain)
         .await
         .map_err(|e| RelayReject::BadRecipients(format!("MX lookup for {domain} failed: {e}")))?;
-    let recipients = vec![recipient.to_string(), control_recipient.to_string()];
     let timeout_secs = if opts.timeout_secs == 0 {
         cfg.smtp_io_timeout_secs
     } else {
@@ -270,12 +269,13 @@ pub async fn handle_probe(
             if sender_index == 1 && envelope_from.is_empty() {
                 break;
             }
+            let target_recipient = vec![recipient.to_string()];
             let attempt = deliver(SmtpDelivery {
                 mx_host: &mx.host,
                 port: 25,
                 helo_name,
                 envelope_from: probe_sender,
-                recipients: &recipients,
+                recipients: &target_recipient,
                 raw_message: &[],
                 connect_timeout: Duration::from_secs(cfg.connect_timeout_secs),
                 io_timeout: Duration::from_secs(timeout_secs),
@@ -285,13 +285,55 @@ pub async fn handle_probe(
             .await;
             match attempt {
                 Ok(SmtpAttempt::Reached(outcomes)) => {
-                    let mut values = outcomes
+                    let target = outcomes
                         .into_iter()
-                        .map(|value| probe_outcome(&mx.host, value.status));
-                    let target = values
+                        .map(|value| probe_outcome(&mx.host, value.status))
                         .next()
                         .unwrap_or_else(|| unknown_probe(&mx.host, "missing target outcome"));
-                    return Ok((target, values.next()));
+                    if target.status != ProbeStatus::Accepted {
+                        return Ok((target, None));
+                    }
+
+                    // Probe the random control in an independent SMTP envelope.
+                    // Recipient limits and per-envelope policy must not let the
+                    // second RCPT distort the target result.
+                    let control = vec![control_recipient.to_string()];
+                    let control_attempt = deliver(SmtpDelivery {
+                        mx_host: &mx.host,
+                        port: 25,
+                        helo_name,
+                        envelope_from: probe_sender,
+                        recipients: &control,
+                        raw_message: &[],
+                        connect_timeout: Duration::from_secs(cfg.connect_timeout_secs),
+                        io_timeout: Duration::from_secs(timeout_secs),
+                        require_tls: opts.require_tls,
+                        probe_only: true,
+                    })
+                    .await;
+                    match control_attempt {
+                        Ok(SmtpAttempt::Reached(outcomes)) => {
+                            let control = outcomes
+                                .into_iter()
+                                .map(|value| probe_outcome(&mx.host, value.status))
+                                .next()
+                                .unwrap_or_else(|| {
+                                    unknown_probe(&mx.host, "missing control outcome")
+                                });
+                            return Ok((target, Some(control)));
+                        }
+                        Ok(SmtpAttempt::Skipped { reason, .. }) => {
+                            let sender_rejected = reason.starts_with("MAIL FROM:");
+                            last_reason = reason;
+                            if sender_index == 0 && sender_rejected {
+                                continue;
+                            }
+                            return Ok((target, Some(unknown_probe(&mx.host, &last_reason))));
+                        }
+                        Err(error) => {
+                            return Ok((target, Some(unknown_probe(&mx.host, &error.to_string()))));
+                        }
+                    }
                 }
                 Ok(SmtpAttempt::Skipped { reason, .. }) => {
                     let sender_rejected = reason.starts_with("MAIL FROM:");

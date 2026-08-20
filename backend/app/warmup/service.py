@@ -27,7 +27,7 @@ from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, dml_rowcount
 from app.domains.models import Domain
 from app.mailboxes.models import Mailbox
 from app.warmup.models import (
@@ -817,7 +817,7 @@ async def process_campaign(campaign_id: str) -> None:
             )
             .values(next_run_at=now + timedelta(minutes=5))
         )
-        if claim.rowcount != 1:
+        if dml_rowcount(claim) != 1:
             await db.rollback()
             return
         await db.commit()

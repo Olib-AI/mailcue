@@ -17,6 +17,8 @@ import type {
   SendResult,
   WaitForEmailParams,
   EmailValidationResponse,
+  EmailValidationFeedbackParams,
+  EmailValidationFeedbackResponse,
 } from '../types.js';
 
 function summaryMatches(email: EmailSummary, p: WaitForEmailParams): boolean {
@@ -361,5 +363,20 @@ export class EmailsResource {
     if (options.signal) reqOpts.signal = options.signal;
     const raw = await this.transport.request<unknown>(reqOpts);
     return camelize(raw) as EmailValidationResponse;
+  }
+
+  /** Record an organic delivery outcome for catch-all risk calibration. */
+  async recordValidationFeedback(
+    params: EmailValidationFeedbackParams,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailValidationFeedbackResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: '/api/v1/emails/validation-feedback',
+      body: snakeify(params),
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as EmailValidationFeedbackResponse;
   }
 }
