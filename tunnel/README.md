@@ -462,3 +462,16 @@ sudo systemctl is-active mailcue-relay-edge
 This tracks the `tunnel-latest` edge release. For a reproducible rollback,
 set `EDGE_RELEASE_URL` to a specific release. Releases attach a `SHA256SUMS`
 file you can verify before installing.
+
+### Upgrade edge and sidecar together
+
+The edge and the sidecar negotiate a protocol version during the handshake and
+refuse to talk when it differs, so a release that changes the wire format has
+to be rolled out on both sides. When they disagree the sidecar logs a
+`proto_version mismatch` and no mail moves through the tunnel.
+
+Recipient probing changed shape in the release that introduced protocol
+version 3: `Probe` now carries several control recipients instead of one, and
+`ProbeResult` returns a list of outcomes with per-RCPT latency. Upgrade the
+edge with the installer above, then restart the sidecar container so both ends
+run the same release.

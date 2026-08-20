@@ -7,7 +7,7 @@ implementation needs to interoperate with the reference Rust
 implementation in `tunnel/crates/proto/`.
 
 The current protocol version, exchanged in `Hello` / `HelloAck`, is
-`PROTO_VERSION = 2`.
+`PROTO_VERSION = 3`.
 
 ## 1. Transport
 
@@ -109,8 +109,8 @@ positionally — order matters):
 | 5   | `Ping`          | sidecar → edge | Liveness probe (`ts_unix`, `nonce`). |
 | 6   | `Pong`          | edge → sidecar | Liveness response (`ts_unix`, `nonce`). |
 | 7   | `Error`         | either         | Fatal protocol error; connection closes after send/receive. |
-| 8   | `Probe`         | sidecar → edge | Tests a target and random control recipient; never sends DATA. |
-| 9   | `ProbeResult`   | edge → sidecar | Conservative target/control recipient outcomes. |
+| 8   | `Probe`         | sidecar → edge | Tests a target against several control recipients; never sends DATA. |
+| 9   | `ProbeResult`   | edge → sidecar | Conservative target and control outcomes, with per-RCPT latency. |
 
 `RelayOpts`:
 
@@ -143,6 +143,40 @@ enum ErrorCode {
     Internal,            // unexpected edge-side failure
 }
 ```
+
+### Recipient probing
+
+`Probe` carries one target recipient and a list of control recipients that do
+not exist at the same domain. The edge probes each recipient in its own SMTP
+envelope and returns a `ProbeOutcome` per recipient, each carrying the RCPT TO
+latency in milliseconds.
+
+Several controls are sent because one is not enough to tell an accept-all
+destination apart from a receiver that refuses obviously synthetic local parts
+while accepting plausible ones. The sidecar builds controls of three shapes: a
+plausible personal name, a copy of the target's separator layout and token
+lengths with the letters randomised, and a high-entropy string.
+
+The first control in the list is probed **before** the target. A destination
+that tarpits after the first recipient in a session would otherwise make every
+control look rejected, which reads as recipient validation when it is only
+throttling. When the first control is accepted and a later one is refused, the
+sidecar reports `degraded=1` and the refusals are not treated as evidence.
+
+A rejected target ends the probe: the remaining controls would tell us nothing
+more and would only cost the destination extra connections.
+
+The sidecar collapses the outcomes into one SMTP reply whose text carries
+`key=value` diagnostics for the backend risk model:
+
+```
+252 2.1.5 accept-all upstream_code=250 mx=mx1.example.net controls_total=3 \
+controls_accepted=3 controls_rejected=0 target_ms=18 control_ms=17 \
+degraded=0 reputation=0 enhanced=2.1.5
+```
+
+`reputation=1` means the destination reacted to the probing host rather than to
+the recipient, so none of the answers describe the mailbox.
 
 ## 5. Multi-frame `Relay` chunking
 

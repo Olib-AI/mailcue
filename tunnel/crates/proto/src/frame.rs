@@ -102,8 +102,11 @@ pub enum Frame {
         envelope_from: String,
         /// Mailbox being tested.
         recipient: String,
-        /// Random nonexistent mailbox used to detect accept-all domains.
-        control_recipient: String,
+        /// Nonexistent mailboxes used to detect accept-all domains. Several
+        /// shapes are probed because a receiver that refuses obviously
+        /// synthetic local parts while accepting plausible ones is
+        /// indistinguishable from a true accept-all under a single sample.
+        control_recipients: Vec<String>,
         /// SMTP connection options.
         opts: RelayOpts,
     },
@@ -113,8 +116,10 @@ pub enum Frame {
         request_id: u64,
         /// Outcome for the requested recipient.
         target: ProbeOutcome,
-        /// Outcome for the random accept-all control address.
-        control: Option<ProbeOutcome>,
+        /// Outcomes for the control addresses, in the order they were probed.
+        /// The first entry was probed before the target so that per-connection
+        /// degradation can be told apart from recipient validation.
+        controls: Vec<ProbeOutcome>,
     },
 }
 
@@ -129,6 +134,9 @@ pub struct ProbeOutcome {
     pub smtp_msg: String,
     /// Conservative recipient classification.
     pub status: ProbeStatus,
+    /// Milliseconds the destination took to answer RCPT TO. A directory lookup
+    /// for a real mailbox is measurably slower than a blanket acceptance.
+    pub latency_ms: u32,
 }
 
 /// Conservative interpretation of an SMTP recipient response.
@@ -314,7 +322,7 @@ mod tests {
             request_id: 99,
             envelope_from: "probe@example.test".into(),
             recipient: "person@example.net".into(),
-            control_recipient: "random@example.net".into(),
+            control_recipients: vec!["random@example.net".into()],
             opts: RelayOpts::default(),
         };
         let encoded = encode_frame(&frame).unwrap();
@@ -322,12 +330,12 @@ mod tests {
             Frame::Probe {
                 request_id,
                 recipient,
-                control_recipient,
+                control_recipients,
                 ..
             } => {
                 assert_eq!(request_id, 99);
                 assert_eq!(recipient, "person@example.net");
-                assert_eq!(control_recipient, "random@example.net");
+                assert_eq!(control_recipients, vec!["random@example.net".to_string()]);
             }
             _ => panic!("wrong variant"),
         }

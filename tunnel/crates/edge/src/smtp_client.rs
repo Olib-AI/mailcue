@@ -18,7 +18,7 @@
 //! 8. QUIT (best effort).
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow, bail};
 use rustls::{ClientConfig, RootCertStore};
@@ -40,6 +40,10 @@ pub struct RecipientOutcome {
     pub recipient: String,
     /// Mapped relay status for [`mailcue_relay_proto::RecipientResult`].
     pub status: RelayStatus,
+    /// Milliseconds the destination took to answer this RCPT TO. Recipient
+    /// validation compares this against control recipients: a real directory
+    /// lookup is measurably slower than a blanket acceptance.
+    pub latency_ms: u32,
 }
 
 /// Per-call configuration for [`deliver`].
@@ -250,12 +254,14 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
     let mut accepted_indices: Vec<usize> = Vec::new();
 
     for (idx, rcpt) in delivery.recipients.iter().enumerate() {
+        let started = Instant::now();
         let reply = send_cmd(
             &mut session,
             &format!("RCPT TO:<{rcpt}>\r\n"),
             delivery.io_timeout,
         )
         .await?;
+        let latency_ms = u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX);
         if reply.is_2xx() {
             accepted_indices.push(idx);
             outcomes.push(RecipientOutcome {
@@ -265,6 +271,7 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
                     smtp_code: reply.code,
                     smtp_msg: first_line(&reply.text),
                 },
+                latency_ms,
             });
         } else if reply.is_4xx() {
             outcomes.push(RecipientOutcome {
@@ -273,6 +280,7 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
                     reason: format!("RCPT TO: {}", first_line(&reply.text)),
                     smtp_code: Some(reply.code),
                 },
+                latency_ms,
             });
         } else {
             outcomes.push(RecipientOutcome {
@@ -281,6 +289,7 @@ pub async fn deliver(delivery: SmtpDelivery<'_>) -> Result<SmtpAttempt> {
                     reason: format!("RCPT TO: {}", first_line(&reply.text)),
                     smtp_code: Some(reply.code),
                 },
+                latency_ms,
             });
         }
     }

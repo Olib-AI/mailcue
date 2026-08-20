@@ -623,7 +623,7 @@ async fn handle_connection(
                 request_id,
                 envelope_from,
                 recipient,
-                control_recipient,
+                control_recipients,
                 opts,
             } => {
                 let permit = sem.clone().acquire_owned().await;
@@ -647,25 +647,26 @@ async fn handle_connection(
                     &helo,
                     &envelope_from,
                     &recipient,
-                    &control_recipient,
+                    &control_recipients,
                     &opts,
                 )
                 .await
                 {
-                    Ok((target, control)) => {
+                    Ok((target, controls)) => {
                         info!(
                             peer = %peer,
                             client_pubkey = %pubkey_short,
                             request_id,
                             recipient_domain = %recipient.rsplit_once('@').map(|(_, d)| d).unwrap_or("-"),
                             target_status = ?target.status,
+                            control_count = controls.len(),
                             "recipient probe complete",
                         );
                         if channel
                             .send_frame(&Frame::ProbeResult {
                                 request_id,
                                 target,
-                                control,
+                                controls,
                             })
                             .await
                             .is_err()

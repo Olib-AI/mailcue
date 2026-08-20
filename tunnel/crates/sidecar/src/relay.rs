@@ -195,7 +195,7 @@ impl SmtpRelay {
         &self,
         envelope_from: String,
         recipient: String,
-        control_recipient: String,
+        control_recipients: Vec<String>,
     ) -> SmtpReply {
         let view = self.registry.snapshot();
         let healthy = self.pool.healthy_ids();
@@ -223,10 +223,10 @@ impl SmtpRelay {
             let result_tx = result_tx.clone();
             let envelope_from = envelope_from.clone();
             let recipient = recipient.clone();
-            let control_recipient = control_recipient.clone();
+            let control_recipients = control_recipients.clone();
             tokio::spawn(async move {
                 let result = relay
-                    .probe_one(tunnel, envelope_from, recipient, control_recipient)
+                    .probe_one(tunnel, envelope_from, recipient, control_recipients)
                     .await;
                 let _ = result_tx.send(result).await;
             });
@@ -263,7 +263,7 @@ impl SmtpRelay {
         tunnel: Tunnel,
         envelope_from: String,
         recipient: String,
-        control_recipient: String,
+        control_recipients: Vec<String>,
     ) -> Option<SmtpReply> {
         let request_id = self.request_seq.fetch_add(1, Ordering::Relaxed);
         let req_to = Duration::from_secs(
@@ -287,7 +287,7 @@ impl SmtpRelay {
             request_id,
             envelope_from,
             recipient,
-            control_recipient,
+            control_recipients,
             opts: RelayOpts::default(),
         };
         match timeout(req_to, conn.channel.send_frame(&frame)).await {
@@ -308,17 +308,17 @@ impl SmtpRelay {
             Ok(Ok(Frame::ProbeResult {
                 request_id: got_id,
                 target,
-                control,
+                controls,
             })) if got_id == request_id => {
                 self.pool.release(conn);
                 info!(
                     tunnel = %tunnel.id,
                     request_id,
                     target_status = ?target.status,
-                    control_status = ?control.as_ref().map(|value| &value.status),
+                    control_count = controls.len(),
                     "tunnel recipient probe completed",
                 );
-                probe_smtp_reply(&target, control.as_ref())
+                probe_smtp_reply(&target, &controls)
             }
             Ok(Ok(other)) => {
                 warn!(tunnel = %tunnel.id, request_id, frame = ?other, "unexpected recipient probe frame");
@@ -456,27 +456,156 @@ fn smtp_safe(value: &str) -> String {
         .collect()
 }
 
-fn probe_smtp_reply(target: &ProbeOutcome, control: Option<&ProbeOutcome>) -> Option<SmtpReply> {
+/// Summarise the control probes so the backend can weigh what they proved.
+struct ControlSummary {
+    total: usize,
+    accepted: usize,
+    rejected: usize,
+    /// The first control was accepted but a later one was refused, which points
+    /// at connection throttling rather than recipient validation.
+    degraded: bool,
+    /// Median RCPT latency across the controls, for comparison with the target.
+    median_latency_ms: u32,
+}
+
+fn summarise_controls(controls: &[ProbeOutcome]) -> ControlSummary {
+    let accepted = controls
+        .iter()
+        .filter(|c| c.status == ProbeStatus::Accepted)
+        .count();
+    let rejected = controls
+        .iter()
+        .filter(|c| c.status == ProbeStatus::Rejected)
+        .count();
+    let degraded = controls
+        .first()
+        .is_some_and(|first| first.status == ProbeStatus::Accepted)
+        && controls
+            .iter()
+            .skip(1)
+            .any(|c| c.status == ProbeStatus::Rejected);
+    let mut latencies: Vec<u32> = controls.iter().map(|c| c.latency_ms).collect();
+    latencies.sort_unstable();
+    let median_latency_ms = if latencies.is_empty() {
+        0
+    } else {
+        latencies[latencies.len() / 2]
+    };
+    ControlSummary {
+        total: controls.len(),
+        accepted,
+        rejected,
+        degraded,
+        median_latency_ms,
+    }
+}
+
+fn reputation_signal(target: &ProbeOutcome, controls: &[ProbeOutcome]) -> bool {
+    const MARKERS: [&str; 6] = [
+        "blocked",
+        "blacklist",
+        "blocklist",
+        "spamhaus",
+        "reputation",
+        "client host rejected",
+    ];
+    std::iter::once(target).chain(controls.iter()).any(|value| {
+        let lower = value.smtp_msg.to_ascii_lowercase();
+        MARKERS.iter().any(|marker| lower.contains(marker))
+    })
+}
+
+fn enhanced_status(message: &str) -> Option<String> {
+    // Match a bare `class.subject.detail` triple without pulling in a regex.
+    let bytes: Vec<char> = message.chars().collect();
+    for start in 0..bytes.len() {
+        if start > 0 && (bytes[start - 1].is_ascii_digit() || bytes[start - 1] == '.') {
+            continue;
+        }
+        if !matches!(bytes[start], '2' | '4' | '5') {
+            continue;
+        }
+        let mut cursor = start + 1;
+        let mut parts = 1;
+        let mut ok = true;
+        while parts < 3 {
+            if cursor >= bytes.len() || bytes[cursor] != '.' {
+                ok = false;
+                break;
+            }
+            cursor += 1;
+            let digits_start = cursor;
+            while cursor < bytes.len()
+                && bytes[cursor].is_ascii_digit()
+                && cursor - digits_start < 3
+            {
+                cursor += 1;
+            }
+            if cursor == digits_start {
+                ok = false;
+                break;
+            }
+            parts += 1;
+        }
+        if ok && (cursor >= bytes.len() || !bytes[cursor].is_ascii_digit()) {
+            return Some(bytes[start..cursor].iter().collect());
+        }
+    }
+    None
+}
+
+/// Build the SMTP reply carrying the probe verdict plus the diagnostics the
+/// backend's risk model reads.
+fn probe_smtp_reply(target: &ProbeOutcome, controls: &[ProbeOutcome]) -> Option<SmtpReply> {
     let upstream_code = target.smtp_code.unwrap_or(0);
     let mx = smtp_safe(&target.mx);
-    match (target.status, control.map(|value| value.status)) {
-        (ProbeStatus::Accepted, Some(ProbeStatus::Accepted)) => Some(SmtpReply::new(
-            252,
-            format!("252 2.1.5 accept-all upstream_code={upstream_code} mx={mx}"),
-        )),
-        (ProbeStatus::Accepted, Some(ProbeStatus::Rejected)) => Some(SmtpReply::new(
-            250,
-            format!("250 2.1.5 recipient accepted upstream_code={upstream_code} mx={mx}"),
-        )),
-        (ProbeStatus::Rejected, _) => Some(SmtpReply::new(
+    let summary = summarise_controls(controls);
+    let enhanced = enhanced_status(&target.smtp_msg).unwrap_or_default();
+    let diagnostics = format!(
+        "upstream_code={upstream_code} mx={mx} controls_total={} controls_accepted={} \
+controls_rejected={} target_ms={} control_ms={} degraded={} reputation={} enhanced={}",
+        summary.total,
+        summary.accepted,
+        summary.rejected,
+        target.latency_ms,
+        summary.median_latency_ms,
+        u8::from(summary.degraded),
+        u8::from(reputation_signal(target, controls)),
+        if enhanced.is_empty() {
+            "-".to_string()
+        } else {
+            enhanced
+        },
+    );
+
+    match target.status {
+        ProbeStatus::Rejected => Some(SmtpReply::new(
             550,
-            format!("550 5.1.1 recipient rejected upstream_code={upstream_code} mx={mx}"),
+            format!("550 5.1.1 recipient rejected {diagnostics}"),
         )),
-        // A missing, temporary, or policy-rejected control cannot establish
-        // that this is a normal recipient-validating MX.
-        (ProbeStatus::Accepted, None | Some(ProbeStatus::Unknown)) | (ProbeStatus::Unknown, _) => {
+        ProbeStatus::Accepted => {
+            if summary.total == 0 {
+                // Without a control there is nothing to compare against, so the
+                // acceptance proves nothing about this mailbox.
+                return None;
+            }
+            if summary.accepted == summary.total {
+                return Some(SmtpReply::new(
+                    252,
+                    format!("252 2.1.5 accept-all {diagnostics}"),
+                ));
+            }
+            if summary.rejected > 0 && !summary.degraded {
+                return Some(SmtpReply::new(
+                    250,
+                    format!("250 2.1.5 recipient accepted {diagnostics}"),
+                ));
+            }
+            // Controls that were only deferred, or refused after an earlier
+            // acceptance, cannot establish either verdict.
             None
         }
+        ProbeStatus::Unknown => None,
     }
 }
 
@@ -601,31 +730,72 @@ mod tests {
     use mailcue_relay_proto::{ProbeOutcome, RecipientResult, RelayStatus};
 
     fn probe(status: ProbeStatus) -> ProbeOutcome {
+        probe_with(status, 10)
+    }
+
+    fn probe_with(status: ProbeStatus, latency_ms: u32) -> ProbeOutcome {
         ProbeOutcome {
             mx: "mx.test".into(),
             smtp_code: Some(250),
             smtp_msg: "test".into(),
             status,
+            latency_ms,
         }
     }
 
     #[test]
     fn accepted_target_requires_definitive_control() {
         let target = probe(ProbeStatus::Accepted);
-        assert!(probe_smtp_reply(&target, None).is_none());
-        assert!(probe_smtp_reply(&target, Some(&probe(ProbeStatus::Unknown))).is_none());
+        assert!(probe_smtp_reply(&target, &[]).is_none());
+        assert!(probe_smtp_reply(&target, &[probe(ProbeStatus::Unknown)]).is_none());
         assert_eq!(
-            probe_smtp_reply(&target, Some(&probe(ProbeStatus::Rejected)))
+            probe_smtp_reply(&target, &[probe(ProbeStatus::Rejected)])
                 .expect("definitive control")
                 .code,
             250
         );
         assert_eq!(
-            probe_smtp_reply(&target, Some(&probe(ProbeStatus::Accepted)))
+            probe_smtp_reply(&target, &[probe(ProbeStatus::Accepted)])
                 .expect("accept-all control")
                 .code,
             252
         );
+    }
+
+    #[test]
+    fn mixed_controls_prove_recipient_validation() {
+        let target = probe(ProbeStatus::Accepted);
+        let controls = [
+            probe(ProbeStatus::Rejected),
+            probe(ProbeStatus::Accepted),
+            probe(ProbeStatus::Rejected),
+        ];
+        let reply = probe_smtp_reply(&target, &controls).expect("selective destination");
+        assert_eq!(reply.code, 250);
+        assert!(reply.line.contains("controls_total=3"));
+        assert!(reply.line.contains("controls_rejected=2"));
+        assert!(reply.line.contains("degraded=0"));
+    }
+
+    #[test]
+    fn refusals_after_an_accepted_control_are_treated_as_degradation() {
+        // The first control was accepted, so later refusals describe the
+        // connection rather than the destination's recipient logic.
+        let target = probe(ProbeStatus::Accepted);
+        let controls = [probe(ProbeStatus::Accepted), probe(ProbeStatus::Rejected)];
+        assert!(probe_smtp_reply(&target, &controls).is_none());
+    }
+
+    #[test]
+    fn diagnostics_carry_latency_and_enhanced_status() {
+        let mut target = probe_with(ProbeStatus::Rejected, 180);
+        target.smtp_msg = "RCPT TO: 550 5.4.1 Recipient address rejected".into();
+        let controls = [probe_with(ProbeStatus::Rejected, 12)];
+        let reply = probe_smtp_reply(&target, &controls).expect("rejection is definitive");
+        assert_eq!(reply.code, 550);
+        assert!(reply.line.contains("target_ms=180"));
+        assert!(reply.line.contains("control_ms=12"));
+        assert!(reply.line.contains("enhanced=5.4.1"));
     }
 
     fn ok(addr: &str) -> RecipientResult {

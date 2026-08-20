@@ -229,17 +229,22 @@ async fn handle_session(
                     continue;
                 }
                 let args: Vec<&str> = trimmed.split_ascii_whitespace().collect();
-                if args.len() != 3 {
+                if args.len() < 3 || args.len() > 4 {
                     write_line(
                         &mut write_half,
-                        "501 5.5.4 syntax: XMAILCUEPROBE recipient envelope-sender",
+                        "501 5.5.4 syntax: XMAILCUEPROBE recipient envelope-sender [controls]",
                     )
                     .await?;
                     continue;
                 }
                 let recipient = args[1];
                 let sender = args[2];
-                let Some((_, domain)) = recipient.rsplit_once('@') else {
+                let control_count = args
+                    .get(3)
+                    .and_then(|value| value.parse::<usize>().ok())
+                    .unwrap_or(DEFAULT_CONTROL_COUNT)
+                    .min(MAX_CONTROL_COUNT);
+                let Some((local_part, domain)) = recipient.rsplit_once('@') else {
                     write_line(&mut write_half, "501 5.1.3 invalid recipient").await?;
                     continue;
                 };
@@ -250,11 +255,12 @@ async fn handle_session(
                 info!(
                     peer = %peer_ip,
                     recipient_domain = %domain,
+                    control_count,
                     "recipient probe requested",
                 );
-                let control = format!("mailcue-probe-{}@{domain}", uuid::Uuid::new_v4().simple());
+                let controls = build_control_recipients(local_part, domain, control_count);
                 let reply = relay
-                    .probe(sender.to_string(), recipient.to_string(), control)
+                    .probe(sender.to_string(), recipient.to_string(), controls)
                     .await;
                 info!(
                     peer = %peer_ip,
@@ -276,6 +282,106 @@ async fn handle_session(
             }
         }
     }
+}
+
+/// Controls probed per accept-all check when the caller does not specify.
+const DEFAULT_CONTROL_COUNT: usize = 3;
+/// Upper bound so one probe cannot be turned into a recipient-enumeration run.
+const MAX_CONTROL_COUNT: usize = 5;
+
+const CONTROL_FIRST_NAMES: [&str; 8] = [
+    "adrian", "bernice", "callum", "delphine", "edmund", "fiona", "gareth", "harriet",
+];
+const CONTROL_SURNAMES: [&str; 8] = [
+    "ashcroft",
+    "beaumont",
+    "castellan",
+    "dunmore",
+    "ellingham",
+    "fairweather",
+    "grantley",
+    "harkness",
+];
+
+fn random_letters(length: usize) -> String {
+    use rand::RngExt;
+    let mut rng = rand::rng();
+    (0..length)
+        .map(|_| (b'a' + rng.random_range(0..26)) as char)
+        .collect()
+}
+
+/// Mirror the separator layout and token lengths of the target local part so
+/// pattern-based recipient rules treat the control the same way.
+fn shape_matched_local(target_local: &str) -> String {
+    let base = target_local.split('+').next().unwrap_or(target_local);
+    if base.is_empty() || base.len() > 64 {
+        return String::new();
+    }
+    let mut rebuilt = String::new();
+    let mut random_len = 0usize;
+    let mut token_len = 0usize;
+    for ch in base.chars() {
+        if matches!(ch, '.' | '_' | '-') {
+            if token_len > 0 {
+                let take = token_len.min(20);
+                rebuilt.push_str(&random_letters(take));
+                random_len += take;
+                token_len = 0;
+            }
+            rebuilt.push(ch);
+        } else {
+            token_len += 1;
+        }
+    }
+    if token_len > 0 {
+        let take = token_len.min(20);
+        rebuilt.push_str(&random_letters(take));
+        random_len += take;
+    }
+    if rebuilt.is_empty() {
+        return String::new();
+    }
+    // A short random string can collide with a real mailbox, which would read
+    // as an accept-all. Extend it until a collision is implausible.
+    if random_len < 6 {
+        rebuilt.push_str(&random_letters(6 - random_len));
+    }
+    rebuilt.chars().take(64).collect()
+}
+
+/// Build nonexistent recipients of several shapes for accept-all testing.
+///
+/// A destination that answers every shape identically is genuinely accepting
+/// everything. One that distinguishes between them is applying recipient logic,
+/// which makes its answer for the real address meaningful.
+fn build_control_recipients(local_part: &str, domain: &str, count: usize) -> Vec<String> {
+    use rand::RngExt;
+    let mut rng = rand::rng();
+    let mut locals: Vec<String> = Vec::new();
+
+    let first = CONTROL_FIRST_NAMES[rng.random_range(0..CONTROL_FIRST_NAMES.len())];
+    let surname = CONTROL_SURNAMES[rng.random_range(0..CONTROL_SURNAMES.len())];
+    locals.push(format!("{first}.{surname}{}", rng.random_range(1000..9999)));
+
+    let shaped = shape_matched_local(local_part);
+    if !shaped.is_empty() {
+        locals.push(shaped);
+    }
+
+    locals.push(uuid::Uuid::new_v4().simple().to_string());
+
+    let mut seen: Vec<String> = Vec::new();
+    for value in locals {
+        if value.eq_ignore_ascii_case(local_part) || seen.iter().any(|item| item == &value) {
+            continue;
+        }
+        seen.push(value);
+    }
+    seen.truncate(count.max(1));
+    seen.into_iter()
+        .map(|local| format!("{local}@{domain}"))
+        .collect()
 }
 
 #[derive(Debug, Default)]

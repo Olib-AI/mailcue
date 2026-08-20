@@ -94,12 +94,12 @@ sudo mailcue-relay-edge authorize --pubkey <base64-pubkey> --name mailcue-prod-d
 This appends a line to `/etc/mailcue-edge/authorized_clients`. The edge
 re-reads the file on every handshake - no restart required.
 
-> **Heads-up (pre-`tunnel-v0.1.1` only):** older edge binaries wrote the
+> **Heads-up for legacy edge binaries:** early releases wrote the
 > allow-list as `root:root 0640`, which the unprivileged daemon
 > (`mailcue-edge`) couldn't read, leading to `Unauthorized: pubkey not in
-> allow-list` on every connection. From `tunnel-v0.1.1` onward the writer
-> chowns the file to match its parent directory's owner automatically.
-> If you're stuck on an older build, fix it manually:
+> allow-list` on every connection. Current releases chown the file to match
+> its parent directory's owner automatically. If you're stuck on an older
+> build, fix it manually:
 >
 > ```sh
 > sudo chown root:mailcue-edge /etc/mailcue-edge/authorized_clients
@@ -331,15 +331,15 @@ with the pubkey from `GET /api/v1/tunnels/client-pubkey`.
 
 ### MX delivery failed (`SMTP_DELIVERY_FAILED`)
 
-The edge couldn't deliver to the recipient's MX. From `tunnel-v0.1.1`
-onward each per-recipient outcome is logged at info level - you'll see
-a line like:
+The edge couldn't deliver to the recipient's MX. Current releases log each
+per-recipient outcome at info level - you'll see a line like:
 
 ```text
 {"level":"INFO","fields":{"recipient":"user@gmail.com","smtp_code":"Some(550)","reason":"5.7.26 unauthenticated email...","message":"delivery perm-fail"}}
 ```
 
-If you're on `tunnel-v0.1.0` you'll need to flip on debug logging:
+If you're on a legacy build that lacks these info-level outcomes, enable
+debug logging:
 
 ```sh
 sudo systemctl edit mailcue-relay-edge
@@ -418,11 +418,11 @@ The Mailcue API hasn't written `tunnels.json` yet. Bootstrap a tunnel via
 mailcue-relay-edge.service: State 'stop-sigterm' timed out. Killing.
 ```
 
-Older builds (pre-`tunnel-v0.1.2`) used `idle_timeout_secs` (default
+Older builds used `idle_timeout_secs` (default
 120s) as the SIGTERM drain budget. Sidecars hold long-lived tunnel
 connections that don't close themselves on SIGTERM, so the drain always
-ran the clock out and systemd escalated to SIGKILL. From `tunnel-v0.1.2`
-the drain uses a separate, shorter `shutdown_drain_secs` (default 10s)
+ran the clock out and systemd escalated to SIGKILL. Current releases use a
+separate, shorter `shutdown_drain_secs` (default 10s)
 and `TimeoutStopSec` is back to 30s. Upgrade the VPS to pick up the new
 unit file:
 
@@ -448,18 +448,30 @@ The install script is idempotent - re-running it replaces the binary
 and the systemd unit, preserving state (`/var/lib/mailcue-edge/server.key`,
 `/etc/mailcue-edge/authorized_clients`, env-var drop-ins).
 
+Re-run the installer to follow the current edge release channel. No version
+needs to be edited in this file:
+
 ```sh
-sudo EDGE_RELEASE_URL=https://github.com/Olib-AI/mailcue/releases/download/tunnel-v0.1.2 \
+sudo EDGE_RELEASE_URL=https://github.com/Olib-AI/mailcue/releases/download/tunnel-latest \
   bash -c 'curl -fsSL https://raw.githubusercontent.com/Olib-AI/mailcue/main/tunnel/deploy/install-edge.sh | bash'
 sudo systemctl daemon-reload
 sudo systemctl restart mailcue-relay-edge
 sudo systemctl is-active mailcue-relay-edge
 ```
 
-Pin to a tag (`tunnel-v0.1.2`, `tunnel-v0.1.1`, …) for reproducible
-upgrades, or omit `EDGE_RELEASE_URL` to track `tunnel-latest`. Releases
-attach a `SHA256SUMS` file you can verify before installing.
+This tracks the `tunnel-latest` edge release. For a reproducible rollback,
+set `EDGE_RELEASE_URL` to a specific release. Releases attach a `SHA256SUMS`
+file you can verify before installing.
 
-For the Docker sidecar, just bump the image tag in
-`docker-compose.tunnel.yml` (`ghcr.io/olib-ai/mailcue-relay-sidecar:0.1.2`,
-multi-arch) and `docker compose up -d`.
+### Upgrade edge and sidecar together
+
+The edge and the sidecar negotiate a protocol version during the handshake and
+refuse to talk when it differs, so a release that changes the wire format has
+to be rolled out on both sides. When they disagree the sidecar logs a
+`proto_version mismatch` and no mail moves through the tunnel.
+
+Recipient probing changed shape in the release that introduced protocol
+version 3: `Probe` now carries several control recipients instead of one, and
+`ProbeResult` returns a list of outcomes with per-RCPT latency. Upgrade the
+edge with the installer above, then restart the sidecar container so both ends
+run the same release.

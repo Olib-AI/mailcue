@@ -40,7 +40,7 @@ pub use keypair::{KeyPair, KeyPairError, pub_path};
 ///
 /// Any mismatch is rejected with [`ErrorCode::ProtocolViolation`] before any
 /// `Relay` frame is processed.
-pub const PROTO_VERSION: u16 = 2;
+pub const PROTO_VERSION: u16 = 3;
 
 /// Noise pattern handled by this crate.
 pub const NOISE_PATTERN: &str = "Noise_IK_25519_ChaChaPoly_BLAKE2s";
