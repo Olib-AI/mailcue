@@ -448,26 +448,16 @@ The install script is idempotent - re-running it replaces the binary
 and the systemd unit, preserving state (`/var/lib/mailcue-edge/server.key`,
 `/etc/mailcue-edge/authorized_clients`, env-var drop-ins).
 
-The following workflow resolves the newest non-draft, non-prerelease
-`tunnel-v*` release, upgrades the edge to that exact release, and uses the
-same version for the Docker sidecar. It requires `curl` and `jq`:
+Re-run the installer and refresh the Compose service to follow the current
+release channels. No version needs to be edited in this file:
 
 ```sh
-if [ -z "${TUNNEL_TAG:-}" ]; then
-  TUNNEL_TAG="$(
-    curl -fsSL 'https://api.github.com/repos/Olib-AI/mailcue/releases?per_page=100' |
-      jq -er 'map(select(.draft == false and .prerelease == false and (.tag_name | startswith("tunnel-v"))))[0].tag_name'
-  )"
-fi
-TUNNEL_VERSION="${TUNNEL_TAG#tunnel-v}"
-
-sudo EDGE_RELEASE_URL="https://github.com/Olib-AI/mailcue/releases/download/${TUNNEL_TAG}" \
+sudo EDGE_RELEASE_URL=https://github.com/Olib-AI/mailcue/releases/download/tunnel-latest \
   bash -c 'curl -fsSL https://raw.githubusercontent.com/Olib-AI/mailcue/main/tunnel/deploy/install-edge.sh | bash'
 sudo systemctl daemon-reload
 sudo systemctl restart mailcue-relay-edge
 sudo systemctl is-active mailcue-relay-edge
 
-export MAILCUE_TUNNEL_VERSION="${TUNNEL_VERSION}"
 docker compose \
   -f docker-compose.yml \
   -f tunnel/deploy/docker/docker-compose.tunnel.yml \
@@ -478,8 +468,7 @@ docker compose \
   up -d mailcue-sidecar
 ```
 
-Keep `MAILCUE_TUNNEL_VERSION` in the deployment environment so later Compose
-commands remain pinned to the selected release. To pin another release, set
-`TUNNEL_TAG` explicitly before deriving `TUNNEL_VERSION`; omit
-`EDGE_RELEASE_URL` only if you intentionally track `tunnel-latest`. Releases
-attach a `SHA256SUMS` file you can verify before installing.
+This tracks the `tunnel-latest` edge release and the sidecar's `latest` image.
+For a reproducible rollback, set `EDGE_RELEASE_URL` to a specific release and
+pin the matching sidecar image tag. Releases attach a `SHA256SUMS` file you
+can verify before installing.
