@@ -1,12 +1,13 @@
 name: Tunnel CI & Release
 
 on:
+  # A path filter on `push` applies to tag pushes too, and a release tag
+  # usually lands on a commit that touched something other than tunnel/.
+  # Filtering pushes here would silently skip the release build, so only
+  # pull requests are filtered by path.
   push:
     branches: [main]
     tags: ["tunnel-v*"]
-    paths:
-      - "tunnel/**"
-      - ".github/workflows/tunnel.yml"
   pull_request:
     branches: [main]
     paths:
