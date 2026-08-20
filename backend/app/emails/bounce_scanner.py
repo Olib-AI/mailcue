@@ -26,7 +26,7 @@ from app.database import AsyncSessionLocal
 from app.emails.canary import apply_bounce
 from app.emails.dsn import parse_dsn
 from app.emails.models import MailboxBounceScan
-from app.emails.validation import validate_syntax
+from app.emails.validation import provider_id_for_domain, validate_syntax
 from app.emails.validation_feedback import record_validation_feedback
 from app.mailboxes.models import Mailbox
 
@@ -34,19 +34,6 @@ logger = logging.getLogger("mailcue.bounce.scanner")
 
 _TICK_SECONDS = 300.0
 _MAX_MESSAGES_PER_MAILBOX = 100
-
-
-async def _provider_for_domain(domain: str) -> str | None:
-    from app.emails.mx_providers import classify_mx, parse_mx_hosts
-    from app.emails.validation import validate_dns
-
-    try:
-        dns_result = await validate_dns(domain)
-    except Exception:
-        return None
-    if not dns_result.mx_records:
-        return None
-    return classify_mx(parse_mx_hosts(dns_result.mx_records), domain).provider.id
 
 
 async def _scan_mailbox(db: AsyncSession, mailbox: Mailbox) -> int:
@@ -123,7 +110,7 @@ async def _scan_mailbox(db: AsyncSession, mailbox: Mailbox) -> int:
                 outcome=outcome,
                 smtp_code=entry.smtp_code,
                 enhanced_status=entry.status,
-                provider_id=await _provider_for_domain(syntax.domain),
+                provider_id=await provider_id_for_domain(syntax.domain),
                 source="dsn",
             )
             await apply_bounce(

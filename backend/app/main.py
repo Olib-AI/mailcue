@@ -38,6 +38,7 @@ from app.domains.router import router as domains_router
 from app.emails.disposable import load_cached_domains, update_disposable_domains
 from app.emails.models import EmailValidationFeedback  # noqa: F401
 from app.emails.router import router as emails_router
+from app.emails.validation_router import validation_router
 from app.events.bus import event_bus
 from app.events.router import router as events_router
 from app.exceptions import register_exception_handlers
@@ -348,6 +349,9 @@ def create_app() -> FastAPI:
 
     # ── Routers ──────────────────────────────────────────────────
     app.include_router(auth_router, prefix="/api/v1")
+    # Registered before emails_router: its literal paths would otherwise be
+    # shadowed by that router's GET /emails/{uid}.
+    app.include_router(validation_router, prefix="/api/v1")
     app.include_router(emails_router, prefix="/api/v1")
     app.include_router(mailboxes_router, prefix="/api/v1")
     app.include_router(deliverability_router, prefix="/api/v1")

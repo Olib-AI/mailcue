@@ -1058,6 +1058,17 @@ def _probe_evidence(mailbox: EmailValidationMailbox) -> ProbeEvidenceInput:
     )
 
 
+async def provider_id_for_domain(domain: str) -> str | None:
+    """Classify a domain's receiving provider so outcomes pool at that level."""
+    try:
+        dns_result = await validate_dns(domain)
+    except Exception:
+        return None
+    if not dns_result.mx_records:
+        return None
+    return classify_mx(parse_mx_hosts(dns_result.mx_records), domain).provider.id
+
+
 async def validate_email_detailed(
     email: str,
     *,

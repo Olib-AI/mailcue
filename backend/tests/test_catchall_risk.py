@@ -645,3 +645,37 @@ async def test_a_wholly_failed_sample_blocks_the_remainder(
         by_email = {row.email: row for row in await _recipients(session, canary.id)}
         # Even the safest held address stays put once the whole sample failed.
         assert by_email["c@dead-domain.com"].status == "blocked"
+
+
+# ── Route resolution ─────────────────────────────────────────────
+
+
+def test_literal_validation_paths_are_not_shadowed_by_the_uid_route() -> None:
+    """GET /emails/{uid} matches any single segment, including literal names.
+
+    These routes were unreachable in production because they were registered
+    after the path-parameter route, so every request resolved to "fetch the
+    email whose uid is 'suppressed-domains'".
+    """
+    from app.main import app
+
+    for path in (
+        "/api/v1/emails/validation-calibration",
+        "/api/v1/emails/suppressed-domains",
+        "/api/v1/emails/send-canaries",
+    ):
+        matched = [
+            route
+            for route in app.routes
+            if getattr(route, "path", None) == path and "GET" in getattr(route, "methods", set())
+        ]
+        assert matched, f"no GET route registered for {path}"
+
+    paths = [getattr(route, "path", "") for route in app.routes]
+    uid_route = paths.index("/api/v1/emails/{uid}")
+    for path in (
+        "/api/v1/emails/validation-calibration",
+        "/api/v1/emails/suppressed-domains",
+        "/api/v1/emails/send-canaries",
+    ):
+        assert paths.index(path) < uid_route, f"{path} is registered after /emails/{{uid}}"
