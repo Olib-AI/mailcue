@@ -99,19 +99,70 @@ const found = await mc.emails.waitFor({
 console.log(found.length);
 ```
 
-## Email validation and catch-all feedback
+## Email validation and catch-all risk
 
 ```ts
 const result = await mc.emails.validate('person@example.com');
-console.log(result.catchAllRisk?.recommendedAction, result.catchAllRisk?.score);
+console.log(result.provider?.name, result.mailbox.selectiveRecipientValidation);
+console.log(result.catchAllRisk?.score, result.catchAllRisk?.recommendedAction);
+```
 
-// Feed organic provider/DSN outcomes back into tenant-specific scoring.
+A catch-all domain accepts every recipient at RCPT time, so no probe can prove
+that a mailbox exists. `catchAllRisk.score` is therefore a hard-bounce
+probability rather than a verdict: it starts from the receiving provider's
+rate, is refined by outcomes seen at that provider and domain, and is then
+adjusted for the local part and passive domain signals. `contributions`
+itemises every adjustment.
+
+Validate a list together rather than one address at a time. Addresses sharing a
+domain reveal that domain's naming convention and any generated name variants,
+and `targetBounceRate` returns the largest subset whose blended expected bounce
+rate stays under the ceiling receivers actually judge you on.
+
+```ts
+const batch = await mc.emails.validateBatch({
+  emails: addresses,
+  targetBounceRate: 0.015,
+});
+console.log(batch.summary.catchAll, batch.selection?.projectedBounceRate);
+const sendTo = batch.selection?.included ?? [];
+```
+
+Feed outcomes back so the estimates improve. A raw bounce can be handed over
+whole instead of being summarised by hand.
+
+```ts
 await mc.emails.recordValidationFeedback({
   email: 'person@example.com',
   outcome: 'hard_bounce',
   smtpCode: 550,
   enhancedStatus: '5.1.1',
 });
+await mc.emails.ingestBounce(rawDsnMessage);
+
+// Check that the published probabilities held up.
+const report = await mc.emails.validationCalibration({ days: 90 });
+console.log(report.brierScore, report.observedRate);
+```
+
+## Staged sending
+
+A message cannot be recalled once it leaves the MTA, so the only way to bound
+exposure on a catch-all domain is to not commit the whole batch at once. A
+staged send delivers a small sample first, watches the bounce window, and
+releases the rest only if the sample survived.
+
+```ts
+const canary = await mc.emails.createSendCanary({
+  recipients: addresses,
+  fromAddress: 'hello@example.com',
+  subject: 'Quarterly update',
+  body: '...',
+  sampleSize: 2,
+  holdMinutes: 15,
+});
+const state = await mc.emails.getSendCanary(canary.id);
+console.log(state.status, state.decisionReason);
 ```
 
 ## Mailboxes, domains, aliases, GPG, API keys, system

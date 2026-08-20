@@ -13,11 +13,17 @@ from mailcue.exceptions import TimeoutError as MailcueTimeoutError
 from mailcue.resources._base import AsyncResource, SyncResource
 from mailcue.types import (
     BulkInjectResponse,
+    DomainSuppressionListResponse,
+    EmailBounceIngestResponse,
     EmailDetail,
     EmailListResponse,
     EmailSummary,
+    EmailValidationBatchResponse,
+    EmailValidationCalibrationResponse,
     EmailValidationFeedbackResponse,
     EmailValidationResponse,
+    SendCanaryListResponse,
+    SendCanaryResponse,
     SendResult,
 )
 
@@ -482,6 +488,121 @@ class Emails(SyncResource):
         response = self._transport.request("POST", "/emails/validation-feedback", json=payload)
         return EmailValidationFeedbackResponse.model_validate(response.json())
 
+    def validate_batch(
+        self,
+        emails: List[str],
+        *,
+        target_bounce_rate: Optional[float] = None,
+        include_domain_signals: bool = True,
+    ) -> EmailValidationBatchResponse:
+        """Validate a list of addresses together.
+
+        Addresses at the same domain reveal that domain's naming convention and
+        any generated name variants, neither of which is visible when addresses
+        are checked one at a time.
+
+        Passing ``target_bounce_rate`` also returns the largest subset whose
+        blended expected bounce rate stays under that ceiling, which is the
+        decision that actually protects sender reputation.
+
+        Example:
+            >>> result = client.emails.validate_batch(addresses, target_bounce_rate=0.015)
+            >>> result.selection.included
+        """
+        payload: Dict[str, Any] = {
+            "emails": emails,
+            "include_domain_signals": include_domain_signals,
+        }
+        if target_bounce_rate is not None:
+            payload["target_bounce_rate"] = target_bounce_rate
+        response = self._transport.request("POST", "/emails/validate-batch", json=payload)
+        return EmailValidationBatchResponse.model_validate(response.json())
+
+    def validation_calibration(
+        self, *, days: int = 90, scope: Literal["tenant", "global"] = "tenant"
+    ) -> EmailValidationCalibrationResponse:
+        """Report how well issued risk scores matched the outcomes that followed."""
+        response = self._transport.request(
+            "GET",
+            "/emails/validation-calibration",
+            params={"days": days, "scope": scope},
+        )
+        return EmailValidationCalibrationResponse.model_validate(response.json())
+
+    def ingest_bounce(self, raw_message: str) -> EmailBounceIngestResponse:
+        """Extract delivery outcomes from a raw notification and record them."""
+        response = self._transport.request(
+            "POST", "/emails/bounces/ingest", json={"raw_message": raw_message}
+        )
+        return EmailBounceIngestResponse.model_validate(response.json())
+
+    def suppressed_domains(self) -> DomainSuppressionListResponse:
+        """List recipient domains paused after their measured bounce rate crossed the limit."""
+        response = self._transport.request("GET", "/emails/suppressed-domains")
+        return DomainSuppressionListResponse.model_validate(response.json())
+
+    def create_send_canary(
+        self,
+        *,
+        recipients: List[str],
+        from_address: str,
+        subject: str,
+        body: str = "",
+        name: str = "",
+        from_name: str = "",
+        body_type: Literal["plain", "html"] = "plain",
+        reply_to: Optional[str] = None,
+        sample_size: Optional[int] = None,
+        hold_minutes: Optional[int] = None,
+        bounce_threshold: float = 0.0,
+        auto_release: bool = True,
+    ) -> SendCanaryResponse:
+        """Stage a send so a sample proves each domain before the rest is committed.
+
+        A message cannot be recalled once it leaves the MTA, so the only control
+        available on an accept-all domain is how much of the batch is committed
+        at once.
+        """
+        payload: Dict[str, Any] = {
+            "recipients": recipients,
+            "from_address": from_address,
+            "subject": subject,
+            "body": body,
+            "name": name,
+            "from_name": from_name,
+            "body_type": body_type,
+            "bounce_threshold": bounce_threshold,
+            "auto_release": auto_release,
+        }
+        if reply_to is not None:
+            payload["reply_to"] = reply_to
+        if sample_size is not None:
+            payload["sample_size"] = sample_size
+        if hold_minutes is not None:
+            payload["hold_minutes"] = hold_minutes
+        response = self._transport.request("POST", "/emails/send-canaries", json=payload)
+        return SendCanaryResponse.model_validate(response.json())
+
+    def list_send_canaries(self, *, limit: int = 25) -> SendCanaryListResponse:
+        """List staged sends for the calling tenant, newest first."""
+        response = self._transport.request("GET", "/emails/send-canaries", params={"limit": limit})
+        return SendCanaryListResponse.model_validate(response.json())
+
+    def get_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Return the state of one staged send."""
+        response = self._transport.request("GET", f"/emails/send-canaries/{canary_id}")
+        return SendCanaryResponse.model_validate(response.json())
+
+    def decide_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Resolve a staged send now instead of waiting for its hold window."""
+        response = self._transport.request("POST", f"/emails/send-canaries/{canary_id}/decide")
+        return SendCanaryResponse.model_validate(response.json())
+
+    def cancel_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Cancel a staged send before its remaining recipients go out."""
+        response = self._transport.request("POST", f"/emails/send-canaries/{canary_id}/cancel")
+        return SendCanaryResponse.model_validate(response.json())
+
 
 class AsyncEmails(AsyncResource):
     """Asynchronous ``emails`` resource."""
@@ -695,3 +816,106 @@ class AsyncEmails(AsyncResource):
             "POST", "/emails/validation-feedback", json=payload
         )
         return EmailValidationFeedbackResponse.model_validate(response.json())
+
+    async def validate_batch(
+        self,
+        emails: List[str],
+        *,
+        target_bounce_rate: Optional[float] = None,
+        include_domain_signals: bool = True,
+    ) -> EmailValidationBatchResponse:
+        """Async variant of :meth:`Emails.validate_batch`."""
+        payload: Dict[str, Any] = {
+            "emails": emails,
+            "include_domain_signals": include_domain_signals,
+        }
+        if target_bounce_rate is not None:
+            payload["target_bounce_rate"] = target_bounce_rate
+        response = await self._transport.request("POST", "/emails/validate-batch", json=payload)
+        return EmailValidationBatchResponse.model_validate(response.json())
+
+    async def validation_calibration(
+        self, *, days: int = 90, scope: Literal["tenant", "global"] = "tenant"
+    ) -> EmailValidationCalibrationResponse:
+        """Async variant of :meth:`Emails.validation_calibration`."""
+        response = await self._transport.request(
+            "GET",
+            "/emails/validation-calibration",
+            params={"days": days, "scope": scope},
+        )
+        return EmailValidationCalibrationResponse.model_validate(response.json())
+
+    async def ingest_bounce(self, raw_message: str) -> EmailBounceIngestResponse:
+        """Async variant of :meth:`Emails.ingest_bounce`."""
+        response = await self._transport.request(
+            "POST", "/emails/bounces/ingest", json={"raw_message": raw_message}
+        )
+        return EmailBounceIngestResponse.model_validate(response.json())
+
+    async def suppressed_domains(self) -> DomainSuppressionListResponse:
+        """Async variant of :meth:`Emails.suppressed_domains`."""
+        response = await self._transport.request("GET", "/emails/suppressed-domains")
+        return DomainSuppressionListResponse.model_validate(response.json())
+
+    async def create_send_canary(
+        self,
+        *,
+        recipients: List[str],
+        from_address: str,
+        subject: str,
+        body: str = "",
+        name: str = "",
+        from_name: str = "",
+        body_type: Literal["plain", "html"] = "plain",
+        reply_to: Optional[str] = None,
+        sample_size: Optional[int] = None,
+        hold_minutes: Optional[int] = None,
+        bounce_threshold: float = 0.0,
+        auto_release: bool = True,
+    ) -> SendCanaryResponse:
+        """Async variant of :meth:`Emails.create_send_canary`."""
+        payload: Dict[str, Any] = {
+            "recipients": recipients,
+            "from_address": from_address,
+            "subject": subject,
+            "body": body,
+            "name": name,
+            "from_name": from_name,
+            "body_type": body_type,
+            "bounce_threshold": bounce_threshold,
+            "auto_release": auto_release,
+        }
+        if reply_to is not None:
+            payload["reply_to"] = reply_to
+        if sample_size is not None:
+            payload["sample_size"] = sample_size
+        if hold_minutes is not None:
+            payload["hold_minutes"] = hold_minutes
+        response = await self._transport.request("POST", "/emails/send-canaries", json=payload)
+        return SendCanaryResponse.model_validate(response.json())
+
+    async def list_send_canaries(self, *, limit: int = 25) -> SendCanaryListResponse:
+        """Async variant of :meth:`Emails.list_send_canaries`."""
+        response = await self._transport.request(
+            "GET", "/emails/send-canaries", params={"limit": limit}
+        )
+        return SendCanaryListResponse.model_validate(response.json())
+
+    async def get_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Async variant of :meth:`Emails.get_send_canary`."""
+        response = await self._transport.request("GET", f"/emails/send-canaries/{canary_id}")
+        return SendCanaryResponse.model_validate(response.json())
+
+    async def decide_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Async variant of :meth:`Emails.decide_send_canary`."""
+        response = await self._transport.request(
+            "POST", f"/emails/send-canaries/{canary_id}/decide"
+        )
+        return SendCanaryResponse.model_validate(response.json())
+
+    async def cancel_send_canary(self, canary_id: str) -> SendCanaryResponse:
+        """Async variant of :meth:`Emails.cancel_send_canary`."""
+        response = await self._transport.request(
+            "POST", f"/emails/send-canaries/{canary_id}/cancel"
+        )
+        return SendCanaryResponse.model_validate(response.json())

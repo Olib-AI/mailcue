@@ -61,10 +61,23 @@ ${scope}
     locked ? '' : '\n- list_mailboxes Discover the mailboxes you can act on.'
   }
 - mailbox_stats  Per-folder counts (total / unread) for a mailbox.
-- validate_email Validate email address structure, DNS status, mailbox SMTP
-                 acceptance, disposable status, and catch-all risk.
+- validate_email Validate one address: structure, DNS, mailbox SMTP acceptance,
+                 disposable status, catch-all risk, the receiving provider, and
+                 the local-part and domain signals behind the score.
+- validate_email_batch Validate a whole list at once. Prefer this over looping
+                 validate_email: addresses at a shared domain reveal that
+                 domain's naming convention and any generated name variants.
+                 Pass targetBounceRate to get the largest subset whose blended
+                 bounce rate stays under a ceiling.
+- get_validation_calibration How well past scores matched real outcomes.
 - record_validation_feedback Record a real delivery or bounce outcome so
                  future catch-all risk estimates improve.
+- ingest_bounce  Parse a raw bounce message and record the outcomes it carries.
+- list_suppressed_domains Domains paused after too many measured hard bounces.
+- create_send_canary / get_send_canary / list_send_canaries /
+  decide_send_canary / cancel_send_canary
+                 Stage a send: a sample goes first, the bounce window is
+                 watched, and the rest is released only if the sample survived.
 
 # How to work
 1. To answer "what's in my inbox" or "any new mail", call list_emails (or
@@ -81,6 +94,13 @@ ${scope}
 6. Bodies may be truncated in tool output; re-fetch with get_email for the full
    text when you need it.
 7. Validate addresses before sending. Treat deliverable=null and catch-all
-   results as probabilistic; use catch_all_risk.recommended_action when present.`;
+   results as probabilistic; use catch_all_risk.recommended_action when present.
+8. A catch-all domain accepts every recipient at RCPT time, so no probe can
+   tell whether the mailbox exists. Judge those on riskScore rather than on a
+   yes or no, and remember that what matters is the blended bounce rate of the
+   whole send, not any single address.
+9. For a bulk send to catch-all domains, use create_send_canary rather than
+   send_email. A message cannot be recalled once it leaves the MTA, so the only
+   protection is committing a small sample first.`;
 
 }

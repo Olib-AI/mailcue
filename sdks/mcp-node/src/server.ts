@@ -4,6 +4,7 @@ import {
   AuthorizationError,
   Mailcue,
   MailcueError,
+  type CreateSendCanaryParams,
   type SendEmailParams,
 } from 'mailcue';
 import { z, type ZodRawShape } from 'zod';
@@ -684,7 +685,7 @@ export function buildServer(config: McpConfig): McpServer {
     {
       title: 'Validate email address',
       description:
-        'Validate structure, DNS, SMTP acceptance, disposable status, and feedback-backed catch-all risk.',
+        'Validate structure, DNS, SMTP acceptance, disposable status, and catch-all risk. The result also identifies the receiving provider, what the control recipients proved, and the local-part and domain signals behind the score.',
       inputSchema: {
         email: z.string().describe('The email address to validate.'),
       },
@@ -719,6 +720,199 @@ export function buildServer(config: McpConfig): McpServer {
         enhancedStatus?: string;
       };
       const res = await client.emails.recordValidationFeedback(a);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'validate_email_batch',
+    {
+      title: 'Validate a batch of email addresses',
+      description:
+        'Validate many addresses at once. Addresses at the same domain reveal that domain\'s ' +
+        'naming convention and any generated name variants, neither of which is visible one ' +
+        'address at a time. Set targetBounceRate to also get the largest subset whose blended ' +
+        'expected bounce rate stays under that ceiling, which is what actually protects sender ' +
+        'reputation.',
+      inputSchema: {
+        emails: z.array(z.string()).min(1).describe('Addresses to validate.'),
+        targetBounceRate: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe('Blended bounce-rate ceiling for the returned selection, e.g. 0.015.'),
+        includeDomainSignals: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as {
+        emails: string[];
+        targetBounceRate?: number;
+        includeDomainSignals?: boolean;
+      };
+      const res = await client.emails.validateBatch(a);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'get_validation_calibration',
+    {
+      title: 'Check validation score calibration',
+      description:
+        'Report how well previously issued risk scores matched the outcomes that followed, as a ' +
+        'Brier score and reliability bins. A score is only a probability once it has been ' +
+        'checked against reality.',
+      inputSchema: {
+        days: z.number().int().min(1).max(365).optional(),
+        scope: z.enum(['tenant', 'global']).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { days?: number; scope?: 'tenant' | 'global' };
+      const res = await client.emails.validationCalibration(a);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'ingest_bounce',
+    {
+      title: 'Record outcomes from a bounce message',
+      description:
+        'Parse a raw delivery status notification and record the recipient outcomes it carries. ' +
+        'A bounce is the only ground truth that exists for a recipient no probe could classify.',
+      inputSchema: {
+        rawMessage: z.string().min(1).describe('The raw RFC 5322 notification.'),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { rawMessage: string };
+      const res = await client.emails.ingestBounce(a.rawMessage);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'list_suppressed_domains',
+    {
+      title: 'List suppressed recipient domains',
+      description:
+        'List recipient domains paused for sending after their measured hard-bounce rate crossed ' +
+        'the circuit-breaker limit.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async () => {
+      const res = await client.emails.suppressedDomains();
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'create_send_canary',
+    {
+      title: 'Stage a send behind a canary sample',
+      description:
+        'Send to a small sample first, watch the bounce window, and release the rest only if the ' +
+        'sample survived. A message cannot be recalled once it leaves the MTA, so the only ' +
+        'control on an accept-all domain is how much of the batch is committed at once.',
+      inputSchema: {
+        recipients: z.array(z.string()).min(1),
+        fromAddress: z.string(),
+        subject: z.string(),
+        body: z.string().optional(),
+        name: z.string().optional(),
+        fromName: z.string().optional(),
+        bodyType: z.enum(['plain', 'html']).optional(),
+        replyTo: z.string().optional(),
+        sampleSize: z.number().int().min(1).max(50).optional(),
+        holdMinutes: z.number().int().min(1).max(10080).optional(),
+        bounceThreshold: z.number().min(0).max(1).optional(),
+        autoRelease: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as unknown as CreateSendCanaryParams;
+      const res = await client.emails.createSendCanary(a);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'get_send_canary',
+    {
+      title: 'Inspect a staged send',
+      description:
+        'Return the state of one staged send: which recipients were sampled, what came back, and ' +
+        'whether the remainder was released or withheld.',
+      inputSchema: {
+        canaryId: z.string(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { canaryId: string };
+      const res = await client.emails.getSendCanary(a.canaryId);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'list_send_canaries',
+    {
+      title: 'List staged sends',
+      description: 'List staged sends for this account, newest first.',
+      inputSchema: {
+        limit: z.number().int().min(1).max(100).optional(),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { limit?: number };
+      const res = await client.emails.listSendCanaries(a);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'decide_send_canary',
+    {
+      title: 'Resolve a staged send now',
+      description:
+        'Apply the hold-window verdict immediately instead of waiting for it to elapse. A clean ' +
+        'sample releases everything, a wholly failed sample withholds everything, and a partly ' +
+        'failed sample releases only the addresses scored safer than the ones that bounced.',
+      inputSchema: {
+        canaryId: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { canaryId: string };
+      const res = await client.emails.decideSendCanary(a.canaryId);
+      return text(JSON.stringify(res, null, 2));
+    }),
+  );
+
+  server.registerTool(
+    'cancel_send_canary',
+    {
+      title: 'Cancel a staged send',
+      description: 'Stop a staged send before its remaining recipients go out.',
+      inputSchema: {
+        canaryId: z.string(),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    },
+    run(async (args) => {
+      const a = args as { canaryId: string };
+      const res = await client.emails.cancelSendCanary(a.canaryId);
       return text(JSON.stringify(res, null, 2));
     }),
   );

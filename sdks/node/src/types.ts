@@ -636,6 +636,16 @@ export interface EmailValidationDns {
   error?: string | null;
 }
 
+export type RcptVerdict = 'mailbox_absent' | 'mailbox_present' | 'temporary' | 'policy' | 'unknown';
+
+export interface EmailValidationControlProbe {
+  shape: string;
+  smtpCode?: number | null;
+  smtpResponse?: string | null;
+  verdict: RcptVerdict;
+  latencyMs?: number | null;
+}
+
 export interface EmailValidationMailbox {
   isValid: boolean | null;
   smtpCode?: number | null;
@@ -644,6 +654,68 @@ export interface EmailValidationMailbox {
   transport: 'direct' | 'mailcue_tunnel' | 'none';
   reasonCode?: string | null;
   error?: string | null;
+  enhancedStatus?: string | null;
+  mxHost?: string | null;
+  targetLatencyMs?: number | null;
+  controlMedianLatencyMs?: number | null;
+  controlProbes: EmailValidationControlProbe[];
+  controlsAccepted: number;
+  controlsRejected: number;
+  controlsInconclusive: number;
+  /** The destination refused at least one synthetic recipient, so it validates recipients. */
+  selectiveRecipientValidation?: boolean | null;
+  /** Refusals followed an accepted control, so they reflect throttling rather than recipient logic. */
+  orderDegraded: boolean;
+  /** The destination reacted to the probing host, so its answers do not describe the mailbox. */
+  senderReputationSignal: boolean;
+}
+
+export type ProviderCategory =
+  | 'hosted_mailbox'
+  | 'security_gateway'
+  | 'consumer'
+  | 'self_hosted'
+  | 'forwarder'
+  | 'parked'
+  | 'unroutable'
+  | 'unknown';
+
+export interface EmailValidationProvider {
+  id: string;
+  name: string;
+  category: ProviderCategory;
+  matchedHost?: string | null;
+  frontsBackend: boolean;
+  acceptAllBouncePrior: number;
+  inferredBackend?: string | null;
+  notes: string;
+}
+
+export interface EmailValidationLocalPart {
+  shape: string;
+  isRoleAccount: boolean;
+  isPlaceholder: boolean;
+  isTrapMarker: boolean;
+  hasPlusTag: boolean;
+  gibberishScore: number;
+  digitRatio: number;
+  riskDelta: number;
+  notes: string[];
+}
+
+export interface EmailValidationDomainSignals {
+  ageDays?: number | null;
+  expiresInDays?: number | null;
+  hasSpf: boolean;
+  hasDmarc: boolean;
+  dmarcPolicy?: string | null;
+  hasMtaSts: boolean;
+  hasTlsRpt: boolean;
+  wildcardDns: boolean;
+  parked: boolean;
+  inferredBackend?: string | null;
+  riskDelta: number;
+  notes: string[];
 }
 
 export interface EmailValidationDisposable {
@@ -652,13 +724,39 @@ export interface EmailValidationDisposable {
   error?: string | null;
 }
 
+export interface EmailValidationRiskContribution {
+  label: string;
+  delta: number;
+  detail: string;
+}
+
+export type RiskSource =
+  | 'no_history'
+  | 'exact_history'
+  | 'domain_history'
+  | 'shared_domain_history'
+  | 'provider_history'
+  | 'provider_prior';
+
+/**
+ * Hard-bounce estimate for an accept-all recipient.
+ *
+ * `score` is a probability; `baseRate` is the pooled rate for the destination
+ * before any per-address adjustment, so the two together show how much of the
+ * estimate came from evidence about this address specifically.
+ */
 export interface EmailValidationCatchAllRisk {
   score: number;
   level: 'low' | 'medium' | 'high' | 'unknown';
   recommendedAction: 'send' | 'caution' | 'hold';
-  source: 'no_history' | 'exact_history' | 'domain_history';
+  source: RiskSource;
   sampleSize: number;
   explanation: string;
+  baseRate: number;
+  providerId?: string | null;
+  providerRate?: number | null;
+  confidence: number;
+  contributions: EmailValidationRiskContribution[];
 }
 
 export type EmailValidationFeedbackOutcome = 'delivered' | 'hard_bounce' | 'soft_bounce';
@@ -688,4 +786,175 @@ export interface EmailValidationResponse {
   mailbox: EmailValidationMailbox;
   disposable: EmailValidationDisposable;
   catchAllRisk?: EmailValidationCatchAllRisk | null;
+  provider?: EmailValidationProvider | null;
+  localPart?: EmailValidationLocalPart | null;
+  domainSignals?: EmailValidationDomainSignals | null;
+}
+
+export interface EmailValidationBatchParams {
+  emails: string[];
+  /**
+   * When set, the response also reports the largest subset whose blended
+   * expected bounce rate stays under this ceiling. Reputation is judged on the
+   * aggregate of a send, not on any single address.
+   */
+  targetBounceRate?: number;
+  includeDomainSignals?: boolean;
+}
+
+export interface EmailValidationBatchItem {
+  email: string;
+  status: 'valid' | 'invalid' | 'undetermined' | 'disposable' | 'catch_all';
+  verdict: 'deliverable' | 'undeliverable' | 'risky' | 'unknown';
+  deliverable?: boolean | null;
+  reason: string;
+  providerId?: string | null;
+  riskScore: number;
+  recommendedAction: 'send' | 'caution' | 'hold';
+  /** The local part matches the naming convention the rest of the batch uses at this domain. */
+  matchesDomainPattern?: boolean | null;
+  /** The batch holds several generated variants of one name here, of which at most one is live. */
+  permutationVariant: boolean;
+  catchAllRisk?: EmailValidationCatchAllRisk | null;
+  error?: string | null;
+}
+
+export interface EmailValidationBudgetSelection {
+  targetBounceRate: number;
+  projectedBounceRate: number;
+  included: string[];
+  excluded: string[];
+  includedCount: number;
+  excludedCount: number;
+}
+
+export interface EmailValidationBatchSummary {
+  total: number;
+  valid: number;
+  invalid: number;
+  catchAll: number;
+  undetermined: number;
+  disposable: number;
+  meanRiskScore: number;
+  projectedBounceRate: number;
+}
+
+export interface EmailValidationBatchResponse {
+  results: EmailValidationBatchItem[];
+  summary: EmailValidationBatchSummary;
+  selection?: EmailValidationBudgetSelection | null;
+}
+
+export interface EmailValidationCalibrationBin {
+  lower: number;
+  upper: number;
+  count: number;
+  predictedMean: number;
+  observedRate: number;
+}
+
+export interface EmailValidationCalibrationResponse {
+  sampleSize: number;
+  brierScore?: number | null;
+  meanPredicted?: number | null;
+  observedRate?: number | null;
+  bins: EmailValidationCalibrationBin[];
+}
+
+export interface EmailBounceIngestRecipient {
+  recipient: string;
+  outcome: EmailValidationFeedbackOutcome;
+  status?: string | null;
+  smtpCode?: number | null;
+  diagnosticCode?: string | null;
+}
+
+export interface EmailBounceIngestResponse {
+  isDsn: boolean;
+  recorded: number;
+  recipients: EmailBounceIngestRecipient[];
+}
+
+export interface CreateSendCanaryParams {
+  recipients: string[];
+  fromAddress: string;
+  subject: string;
+  body?: string;
+  name?: string;
+  fromName?: string;
+  bodyType?: 'plain' | 'html';
+  replyTo?: string;
+  sampleSize?: number;
+  holdMinutes?: number;
+  bounceThreshold?: number;
+  autoRelease?: boolean;
+}
+
+export type SendCanaryStatus =
+  | 'pending'
+  | 'probing'
+  | 'released'
+  | 'blocked'
+  | 'cancelled'
+  | 'failed';
+
+export interface SendCanaryRecipient {
+  email: string;
+  role: 'sample' | 'held';
+  status:
+    | 'pending'
+    | 'sent'
+    | 'delivered'
+    | 'hard_bounce'
+    | 'soft_bounce'
+    | 'released'
+    | 'blocked'
+    | 'skipped';
+  riskScore?: number | null;
+  smtpCode?: number | null;
+  enhancedStatus?: string | null;
+  sentAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface SendCanaryResponse {
+  id: string;
+  name: string;
+  status: SendCanaryStatus;
+  sampleSize: number;
+  holdMinutes: number;
+  bounceThreshold: number;
+  autoRelease: boolean;
+  fromAddress: string;
+  subject: string;
+  createdAt: string;
+  sampleSentAt?: string | null;
+  decisionDueAt?: string | null;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+  totalRecipients: number;
+  sampleRecipients: number;
+  heldRecipients: number;
+  hardBounces: number;
+  softBounces: number;
+  recipients: SendCanaryRecipient[];
+}
+
+export interface SendCanaryListResponse {
+  canaries: SendCanaryResponse[];
+  total: number;
+}
+
+export interface DomainSuppressionEntry {
+  domain: string;
+  reason: string;
+  hardBounces: number;
+  observations: number;
+  createdAt: string;
+  expiresAt?: string | null;
+}
+
+export interface DomainSuppressionListResponse {
+  suppressions: DomainSuppressionEntry[];
+  total: number;
 }

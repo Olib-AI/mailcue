@@ -17,8 +17,16 @@ import type {
   SendResult,
   WaitForEmailParams,
   EmailValidationResponse,
+  EmailValidationBatchParams,
+  EmailValidationBatchResponse,
+  EmailValidationCalibrationResponse,
   EmailValidationFeedbackParams,
   EmailValidationFeedbackResponse,
+  EmailBounceIngestResponse,
+  DomainSuppressionListResponse,
+  CreateSendCanaryParams,
+  SendCanaryResponse,
+  SendCanaryListResponse,
 } from '../types.js';
 
 function summaryMatches(email: EmailSummary, p: WaitForEmailParams): boolean {
@@ -378,5 +386,151 @@ export class EmailsResource {
     if (options.signal) reqOpts.signal = options.signal;
     const raw = await this.transport.request<unknown>(reqOpts);
     return camelize(raw) as EmailValidationFeedbackResponse;
+  }
+
+  /**
+   * Validate a list of addresses together.
+   *
+   * Addresses at the same domain reveal that domain's naming convention and any
+   * generated name variants, neither of which is visible when addresses are
+   * checked one at a time. Passing `targetBounceRate` also returns the largest
+   * subset whose blended expected bounce rate stays under that ceiling, which is
+   * the decision that actually protects sender reputation.
+   */
+  async validateBatch(
+    params: EmailValidationBatchParams,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailValidationBatchResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: '/api/v1/emails/validate-batch',
+      body: snakeify(params),
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as EmailValidationBatchResponse;
+  }
+
+  /** Report how well issued risk scores matched the outcomes that followed. */
+  async validationCalibration(
+    params: { days?: number; scope?: 'tenant' | 'global' } = {},
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailValidationCalibrationResponse> {
+    const query = new URLSearchParams();
+    query.set('days', String(params.days ?? 90));
+    query.set('scope', params.scope ?? 'tenant');
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'GET',
+      path: `/api/v1/emails/validation-calibration?${query.toString()}`,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as EmailValidationCalibrationResponse;
+  }
+
+  /** Extract delivery outcomes from a raw notification and record them. */
+  async ingestBounce(
+    rawMessage: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<EmailBounceIngestResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: '/api/v1/emails/bounces/ingest',
+      body: { raw_message: rawMessage },
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as EmailBounceIngestResponse;
+  }
+
+  /** List recipient domains paused after their measured bounce rate crossed the limit. */
+  async suppressedDomains(
+    options: { signal?: AbortSignal } = {},
+  ): Promise<DomainSuppressionListResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'GET',
+      path: '/api/v1/emails/suppressed-domains',
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as DomainSuppressionListResponse;
+  }
+
+  /**
+   * Stage a send so a sample proves each domain before the rest is committed.
+   *
+   * A message cannot be recalled once it leaves the MTA, so the only control
+   * available on an accept-all domain is how much of the batch goes at once.
+   */
+  async createSendCanary(
+    params: CreateSendCanaryParams,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SendCanaryResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: '/api/v1/emails/send-canaries',
+      body: snakeify(params),
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as SendCanaryResponse;
+  }
+
+  /** List staged sends for the calling tenant, newest first. */
+  async listSendCanaries(
+    params: { limit?: number } = {},
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SendCanaryListResponse> {
+    const query = new URLSearchParams();
+    query.set('limit', String(params.limit ?? 25));
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'GET',
+      path: `/api/v1/emails/send-canaries?${query.toString()}`,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as SendCanaryListResponse;
+  }
+
+  /** Return the state of one staged send. */
+  async getSendCanary(
+    canaryId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SendCanaryResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'GET',
+      path: `/api/v1/emails/send-canaries/${encodeURIComponent(canaryId)}`,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as SendCanaryResponse;
+  }
+
+  /** Resolve a staged send now instead of waiting for its hold window. */
+  async decideSendCanary(
+    canaryId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SendCanaryResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: `/api/v1/emails/send-canaries/${encodeURIComponent(canaryId)}/decide`,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as SendCanaryResponse;
+  }
+
+  /** Cancel a staged send before its remaining recipients go out. */
+  async cancelSendCanary(
+    canaryId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<SendCanaryResponse> {
+    const reqOpts: Parameters<Transport['request']>[0] = {
+      method: 'POST',
+      path: `/api/v1/emails/send-canaries/${encodeURIComponent(canaryId)}/cancel`,
+    };
+    if (options.signal) reqOpts.signal = options.signal;
+    const raw = await this.transport.request<unknown>(reqOpts);
+    return camelize(raw) as SendCanaryResponse;
   }
 }

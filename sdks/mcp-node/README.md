@@ -101,13 +101,32 @@ Drop `MAILCUE_MAILBOX` to let the agent work across every mailbox on the server.
 | `reply_email`    | Reply by uid; threading + `Re:` subject set automatically. | replies from the locked address |
 | `delete_email`   | Permanently delete an email by uid. | no `mailbox` arg |
 | `mailbox_stats`  | Per-folder total / unread counts. | no `mailbox` arg |
-| `validate_email` | Validate structure, DNS, SMTP acceptance, disposable status, and catch-all risk. | independent of mailbox |
-| `record_validation_feedback` | Record an organic delivery or bounce for tenant-specific catch-all scoring. | independent of mailbox |
+| `validate_email` | Validate one address: structure, DNS, SMTP acceptance, disposable status, catch-all risk, receiving provider, and the signals behind the score. | independent of mailbox |
+| `validate_email_batch` | Validate a list, using batch-level evidence and an optional blended bounce-rate budget. | independent of mailbox |
+| `get_validation_calibration` | Brier score and reliability bins for previously issued scores. | independent of mailbox |
+| `record_validation_feedback` | Record one organic delivery or bounce outcome. | independent of mailbox |
+| `ingest_bounce` | Parse a raw delivery status notification and record the outcomes it carries. | independent of mailbox |
+| `list_suppressed_domains` | Domains paused after too many measured hard bounces. | independent of mailbox |
+| `create_send_canary` | Stage a send: a sample goes first, the rest is released only if it survives. | independent of mailbox |
+| `get_send_canary` / `list_send_canaries` | Inspect staged sends. | independent of mailbox |
+| `decide_send_canary` | Resolve a staged send now instead of waiting out the hold window. | independent of mailbox |
+| `cancel_send_canary` | Stop a staged send before its remaining recipients go out. | independent of mailbox |
 | `list_mailboxes` | Discover available mailboxes. | **not available when locked** |
 
 uids are scoped to a `(mailbox, folder)` pair. Read and act using the same
 folder you listed from. HTML bodies are converted to readable text and long
 bodies are truncated; re-fetch with `get_email` for the full message.
+
+### Catch-all recipients and staged sends
+
+A catch-all domain accepts every recipient at RCPT time, so no probe can prove
+whether a mailbox exists. `validate_email` therefore reports a probability
+rather than a verdict, along with the provider that decides what an accept-all
+response is worth and what the control recipients proved.
+
+Because a message cannot be recalled once it leaves the MTA, the way to bound
+exposure on those domains is `create_send_canary` rather than `send_email`: a
+small sample is committed first and the remainder waits on the result.
 
 ### Built-in agent instructions
 

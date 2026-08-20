@@ -85,17 +85,66 @@ found = client.emails.wait_for(
 assert len(found) == 1
 ```
 
-## Email validation and catch-all feedback
+## Email validation and catch-all risk
 
 ```python
 result = client.emails.validate("person@example.com")
+print(result.provider.name, result.mailbox.selective_recipient_validation)
 if result.catch_all_risk:
-    print(result.catch_all_risk.recommended_action, result.catch_all_risk.score)
+    print(result.catch_all_risk.score, result.catch_all_risk.recommended_action)
+    for item in result.catch_all_risk.contributions:
+        print(item.label, item.delta, item.detail)
+```
 
-# Feed organic provider/DSN outcomes back into tenant-specific scoring.
+A catch-all domain accepts every recipient at RCPT time, so no probe can prove
+that a mailbox exists. `catch_all_risk.score` is therefore a hard-bounce
+probability rather than a verdict: it starts from the receiving provider's
+rate, is refined by outcomes seen at that provider and domain, and is then
+adjusted for the local part and passive domain signals.
+
+Validate a list together rather than one address at a time. Addresses sharing a
+domain reveal that domain's naming convention and any generated name variants,
+and `target_bounce_rate` returns the largest subset whose blended expected
+bounce rate stays under the ceiling receivers actually judge you on.
+
+```python
+batch = client.emails.validate_batch(addresses, target_bounce_rate=0.015)
+print(batch.summary.catch_all, batch.selection.projected_bounce_rate)
+send_to = batch.selection.included
+```
+
+Feed outcomes back so the estimates improve. A raw bounce can be handed over
+whole instead of being summarised by hand.
+
+```python
 client.emails.record_validation_feedback(
     "person@example.com", "hard_bounce", smtp_code=550, enhanced_status="5.1.1"
 )
+client.emails.ingest_bounce(raw_dsn_message)
+
+# Check that the published probabilities held up.
+report = client.emails.validation_calibration(days=90)
+print(report.brier_score, report.observed_rate)
+```
+
+## Staged sending
+
+A message cannot be recalled once it leaves the MTA, so the only way to bound
+exposure on a catch-all domain is to not commit the whole batch at once. A
+staged send delivers a small sample first, watches the bounce window, and
+releases the rest only if the sample survived.
+
+```python
+canary = client.emails.create_send_canary(
+    recipients=addresses,
+    from_address="hello@example.com",
+    subject="Quarterly update",
+    body="...",
+    sample_size=2,
+    hold_minutes=15,
+)
+state = client.emails.get_send_canary(canary.id)
+print(state.status, state.decision_reason)
 ```
 
 ## Attachments
@@ -183,7 +232,7 @@ You can also inject your own `httpx.Client` / `httpx.AsyncClient` via
 
 | Resource | Methods |
 |----------|---------|
-| `client.emails` | `send`, `list`, `get`, `get_raw`, `get_attachment`, `delete`, `inject`, `bulk_inject`, `validate`, `record_validation_feedback` |
+| `client.emails` | `send`, `list`, `get`, `get_raw`, `get_attachment`, `delete`, `inject`, `bulk_inject`, `validate`, `validate_batch`, `record_validation_feedback`, `ingest_bounce`, `validation_calibration`, `suppressed_domains`, `create_send_canary`, `list_send_canaries`, `get_send_canary`, `decide_send_canary`, `cancel_send_canary` |
 | `client.mailboxes` | `list`, `create`, `delete`, `stats`, `purge`, `list_emails` |
 | `client.domains` | `list`, `create`, `get`, `verify_dns`, `delete` |
 | `client.aliases` | `list`, `create`, `get`, `update`, `delete` |
