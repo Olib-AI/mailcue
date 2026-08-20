@@ -168,6 +168,35 @@ jobs:
             dist/mailcue-relay-edge.service
             dist/SHA256SUMS
 
+      # Keep the installer's version-free upgrade URL working. This is a
+      # prerelease channel so it does not replace versioned releases in
+      # GitHub's "Latest" release selection.
+      - name: Refresh tunnel-latest channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view tunnel-latest >/dev/null 2>&1; then
+            gh release upload tunnel-latest \
+              dist/mailcue-relay-edge-* \
+              dist/mailcue-relay-sidecar-* \
+              dist/mailcue-relay-edge.service \
+              dist/SHA256SUMS \
+              --clobber
+            gh release edit tunnel-latest \
+              --title "Tunnel latest (${{ github.ref_name }})" \
+              --notes "Moving upgrade channel for ${{ github.ref_name }}."
+          else
+            gh release create tunnel-latest \
+              --target "${GITHUB_SHA}" \
+              --title "Tunnel latest (${{ github.ref_name }})" \
+              --notes "Moving upgrade channel for ${{ github.ref_name }}." \
+              --prerelease \
+              dist/mailcue-relay-edge-* \
+              dist/mailcue-relay-sidecar-* \
+              dist/mailcue-relay-edge.service \
+              dist/SHA256SUMS
+          fi
+
   # -----------------------------------------------------------------
   # Sidecar Docker image: built from tunnel/deploy/docker/Dockerfile.sidecar
   # and pushed to GHCR on main + tunnel-v* tags. Multi-arch via buildx.
