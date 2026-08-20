@@ -63,6 +63,23 @@ Mailbox tools include `list_emails`, `search_emails`, `get_email`, `send_email`,
 not locked. The server also exposes MCP `instructions` that orient the agent on
 safe mailbox and deliverability workflows.
 
+Address validation is covered by `validate_email` for one address and
+`validate_email_batch` for a list. Prefer the batch tool: addresses at a shared
+domain reveal that domain's naming convention and any generated name variants,
+which a single lookup cannot see, and passing `targetBounceRate` returns the
+largest subset whose blended expected bounce rate stays under that ceiling.
+`get_validation_calibration` reports whether past scores matched reality.
+
+Outcomes feed back through `record_validation_feedback` for a single result and
+`ingest_bounce` for a raw notification. `list_suppressed_domains` shows domains
+paused after too many measured hard bounces.
+
+For a bulk send to catch-all domains, `create_send_canary` is safer than
+`send_email`. A message cannot be recalled once it leaves the MTA, so a sample
+goes out first and the rest is released only if the sample survived.
+`get_send_canary`, `list_send_canaries`, `decide_send_canary`, and
+`cancel_send_canary` drive the rest of that flow.
+
 For full details on the tools and the SDK, see [the MCP SDK](../../sdks/mcp-node/README.md).
 
 See the main [README](../../README.md) for the rest of the documentation.

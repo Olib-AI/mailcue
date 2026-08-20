@@ -50,6 +50,20 @@ All settings are configured via environment variables prefixed with `MAILCUE_`. 
 | `MAILCUE_VALIDATION_PROBE_RELAY_HOST` | *(empty)* | MailCue tunnel sidecar used when direct port 25 is unavailable |
 | `MAILCUE_VALIDATION_PROBE_RELAY_PORT` | `2525` | MailCue tunnel sidecar SMTP RPC port |
 | `MAILCUE_VALIDATION_RATE_LIMIT` | `30/minute` | Per-client-IP validation API limit |
+| `MAILCUE_VALIDATION_CONTROL_PROBE_COUNT` | `3` | Nonexistent control recipients probed per accept-all check, from 1 to 5 |
+| `MAILCUE_VALIDATION_DOMAIN_SIGNALS_ENABLED` | `true` | Collect passive SPF, DMARC, MTA-STS, parking, and wildcard signals |
+| `MAILCUE_VALIDATION_DOMAIN_SIGNAL_TIMEOUT_SECONDS` | `6` | Budget for one domain's passive signal collection |
+| `MAILCUE_VALIDATION_RDAP_ENABLED` | `true` | Look up domain age and expiry over RDAP |
+| `MAILCUE_VALIDATION_RDAP_TIMEOUT_SECONDS` | `3` | RDAP request timeout |
+| `MAILCUE_VALIDATION_CROSS_TENANT_RISK_ENABLED` | `true` | Share domain-level outcome aggregates between tenants once they are anonymous |
+| `MAILCUE_VALIDATION_CROSS_TENANT_MIN_TENANTS` | `3` | Distinct tenants required before a shared aggregate is used |
+| `MAILCUE_VALIDATION_CROSS_TENANT_MIN_SAMPLES` | `12` | Outcomes required before a shared aggregate is used |
+| `MAILCUE_VALIDATION_BATCH_MAX_ADDRESSES` | `500` | Maximum addresses per batch validation or staged send |
+| `MAILCUE_VALIDATION_DSN_INGEST_ENABLED` | `true` | Parse received bounces and feed the outcomes back into scoring |
+| `MAILCUE_CANARY_ENABLED` | `true` | Enable staged sends |
+| `MAILCUE_CANARY_DEFAULT_SAMPLE_SIZE` | `2` | Recipients sent before the rest of a staged batch |
+| `MAILCUE_CANARY_DEFAULT_HOLD_MINUTES` | `15` | Bounce window observed before releasing the remainder |
+| `MAILCUE_CANARY_MAX_HOLD_MINUTES` | `1440` | Upper bound on a caller-supplied hold window |
 | `MAILCUE_DELIVERABILITY_RATE_LIMIT` | `30/minute` | Per-client-IP deliverability scoring API limit |
 | `MAILCUE_DELIVERABILITY_ENRICHMENT_RATE_LIMIT` | `5/minute` | Per-client-IP extended-run API limit |
 | `MAILCUE_DELIVERABILITY_NETWORK_CHECKS_ENABLED` | `false` | Enable opt-in public DNS, reputation, and live-link runs |

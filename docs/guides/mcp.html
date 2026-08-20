@@ -555,6 +555,20 @@ result.</p>
 <code>reply_email</code>, <code>delete_email</code>, and <code>mailbox_stats</code>, plus <code>list_mailboxes</code> when
 not locked. The server also exposes MCP <code>instructions</code> that orient the agent on
 safe mailbox and deliverability workflows.</p>
+<p>Address validation is covered by <code>validate_email</code> for one address and
+<code>validate_email_batch</code> for a list. Prefer the batch tool: addresses at a shared
+domain reveal that domain's naming convention and any generated name variants,
+which a single lookup cannot see, and passing <code>targetBounceRate</code> returns the
+largest subset whose blended expected bounce rate stays under that ceiling.
+<code>get_validation_calibration</code> reports whether past scores matched reality.</p>
+<p>Outcomes feed back through <code>record_validation_feedback</code> for a single result and
+<code>ingest_bounce</code> for a raw notification. <code>list_suppressed_domains</code> shows domains
+paused after too many measured hard bounces.</p>
+<p>For a bulk send to catch-all domains, <code>create_send_canary</code> is safer than
+<code>send_email</code>. A message cannot be recalled once it leaves the MTA, so a sample
+goes out first and the rest is released only if the sample survived.
+<code>get_send_canary</code>, <code>list_send_canaries</code>, <code>decide_send_canary</code>, and
+<code>cancel_send_canary</code> drive the rest of that flow.</p>
 <p>For full details on the tools and the SDK, see <a href="../../sdks/mcp-node/README.md">the MCP SDK</a>.</p>
 <p>See the main <a href="../../README.md">README</a> for the rest of the documentation.</p>
     </article>

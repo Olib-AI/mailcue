@@ -699,6 +699,76 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <td>Per-client-IP validation API limit</td>
 </tr>
 <tr>
+<td><code>MAILCUE_VALIDATION_CONTROL_PROBE_COUNT</code></td>
+<td><code>3</code></td>
+<td>Nonexistent control recipients probed per accept-all check, from 1 to 5</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_DOMAIN_SIGNALS_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Collect passive SPF, DMARC, MTA-STS, parking, and wildcard signals</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_DOMAIN_SIGNAL_TIMEOUT_SECONDS</code></td>
+<td><code>6</code></td>
+<td>Budget for one domain's passive signal collection</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_RDAP_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Look up domain age and expiry over RDAP</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_RDAP_TIMEOUT_SECONDS</code></td>
+<td><code>3</code></td>
+<td>RDAP request timeout</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_CROSS_TENANT_RISK_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Share domain-level outcome aggregates between tenants once they are anonymous</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_CROSS_TENANT_MIN_TENANTS</code></td>
+<td><code>3</code></td>
+<td>Distinct tenants required before a shared aggregate is used</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_CROSS_TENANT_MIN_SAMPLES</code></td>
+<td><code>12</code></td>
+<td>Outcomes required before a shared aggregate is used</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_BATCH_MAX_ADDRESSES</code></td>
+<td><code>500</code></td>
+<td>Maximum addresses per batch validation or staged send</td>
+</tr>
+<tr>
+<td><code>MAILCUE_VALIDATION_DSN_INGEST_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Parse received bounces and feed the outcomes back into scoring</td>
+</tr>
+<tr>
+<td><code>MAILCUE_CANARY_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Enable staged sends</td>
+</tr>
+<tr>
+<td><code>MAILCUE_CANARY_DEFAULT_SAMPLE_SIZE</code></td>
+<td><code>2</code></td>
+<td>Recipients sent before the rest of a staged batch</td>
+</tr>
+<tr>
+<td><code>MAILCUE_CANARY_DEFAULT_HOLD_MINUTES</code></td>
+<td><code>15</code></td>
+<td>Bounce window observed before releasing the remainder</td>
+</tr>
+<tr>
+<td><code>MAILCUE_CANARY_MAX_HOLD_MINUTES</code></td>
+<td><code>1440</code></td>
+<td>Upper bound on a caller-supplied hold window</td>
+</tr>
+<tr>
 <td><code>MAILCUE_DELIVERABILITY_RATE_LIMIT</code></td>
 <td><code>30/minute</code></td>
 <td>Per-client-IP deliverability scoring API limit</td>

@@ -55,8 +55,63 @@ POST   /api/v1/emails/inject       # Inject directly via IMAP APPEND
 POST   /api/v1/emails/bulk-inject  # Batch inject multiple emails
 DELETE /api/v1/emails/:uid         # Delete email
 POST   /api/v1/emails/validate              # Validate syntax, DNS, SMTP, disposable, catch-all risk
+POST   /api/v1/emails/validate-batch        # Validate a list, with a blended bounce-rate budget
 POST   /api/v1/emails/validation-feedback   # Record an organic delivery/bounce outcome
+GET    /api/v1/emails/validation-calibration # Brier score and reliability bins for past scores
+POST   /api/v1/emails/bounces/ingest        # Parse a raw DSN and record its outcomes
+GET    /api/v1/emails/suppressed-domains    # Domains paused after too many measured bounces
+POST   /api/v1/emails/send-canaries         # Stage a send behind a canary sample
+GET    /api/v1/emails/send-canaries         # List staged sends
+GET    /api/v1/emails/send-canaries/:id     # Inspect one staged send
+POST   /api/v1/emails/send-canaries/:id/decide # Resolve now instead of waiting out the hold
+POST   /api/v1/emails/send-canaries/:id/cancel # Stop before the remainder goes out
 ```
+
+### Catch-all recipients
+
+A catch-all domain accepts every recipient at RCPT time, so no probe can
+establish whether the mailbox exists. The boundary MTA has no answer to give
+yet: the real verdict comes later from an internal directory lookup or a second
+hop, and arrives as an asynchronous bounce.
+
+What the API does instead is narrow the question and price it.
+
+`validate` reports which provider runs the destination, because that decides
+whether an accept-all response means anything. A security gateway that does not
+sync the recipient directory accepts everything and lets the backend bounce; a
+provider that answers RCPT honestly only accept-alls when a catch-all route was
+configured deliberately. The probe also tests several control recipients of
+different shapes, so a destination that validates recipients can be told apart
+from one that accepts blindly, and `mailbox.selective_recipient_validation`
+reports which it was.
+
+`catch_all_risk.score` is a hard-bounce probability, not a label. It starts
+from the receiving provider's rate, is refined by outcomes observed at that
+provider and at that domain, and is then adjusted for the local part and for
+passive domain signals. `contributions` itemises every adjustment.
+`validation-calibration` measures whether those probabilities held up.
+
+`validate-batch` is the better entry point for a list. Addresses at a shared
+domain reveal that domain's naming convention and any generated name variants,
+neither of which is visible one address at a time. Pass `target_bounce_rate`
+and the response also carries the largest subset whose blended expected bounce
+rate stays under that ceiling, which is what receivers actually judge.
+
+### Staged sending
+
+Nothing can recall a message once it leaves the MTA. Gmail's undo is a
+client-side delay before handoff, and Exchange recall only works inside one
+organisation. The only real control is how much of a batch is committed at
+once.
+
+`send-canaries` sends a small sample first, watches the bounce window, then
+releases the rest. The sample spans the batch's risk range rather than being
+drawn from the safe end, so three outcomes can be distinguished: a clean sample
+releases everything, a wholly failed sample withholds everything, and a partly
+failed sample releases only the addresses scored safer than the ones that
+bounced. Domains whose measured hard-bounce rate crosses the limit are added to
+`suppressed-domains`, so the first tenant to find a bad domain protects the
+rest.
 
 ## Mailboxes
 
