@@ -280,6 +280,10 @@ async def create_mailbox(
         existing.purpose = body.purpose
         if user_id is not None:
             existing.user_id = user_id
+        # A created mailbox is a real one, even when the row began as a
+        # discovered catch-all address: otherwise its new owner cannot
+        # list it (listings hide catch-all rows from non-admin users).
+        existing.is_catchall = False
         await db.commit()
         await db.refresh(existing)
         mailbox = existing

@@ -38,7 +38,7 @@ from app.emails.service import (
     set_email_flags,
     train_spam,
 )
-from app.exceptions import AuthorizationError
+from app.exceptions import AuthorizationError, NotFoundError
 from app.mailboxes.schemas import (
     DisplayNameUpdateRequest,
     MailboxCreateRequest,
@@ -55,6 +55,7 @@ from app.mailboxes.service import (
     get_mailbox_by_address,
     get_mailbox_stats,
     list_mailboxes,
+    sync_filesystem_mailboxes,
 )
 from app.rate_limit import limiter
 
@@ -72,7 +73,13 @@ async def verify_mailbox_access(mailbox_address: str, auth: AuthContext, db: Asy
     either mismatch.
     """
     decoded = unquote(mailbox_address).lower()
-    mailbox = await get_mailbox_by_address(decoded, db)
+    try:
+        mailbox = await get_mailbox_by_address(decoded, db)
+    except NotFoundError:
+        # Catch-all mail creates the Maildir before any row exists; register
+        # it now instead of answering 404 until something lists mailboxes.
+        await sync_filesystem_mailboxes(db)
+        mailbox = await get_mailbox_by_address(decoded, db)
     if mailbox.user_id != auth.user.id and not (auth.user.is_admin and mailbox.is_catchall):
         raise AuthorizationError("You do not have access to this mailbox")
     if not auth.mailbox_allowed(decoded):
@@ -83,7 +90,6 @@ async def verify_mailbox_access(mailbox_address: str, auth: AuthContext, db: Asy
     if settings.is_production and mailbox.is_catchall:
         from sqlalchemy import select
 
-        from app.exceptions import NotFoundError
         from app.system.models import ServerSettings
 
         settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)

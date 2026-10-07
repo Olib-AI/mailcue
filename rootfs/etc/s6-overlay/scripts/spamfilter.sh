@@ -21,7 +21,10 @@ trap "rm -f $TMPFILE" EXIT
   done
   printf "DATA\r\n"
   sleep 0.1
-  cat "$TMPFILE"
+  # RFC 5321 4.5.2: dot-stuff the body. Postfix removed the client's stuffing before
+  # handing the message over, so a line that starts with "." must be doubled again or
+  # the re-injection loses that dot (and a lone "." line would end DATA early).
+  sed 's/^\./../' "$TMPFILE"
   printf "\r\n.\r\n"
   sleep 0.1
   printf "QUIT\r\n"
