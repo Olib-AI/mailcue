@@ -74,7 +74,11 @@ async def list_all_emails(
     folder: str = Query("INBOX", description="IMAP folder name"),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(50, ge=1, le=200, description="Items per page"),
-    search: str | None = Query(None, description="Full-text search query"),
+    search: str | None = Query(None, description="Search query"),
+    search_scope: str = Query(
+        "headers",
+        description="Search scope: 'headers' (Subject, From, To, Cc) or 'all'/'body' (full text including message body)",
+    ),
     sort: str = Query("date_desc", description="Sort order (date_asc, date_desc)"),
     thread_view: bool = Query(
         False,
@@ -85,8 +89,10 @@ async def list_all_emails(
 ) -> EmailListResponse:
     """List emails in a mailbox with pagination, search, and sorting.
 
-    Emails are fetched directly from IMAP. The ``search`` parameter
-    maps to IMAP ``TEXT`` search which covers subject and body.
+    Emails are fetched directly from IMAP. By default, the ``search``
+    parameter searches email headers (Subject, From, To, Cc) for fast
+    performance without requiring Dovecot FTS. Full body search can be
+    requested via ``search_scope="all"`` or query prefixes (e.g. ``body:text``).
     """
     await verify_mailbox_access(mailbox, auth, db)
     return await list_emails(
@@ -97,6 +103,7 @@ async def list_all_emails(
         search=search,
         sort=sort,
         thread_view=thread_view,
+        search_scope=search_scope,
     )
 
 

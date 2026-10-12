@@ -75,6 +75,17 @@ class MailServerError(MailCueError):
         super().__init__(message=message, status_code=502)
 
 
+class MailServerTimeoutError(MailCueError):
+    """Timeout communicating with Postfix / Dovecot / IMAP."""
+
+    def __init__(
+        self,
+        message: str = "Mail server operation timed out. Please try again later.",
+        detail: Any = None,
+    ) -> None:
+        super().__init__(message=message, status_code=504, detail=detail)
+
+
 class ValidationError(MailCueError):
     """Domain-level validation failure (beyond Pydantic)."""
 
@@ -95,6 +106,14 @@ def register_exception_handlers(app: FastAPI) -> None:
         if exc.detail is not None:
             body["detail"] = exc.detail
         return JSONResponse(status_code=exc.status_code, content=body)
+
+    @app.exception_handler(TimeoutError)
+    async def _timeout_error_handler(_request: Request, exc: TimeoutError) -> JSONResponse:
+        logger.warning("Operation timed out: %s", exc)
+        return JSONResponse(
+            status_code=504,
+            content={"error": "Mail server operation timed out. Please try again later."},
+        )
 
     @app.exception_handler(Exception)
     async def _unhandled_error_handler(_request: Request, exc: Exception) -> JSONResponse:

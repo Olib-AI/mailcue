@@ -268,6 +268,10 @@ async def list_mailbox_emails(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     search: str | None = Query(None),
+    search_scope: str = Query(
+        "headers",
+        description="Search scope: 'headers' (Subject, From, To, Cc) or 'all'/'body' (full text including message body)",
+    ),
     sort: str = Query("date_desc"),
     thread_view: bool = Query(
         False,
@@ -288,6 +292,7 @@ async def list_mailbox_emails(
         search=search,
         sort=sort,
         thread_view=thread_view,
+        search_scope=search_scope,
     )
 
 

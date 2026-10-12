@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     smtp_tls: bool = False
     imap_host: str = "127.0.0.1"
     imap_port: int = 143
+    imap_timeout: float = 15.0
 
     # Dovecot master user — enables API access to every mailbox via
     # ``user@domain*master_user`` with the master password.

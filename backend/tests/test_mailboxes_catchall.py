@@ -121,7 +121,9 @@ async def test_mailbox_access_registers_an_undiscovered_catchall_mailbox(
         session.add(admin)
         await session.commit()
 
-        await verify_mailbox_access("fresh@example.com", AuthContext(user=admin, api_key=None), session)
+        await verify_mailbox_access(
+            "fresh@example.com", AuthContext(user=admin, api_key=None), session
+        )
 
         stored = (
             await session.execute(select(Mailbox).where(Mailbox.address == "fresh@example.com"))

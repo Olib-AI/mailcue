@@ -42,7 +42,7 @@ from app.emails.schemas import (
     SendEmailRequest,
 )
 from app.events.bus import event_bus
-from app.exceptions import MailServerError, NotFoundError
+from app.exceptions import MailServerError, MailServerTimeoutError, NotFoundError
 from app.gpg import service as gpg_service
 from app.gpg.schemas import ImportKeyRequest
 
@@ -200,7 +200,7 @@ async def _ensure_dovecot_user(address: str) -> None:
         logger.warning("Could not auto-provision Dovecot user for %s: %s", address, exc)
 
 
-async def _imap_connect(mailbox_address: str) -> aioimaplib.IMAP4:
+async def _imap_connect(mailbox_address: str, timeout: float | None = None) -> aioimaplib.IMAP4:
     """Open an authenticated IMAP connection using the Dovecot master user.
 
     The master user separator is ``*``, so we log in as
@@ -208,14 +208,24 @@ async def _imap_connect(mailbox_address: str) -> aioimaplib.IMAP4:
     """
     await _ensure_dovecot_user(mailbox_address)
     master_login = f"{mailbox_address}*{settings.imap_master_user}"
+    effective_timeout = timeout if timeout is not None else settings.imap_timeout
     try:
-        imap = aioimaplib.IMAP4(host=settings.imap_host, port=settings.imap_port)
+        imap = aioimaplib.IMAP4(
+            host=settings.imap_host,
+            port=settings.imap_port,
+            timeout=effective_timeout,
+        )
         await imap.wait_hello_from_server()
         login_response = await imap.login(master_login, settings.imap_master_password)
         if str(login_response.result).upper() != "OK":
             detail = " ".join(str(line) for line in login_response.lines)
             raise ConnectionError(f"IMAP authentication failed: {detail}")
         return imap
+    except TimeoutError as exc:
+        logger.error("IMAP connection timed out for %s: %s", mailbox_address, exc)
+        raise MailServerTimeoutError(
+            "Mail server connection timed out. Please try again later."
+        ) from exc
     except Exception as exc:
         logger.error("Failed to connect to IMAP server for %s: %s", mailbox_address, exc)
         raise MailServerError("Mail server unavailable. Please try again later.") from exc
@@ -225,6 +235,57 @@ async def _imap_disconnect(imap: aioimaplib.IMAP4) -> None:
     """Gracefully close an IMAP connection."""
     with contextlib.suppress(Exception):
         await imap.logout()
+
+
+def _build_imap_search_criteria(
+    search: str | None,
+    search_scope: str = "headers",
+) -> str:
+    """Build a safe IMAP SEARCH criteria string.
+
+    Without Dovecot FTS, IMAP TEXT scans the body of every message on disk,
+    causing heavy I/O and timeouts on large mailboxes. By default, searches
+    target headers (SUBJECT, FROM, TO, CC), which are indexed and fast.
+
+    Callers can pass ``search_scope="all"`` or use query prefixes (e.g.
+    ``body:``, ``text:``, ``subject:``, ``from:``, ``to:``) to target
+    specific fields.
+    """
+    if not search:
+        return "ALL"
+
+    # Strip CRLF to prevent IMAP protocol injection
+    clean = re.sub(r"[\r\n]+", " ", search).strip()
+    if not clean:
+        return "ALL"
+
+    lower = clean.lower()
+    if lower.startswith("body:") or lower.startswith("text:"):
+        term = clean.split(":", 1)[1].strip()
+        escaped = term.replace("\\", "\\\\").replace('"', '\\"')
+        return f'TEXT "{escaped}"' if escaped else "ALL"
+
+    if lower.startswith("subject:"):
+        term = clean.split(":", 1)[1].strip()
+        escaped = term.replace("\\", "\\\\").replace('"', '\\"')
+        return f'SUBJECT "{escaped}"' if escaped else "ALL"
+
+    if lower.startswith("from:"):
+        term = clean.split(":", 1)[1].strip()
+        escaped = term.replace("\\", "\\\\").replace('"', '\\"')
+        return f'FROM "{escaped}"' if escaped else "ALL"
+
+    if lower.startswith("to:"):
+        term = clean.split(":", 1)[1].strip()
+        escaped = term.replace("\\", "\\\\").replace('"', '\\"')
+        return f'TO "{escaped}"' if escaped else "ALL"
+
+    escaped = clean.replace("\\", "\\\\").replace('"', '\\"')
+    if search_scope.lower() in ("all", "body", "text"):
+        return f'TEXT "{escaped}"'
+
+    # Default to header search: Subject, From, To, Cc
+    return f'OR (OR (OR SUBJECT "{escaped}" FROM "{escaped}") TO "{escaped}") CC "{escaped}"'
 
 
 # ── List emails ──────────────────────────────────────────────────
@@ -238,6 +299,7 @@ async def list_emails(
     search: str | None = None,
     sort: str = "date_desc",
     thread_view: bool = False,
+    search_scope: str = "headers",
 ) -> EmailListResponse:
     """Fetch a paginated list of email summaries from IMAP.
 
@@ -255,12 +317,7 @@ async def list_emails(
     try:
         await imap.select(folder)
 
-        # Build IMAP SEARCH criteria
-        criteria = "ALL"
-        if search:
-            # IMAP TEXT search covers subject + body
-            criteria = f'TEXT "{search}"'
-
+        criteria = _build_imap_search_criteria(search, search_scope=search_scope)
         _status_line, data = await imap.uid_search(criteria)
         if not data or not data[0]:
             return EmailListResponse(
@@ -341,6 +398,11 @@ async def list_emails(
             emails=items,
             has_more=(page * per_page) < total,
         )
+    except TimeoutError as exc:
+        logger.warning("IMAP search or fetch timed out for %s: %s", mailbox, exc)
+        raise MailServerTimeoutError(
+            "Email search or fetch timed out. Please narrow your search query."
+        ) from exc
     finally:
         await _imap_disconnect(imap)
 
@@ -947,16 +1009,23 @@ async def search_emails(
     mailbox: str,
     query: str,
     folder: str = "INBOX",
+    search_scope: str = "headers",
 ) -> list[str]:
-    """Return a list of UIDs matching the IMAP TEXT search."""
+    """Return a list of UIDs matching the IMAP search."""
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
-        _status_line, data = await imap.uid_search(f'TEXT "{query}"')
+        criteria = _build_imap_search_criteria(query, search_scope=search_scope)
+        _status_line, data = await imap.uid_search(criteria)
         if not data or not data[0]:
             return []
         raw = data[0] if isinstance(data[0], str) else data[0].decode()
         return raw.split()
+    except TimeoutError as exc:
+        logger.warning("IMAP search timed out for %s: %s", mailbox, exc)
+        raise MailServerTimeoutError(
+            "Email search timed out. Please narrow your search query."
+        ) from exc
     finally:
         await _imap_disconnect(imap)
 
