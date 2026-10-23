@@ -1,33 +1,46 @@
 #!/bin/sh
 # SpamAssassin content filter for Postfix.
 # Scans via spamc, re-injects on 10025 (no content_filter = no loop).
+set -eu
+
+# EX_TEMPFAIL = 75 (sysexits.h) tells Postfix to defer mail on failure
+EX_TEMPFAIL=75
+
 SENDER="$1"
 shift
 
-# Scan with spamc
 TMPFILE=$(mktemp)
-trap "rm -f $TMPFILE" EXIT
-/usr/bin/spamc -f > "$TMPFILE"
+trap 'rm -f "$TMPFILE"' EXIT
 
-# Build SMTP conversation for re-injection on 10025
-{
-  printf "EHLO localhost\r\n"
-  sleep 0.1
-  printf "MAIL FROM:<%s>\r\n" "$SENDER"
-  sleep 0.1
-  for R in "$@"; do
-    printf "RCPT TO:<%s>\r\n" "$R"
-    sleep 0.1
-  done
-  printf "DATA\r\n"
-  sleep 0.1
-  # RFC 5321 4.5.2: dot-stuff the body. Postfix removed the client's stuffing before
-  # handing the message over, so a line that starts with "." must be doubled again or
-  # the re-injection loses that dot (and a lone "." line would end DATA early).
-  sed 's/^\./../' "$TMPFILE"
-  printf "\r\n.\r\n"
-  sleep 0.1
-  printf "QUIT\r\n"
-} | nc -w 5 127.0.0.1 10025 > /dev/null 2>&1
+# Scan with spamc
+if ! /usr/bin/spamc -f > "$TMPFILE"; then
+    echo "[spamfilter] ERROR: spamc scan failed" >&2
+    exit $EX_TEMPFAIL
+fi
 
-exit $?
+# Re-inject message into Postfix on port 10025 using Python smtplib.
+# This ensures we wait for the 220 banner before EHLO, verify 250 responses,
+# and exit with EX_TEMPFAIL (75) on any failure so Postfix defers the message.
+if ! python3 - "$TMPFILE" "$SENDER" "$@" << 'EOF'
+import sys
+import smtplib
+
+mail_path = sys.argv[1]
+sender = sys.argv[2]
+recipients = sys.argv[3:]
+
+with open(mail_path, "rb") as f:
+    content = f.read()
+
+try:
+    with smtplib.SMTP("127.0.0.1", 10025, timeout=30) as client:
+        client.sendmail(sender, recipients, content)
+except Exception as exc:
+    sys.stderr.write(f"[spamfilter] Re-injection failed: {exc}\n")
+    sys.exit(75)
+EOF
+then
+    exit $EX_TEMPFAIL
+fi
+
+exit 0

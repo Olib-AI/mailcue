@@ -91,7 +91,7 @@ spamassassin unix -     n       n       -       5       pipe
   flags=Rq user=debian-spamd
   argv=/etc/s6-overlay/scripts/spamfilter.sh ${sender} ${recipient}
 
-# Re-injection after spam scan — content_filter empty prevents loop
+# Re-injection after spam scan - content_filter empty prevents loop
 127.0.0.1:10025 inet n  -       n       -       -       smtpd
   -o content_filter=
   -o smtpd_delay_reject=no
@@ -100,3 +100,4 @@ spamassassin unix -     n       n       -       5       pipe
   -o mynetworks=127.0.0.0/8
   -o receive_override_options=no_header_body_checks,no_unknown_recipient_checks,no_milters
   -o smtpd_milters=
+  -o smtpd_forbid_unauth_pipelining=no
