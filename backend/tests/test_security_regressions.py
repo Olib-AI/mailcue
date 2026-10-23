@@ -249,3 +249,37 @@ def test_production_configuration_rejects_known_credentials() -> None:
     )
     with pytest.raises(ValueError, match="Unsafe production configuration"):
         unsafe.validate_production_security()
+
+
+async def test_content_encoding_non_identity_is_refused() -> None:
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+
+    app = create_app()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Request with identity encoding or no encoding is allowed
+        resp_ok = await client.get("/api/v1/health", headers={"Content-Encoding": "identity"})
+        assert resp_ok.status_code == 200
+
+        # Request with gzip or other encoding is rejected with 415
+        resp_bad = await client.post(
+            "/api/v1/auth/login",
+            content=b"test",
+            headers={"Content-Encoding": "gzip"},
+        )
+        assert resp_bad.status_code == 415
+        assert "Unsupported Content-Encoding" in resp_bad.text
+
+
+def test_folder_validation_rejects_control_characters() -> None:
+    from app.emails.service import _validate_folder
+    from app.exceptions import ValidationError
+
+    assert _validate_folder("INBOX") == "INBOX"
+    assert _validate_folder("Archive") == "Archive"
+
+    for bad in ["INBOX\r\n", "INBOX\n", "INBOX\0", ""]:
+        with pytest.raises(ValidationError):
+            _validate_folder(bad)

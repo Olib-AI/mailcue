@@ -42,11 +42,23 @@ from app.emails.schemas import (
     SendEmailRequest,
 )
 from app.events.bus import event_bus
-from app.exceptions import MailServerError, MailServerTimeoutError, NotFoundError
+from app.exceptions import (
+    MailServerError,
+    MailServerTimeoutError,
+    NotFoundError,
+    ValidationError,
+)
 from app.gpg import service as gpg_service
 from app.gpg.schemas import ImportKeyRequest
 
 logger = logging.getLogger("mailcue.emails")
+
+
+def _validate_folder(folder: str) -> str:
+    """Validate IMAP folder name to prevent command injection."""
+    if not folder or any(c in folder for c in ("\r", "\n", "\0")):
+        raise ValidationError(message="Invalid folder name")
+    return folder
 
 
 class _PlainTextHTMLParser(HTMLParser):
@@ -190,7 +202,9 @@ async def _ensure_dovecot_user(address: str) -> None:
         elif not matching_lines:
             local_part, _, domain = address.partition("@")
             domain = domain or settings.domain
-            maildir = Path(settings.mail_storage_path) / domain / local_part
+            from app.mailboxes.service import _safe_maildir_path
+
+            maildir = _safe_maildir_path(domain, local_part)
 
             await asyncio.to_thread(_create_maildir, maildir)
             hashed = await asyncio.to_thread(_dovecot_hash_password, "mailcue-auto-password")
@@ -313,6 +327,7 @@ async def list_emails(
     Pagination still operates on the underlying date-ordered UID list,
     so the flat-list contract is preserved.
     """
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
@@ -424,6 +439,7 @@ async def get_email(
     verified (signatures) or decrypted (encrypted) and ``detail.gpg`` is
     populated with the result metadata.
     """
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
@@ -512,6 +528,7 @@ async def get_email(
 
 async def get_email_raw(mailbox: str, uid: str, folder: str = "INBOX") -> bytes:
     """Fetch the raw RFC822 bytes for a message."""
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
@@ -828,6 +845,7 @@ async def bulk_inject(request: BulkInjectRequest) -> BulkInjectResponse:
 
 async def delete_email(mailbox: str, uid: str, folder: str = "INBOX") -> None:
     """Move an email to Trash, or permanently delete if already in Trash."""
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
@@ -928,6 +946,7 @@ async def set_email_flags(
     Uses IMAP ``UID STORE`` with ``+FLAGS`` or ``-FLAGS`` to toggle
     the read/unread state without modifying other flags.
     """
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)
@@ -959,6 +978,8 @@ async def move_email_to_folder(
     to *target_folder*, marks the original as ``\\Deleted``, and expunges.
     The target folder is created if it does not already exist.
     """
+    source_folder = _validate_folder(source_folder)
+    target_folder = _validate_folder(target_folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(source_folder)
@@ -1012,6 +1033,7 @@ async def search_emails(
     search_scope: str = "headers",
 ) -> list[str]:
     """Return a list of UIDs matching the IMAP search."""
+    folder = _validate_folder(folder)
     imap = await _imap_connect(mailbox)
     try:
         await imap.select(folder)

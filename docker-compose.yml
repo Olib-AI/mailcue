@@ -22,6 +22,33 @@ services:
     container_name: mailcue
     hostname: mail.mailcue.local
     restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - FOWNER
+      - SYS_CHROOT
+    tmpfs:
+      - /tmp:mode=1777
+      - /run:exec,mode=755
+      - /var/run:exec,mode=755
+      - /var/log:mode=755
+      - /var/spool/postfix:mode=755
+      - /var/lib/postfix:mode=700
+      - /var/lib/dovecot:mode=755
+      - /var/lib/spamassassin:mode=755
+      - /etc/postfix:mode=755
+      - /etc/dovecot:mode=755
+      - /etc/opendkim:mode=750
+      - /etc/opendmarc:mode=755
+      - /etc/nginx/conf.d:mode=755
     ports:
       # Web UI (Nginx reverse proxy, HTTP)
       - "8088:80"
@@ -88,6 +115,8 @@ services:
       # survive rebuilds. The CA cost is only paid again when the
       # operator explicitly `docker volume rm`s this volume.
       - mailcue-tls:/etc/ssl/mailcue
+      # DKIM signing keys
+      - mailcue-dkim:/etc/opendkim/keys
     networks:
       mailcue-net:
         ipv4_address: ${MAILCUE_SANDBOX_IP:-172.28.0.10}
@@ -106,6 +135,7 @@ volumes:
   mailcue-data:
   mailcue-db:
   mailcue-tls:
+  mailcue-dkim:
 
 networks:
   # Shared external network used by every consumer project.  Create it

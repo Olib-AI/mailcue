@@ -152,7 +152,15 @@ async def list_mailboxes(db: AsyncSession, user: User | None = None) -> list[Mai
             else:
                 stmt = stmt.where(Mailbox.user_id == user.id).where(Mailbox.is_catchall.is_(False))
         else:
-            stmt = stmt.where(Mailbox.user_id == user.id).where(Mailbox.is_catchall.is_(False))
+            stmt = stmt.where(Mailbox.user_id == user.id)
+            if settings.is_production:
+                from app.system.models import ServerSettings
+
+                settings_stmt = select(ServerSettings).where(ServerSettings.id == 1)
+                settings_row = (await db.execute(settings_stmt)).scalar_one_or_none()
+                catch_all_enabled = settings_row.catch_all_enabled if settings_row else False
+                if not catch_all_enabled:
+                    stmt = stmt.where(Mailbox.is_catchall.is_(False))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -270,20 +278,18 @@ async def create_mailbox(
     stmt = select(Mailbox).where(Mailbox.address == address)
     result = await db.execute(stmt)
     existing = result.scalar_one_or_none()
-    if existing is not None and existing.is_active:
+    if existing is not None and existing.is_active and not existing.is_catchall:
         raise ConflictError(f"Mailbox '{address}' already exists")
 
     if existing is not None:
-        # Reactivate the soft-deleted row.
+        # Reactivate the soft-deleted row or adopt/reassign a catch-all mailbox.
         existing.is_active = True
         existing.display_name = body.display_name or local_part
         existing.purpose = body.purpose
         if user_id is not None:
             existing.user_id = user_id
-        # A created mailbox is a real one, even when the row began as a
-        # discovered catch-all address: otherwise its new owner cannot
-        # list it (listings hide catch-all rows from non-admin users).
-        existing.is_catchall = False
+        # Preserve the catch-all flag so handing a catch-all mailbox to
+        # another login through the API keeps its catch-all status intact.
         await db.commit()
         await db.refresh(existing)
         mailbox = existing

@@ -1,5 +1,7 @@
 """Email CRUD router -- list, get, raw, attachments, send, inject, delete."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,10 +166,11 @@ async def download_attachment(
     data, content_type, filename = await get_attachment(
         mailbox=mailbox, uid=uid, part_id=part_id, folder=folder
     )
+    safe_filename = Path(filename).name.replace('"', '\\"').replace("\r", "").replace("\n", "")
     return Response(
         content=data,
         media_type=content_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
     )
 
 

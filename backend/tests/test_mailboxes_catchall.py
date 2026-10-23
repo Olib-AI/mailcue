@@ -132,12 +132,74 @@ async def test_mailbox_access_registers_an_undiscovered_catchall_mailbox(
         assert stored.user_id == "admin-id"
 
 
-async def test_creating_a_retired_catchall_address_gives_a_real_mailbox(
+async def test_catchall_mailbox_handed_to_another_login_retains_catchall_flag(
     _engine_and_session: Any,
     monkeypatch: Any,
     tmp_path: Path,
 ) -> None:
-    """Re-creating a soft-deleted catch-all address makes an ordinary mailbox its owner lists."""
+    """When a catch-all mailbox is handed to another login via API, its catch-all flag stays set."""
+    from app.mailboxes import service
+    from app.mailboxes.schemas import MailboxCreateRequest
+
+    _engine, factory = _engine_and_session
+    monkeypatch.setattr(settings, "mail_storage_path", str(tmp_path), raising=False)
+    monkeypatch.setattr(settings, "admin_user", "admin", raising=False)
+
+    async def _no_provision(*_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(service, "_provision_system_mailbox", _no_provision)
+    admin = User(
+        id="admin-id",
+        username="admin",
+        email="admin@example.com",
+        hashed_password="unused",
+        is_admin=True,
+        is_active=True,
+    )
+    user = User(
+        id="user-id",
+        username="user",
+        email="user@example.com",
+        hashed_password="unused",
+        is_admin=False,
+        is_active=True,
+    )
+    async with factory() as session:
+        session.add_all([admin, user])
+        # Auto-discovered active catch-all mailbox initially assigned to admin
+        session.add(
+            Mailbox(
+                address="catchall@example.com",
+                display_name="catchall",
+                domain="example.com",
+                user_id="admin-id",
+                is_catchall=True,
+                is_active=True,
+            )
+        )
+        await session.commit()
+
+        # Hand over to user-id via create_mailbox API call
+        handed_over = await service.create_mailbox(
+            MailboxCreateRequest(username="catchall", domain="example.com", password="x" * 16),
+            session,
+            user_id="user-id",
+        )
+
+        assert handed_over.is_catchall is True
+        assert handed_over.user_id == "user-id"
+        listed = await list_mailboxes(session, user=user)
+        assert [m.address for m in listed] == ["catchall@example.com"]
+        assert listed[0].is_catchall is True
+
+
+async def test_creating_a_retired_catchall_address_retains_catchall_flag(
+    _engine_and_session: Any,
+    monkeypatch: Any,
+    tmp_path: Path,
+) -> None:
+    """Re-creating a soft-deleted catch-all address retains the catch-all flag and owner lists it."""
     from app.mailboxes import service
     from app.mailboxes.schemas import MailboxCreateRequest
 
@@ -177,7 +239,7 @@ async def test_creating_a_retired_catchall_address_gives_a_real_mailbox(
             user_id="user-id",
         )
 
-        assert created.is_catchall is False
+        assert created.is_catchall is True
         assert created.user_id == "user-id"
         listed = await list_mailboxes(session, user=user)
         assert [m.address for m in listed] == ["taken@example.com"]

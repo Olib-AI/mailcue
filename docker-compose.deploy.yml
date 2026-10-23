@@ -26,9 +26,34 @@ services:
     # Set hostname to your mail server FQDN. It is used in the SMTP EHLO greeting.
     hostname: mail.CHANGE_ME_DOMAIN
     restart: unless-stopped
+    read_only: true
     security_opt:
       - no-new-privileges:true
     pids_limit: 512
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - FOWNER
+      - SYS_CHROOT
+    tmpfs:
+      - /tmp:mode=1777
+      - /run:exec,mode=755
+      - /var/run:exec,mode=755
+      - /var/log:mode=755
+      - /var/spool/postfix:mode=755
+      - /var/lib/postfix:mode=700
+      - /var/lib/dovecot:mode=755
+      - /var/lib/spamassassin:mode=755
+      - /etc/postfix:mode=755
+      - /etc/dovecot:mode=755
+      - /etc/opendkim:mode=750
+      - /etc/opendmarc:mode=755
+      - /etc/nginx/conf.d:mode=755
     ports:
       - "80:80"       # HTTP (Nginx + ACME challenge)
       - "443:443"     # HTTPS (Nginx with TLS)
@@ -80,6 +105,16 @@ services:
       - mailcue-tls:/etc/ssl/mailcue           # Self-signed CA + server cert (avoids regen on every recreate)
       - letsencrypt-data:/etc/letsencrypt      # ACME-issued TLS certificates
       - dkim-data:/etc/opendkim/keys           # DKIM signing keys
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://127.0.0.1:80/api/v1/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   mailcue-data:

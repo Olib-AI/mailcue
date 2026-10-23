@@ -89,6 +89,80 @@ docker run -d \
 curl http://localhost:8088/api/v1/health
 ```
 
+### Hardened container deployment
+
+MailCue supports fully hardened container execution with a read-only root filesystem, dropped capabilities, no-new-privileges, and non-root services.
+
+```yaml
+services:
+  mailcue:
+    image: ghcr.io/olib-ai/mailcue:2.4.0
+    container_name: mailcue
+    hostname: mail.example.com
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+      - FOWNER
+      - SYS_CHROOT
+    tmpfs:
+      - /tmp:mode=1777
+      - /run:exec,mode=755
+      - /var/run:exec,mode=755
+      - /var/log:mode=755
+      - /var/spool/postfix:mode=755
+      - /var/lib/postfix:mode=700
+      - /var/lib/dovecot:mode=755
+      - /var/lib/spamassassin:mode=755
+      - /etc/postfix:mode=755
+      - /etc/dovecot:mode=755
+      - /etc/opendkim:mode=750
+      - /etc/opendmarc:mode=755
+      - /etc/nginx/conf.d:mode=755
+    ports:
+      - "80:80"
+      - "443:443"
+      - "25:25"
+      - "465:465"
+      - "587:587"
+      - "993:993"
+      - "995:995"
+    environment:
+      - MAILCUE_MODE=production
+      - MAILCUE_DOMAIN=example.com
+      - MAILCUE_HOSTNAME=mail.example.com
+      - MAILCUE_ADMIN_PASSWORD=CHANGE_ME_STRONG_PASSWORD
+      - MAILCUE_SECRET_KEY=CHANGE_ME_GENERATE_WITH_OPENSSL_RAND
+      - MAILCUE_IMAP_MASTER_PASSWORD=CHANGE_ME_GENERATE_ANOTHER_RANDOM_SECRET
+    volumes:
+      - mailcue-data:/var/mail/vhosts
+      - mailcue-db:/var/lib/mailcue
+      - mailcue-tls:/etc/ssl/mailcue
+      - dkim-data:/etc/opendkim/keys
+      - letsencrypt-data:/etc/letsencrypt
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:80/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mailcue-data:
+  mailcue-db:
+  mailcue-tls:
+  dkim-data:
+  letsencrypt-data:
+```
+
 ### Database choices
 
 MailCue uses SQLite by default, which keeps local and small deployments simple.

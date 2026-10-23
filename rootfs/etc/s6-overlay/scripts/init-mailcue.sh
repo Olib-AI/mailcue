@@ -5,6 +5,33 @@
 # =============================================================================
 set -eu
 
+# If configuration directories are mounted as tmpfs (read-only rootfs mode),
+# seed them from the bundled templates in /usr/share/mailcue/config/.
+if [ -d /usr/share/mailcue/config/postfix ] && [ ! -f /etc/postfix/main.cf ]; then
+    cp -a /usr/share/mailcue/config/postfix/. /etc/postfix/
+fi
+if [ -d /usr/share/mailcue/config/dovecot ] && [ ! -f /etc/dovecot/dovecot.conf ]; then
+    cp -a /usr/share/mailcue/config/dovecot/. /etc/dovecot/
+fi
+if [ -d /usr/share/mailcue/config/opendkim ] && [ ! -f /etc/opendkim/opendkim.conf ]; then
+    cp -a /usr/share/mailcue/config/opendkim/. /etc/opendkim/
+fi
+if [ -d /usr/share/mailcue/config/opendmarc ] && [ ! -f /etc/opendmarc/opendmarc.conf ]; then
+    cp -a /usr/share/mailcue/config/opendmarc/. /etc/opendmarc/
+fi
+if [ -d /usr/share/mailcue/config/nginx-conf.d ] && [ -d /etc/nginx/conf.d ] && [ ! -f /etc/nginx/conf.d/.seeded ]; then
+    cp -a /usr/share/mailcue/config/nginx-conf.d/. /etc/nginx/conf.d/ 2>/dev/null || true
+    touch /etc/nginx/conf.d/.seeded 2>/dev/null || true
+fi
+
+# Ensure runtime directories in tmpfs exist with correct permissions
+mkdir -p /var/run/opendkim /var/run/opendmarc /var/run/spamd /var/lib/dovecot /tmp/nginx_client_temp /tmp/nginx_proxy_temp /tmp/nginx_fastcgi_temp /tmp/nginx_uwsgi_temp /tmp/nginx_scgi_temp
+chown opendkim:opendkim /var/run/opendkim 2>/dev/null || true
+chown opendmarc:opendmarc /var/run/opendmarc 2>/dev/null || true
+chown debian-spamd:debian-spamd /var/run/spamd 2>/dev/null || true
+chown dovecot:dovecot /var/lib/dovecot 2>/dev/null || true
+chown -R nginx:nginx /tmp/nginx_* 2>/dev/null || true
+
 MAILCUE_MODE="${MAILCUE_MODE:-test}"
 case "${MAILCUE_MODE}" in
     test|production) ;;
@@ -425,7 +452,7 @@ SMTPS
     echo "[init-mailcue] [production] Hardening Dovecot..."
 
     # Remove/comment out the catch-all static passdb (nopassword=y)
-    sed -i '/^# Catch-all passdb:/,/^}/ s/^/#/' /etc/dovecot/dovecot.conf
+    sed -i '/^# Catch-all passdb:/,/^# End catch-all passdb/ s/^/#/' /etc/dovecot/dovecot.conf
 
     # Set ssl = required instead of ssl = yes
     sed -i 's/^ssl = yes$/ssl = required/' /etc/dovecot/dovecot.conf

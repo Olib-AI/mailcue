@@ -11,12 +11,12 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -324,6 +324,20 @@ def create_app() -> FastAPI:
     )
 
     # ── Middleware ────────────────────────────────────────────────
+    @app.middleware("http")
+    async def enforce_identity_content_encoding(
+        request: Request,
+        call_next: Callable[[Request], Any],
+    ) -> Response:
+        encoding = request.headers.get("content-encoding", "").strip().lower()
+        if encoding and encoding != "identity":
+            return Response(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                content="Unsupported Content-Encoding",
+                media_type="text/plain",
+            )
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

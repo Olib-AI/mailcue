@@ -1,5 +1,9 @@
 #!/bin/sh
 exec 2>&1
 
+mkdir -p /var/run/spamd
+chown debian-spamd:debian-spamd /var/run/spamd 2>/dev/null || true
+
 MAX_CHILDREN="${MAILCUE_SPAMD_MAX_CHILDREN:-5}"
-exec /usr/sbin/spamd --nouser-config --max-children="${MAX_CHILDREN}" --listen=127.0.0.1:783
+exec /usr/sbin/spamd --nouser-config --username=debian-spamd --max-children="${MAX_CHILDREN}" --listen=127.0.0.1:783
+
