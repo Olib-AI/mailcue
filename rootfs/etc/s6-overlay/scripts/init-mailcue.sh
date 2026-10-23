@@ -461,8 +461,8 @@ SMTPS
     sed -i '/^ssl = required$/a disable_plaintext_auth = yes' /etc/dovecot/dovecot.conf
 
     # Enable quota plugin in imap and lmtp protocol sections
-    sed -i '/^protocol imap {/a\  mail_plugins = $mail_plugins quota' /etc/dovecot/dovecot.conf
-    sed -i '/^protocol lmtp {/a\  mail_plugins = $mail_plugins quota' /etc/dovecot/dovecot.conf
+    sed -i '/^protocol imap {/a\  mail_plugins {\n    quota = yes\n  }' /etc/dovecot/dovecot.conf
+    sed -i '/^protocol lmtp {/,/^}/ s/sieve = yes/sieve = yes\n    quota = yes/' /etc/dovecot/dovecot.conf
 
     # --- OpenDMARC production hardening ---
     echo "[init-mailcue] [production] Hardening OpenDMARC..."
