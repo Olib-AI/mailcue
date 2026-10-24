@@ -5,7 +5,7 @@ MailCue can run as a hardened production email server. Set `MAILCUE_MODE=product
 ## What changes in production mode
 
 - **Postfix**: Strict virtual domain/mailbox maps (no catch-all), `mynetworks` restricted to loopback, SPF policy enforcement, SMTPS on port 465
-- **Dovecot**: Password-less catch-all auth disabled, `ssl = required`, `disable_plaintext_auth = yes`, quota enforcement enabled
+- **Dovecot**: Password-less catch-all auth disabled, `ssl = required`, `auth_allow_cleartext = no` (plaintext authentication disabled), quota enforcement enabled
 - **OpenDMARC**: `RejectFailures` set to `true`, so DMARC policy `p=reject` is honored
 - **Nginx**: HTTPS server block generated when TLS certs are available, HTTP-to-HTTPS redirect
 - **MTA-STS**: Policy switches from `mode: testing` to `mode: enforce`

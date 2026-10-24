@@ -26,4 +26,5 @@
 ### Bug Fixes
 - Fixed catch-all mailbox reassignment bug: mailboxes reassigned to another login retain their `is_catchall` flag. Added regression test coverage.
 - Fixed Dovecot 2.4 LMTP delivery failure: updated mail_plugins configuration to Dovecot 2.4 block syntax in dovecot.conf and init-mailcue.sh.
+- Fixed Dovecot 2.4 production mode configuration: replaced obsolete disable_plaintext_auth setting with auth_allow_cleartext = no.
 - Fixed Postfix 3.10 SMTP pipelining rejection in spam filter: waited for 220 banner and verified response codes on re-injection in spamfilter.sh with EX_TEMPFAIL on error, and disabled smtpd_forbid_unauth_pipelining on 127.0.0.1:10025.

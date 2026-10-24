@@ -480,7 +480,7 @@ mermaid.initialize({ startOnLoad: true, theme: 'dark', securityLevel: 'loose' })
 <h2>What changes in production mode</h2>
 <ul>
 <li><strong>Postfix</strong>: Strict virtual domain/mailbox maps (no catch-all), <code>mynetworks</code> restricted to loopback, SPF policy enforcement, SMTPS on port 465</li>
-<li><strong>Dovecot</strong>: Password-less catch-all auth disabled, <code>ssl = required</code>, <code>disable_plaintext_auth = yes</code>, quota enforcement enabled</li>
+<li><strong>Dovecot</strong>: Password-less catch-all auth disabled, <code>ssl = required</code>, <code>auth_allow_cleartext = no</code>, quota enforcement enabled</li>
 <li><strong>OpenDMARC</strong>: <code>RejectFailures</code> set to <code>true</code>, so DMARC policy <code>p=reject</code> is honored</li>
 <li><strong>Nginx</strong>: HTTPS server block generated when TLS certs are available, HTTP-to-HTTPS redirect</li>
 <li><strong>MTA-STS</strong>: Policy switches from <code>mode: testing</code> to <code>mode: enforce</code></li>

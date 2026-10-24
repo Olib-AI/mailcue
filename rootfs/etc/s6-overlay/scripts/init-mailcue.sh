@@ -457,8 +457,8 @@ SMTPS
     # Set ssl = required instead of ssl = yes
     sed -i 's/^ssl = yes$/ssl = required/' /etc/dovecot/dovecot.conf
 
-    # Set disable_plaintext_auth = yes
-    sed -i '/^ssl = required$/a disable_plaintext_auth = yes' /etc/dovecot/dovecot.conf
+    # Set auth_allow_cleartext = no (Dovecot 2.4 setting for disabling plaintext auth)
+    sed -i '/^ssl = required$/a auth_allow_cleartext = no' /etc/dovecot/dovecot.conf
 
     # Enable quota plugin in imap and lmtp protocol sections
     sed -i '/^protocol imap {/a\  mail_plugins {\n    quota = yes\n  }' /etc/dovecot/dovecot.conf
@@ -639,7 +639,7 @@ NGINXHTTPS
         echo "[init-mailcue] [production] Nginx HTTPS configured."
     else
         if [ -n "${MAILCUE_ACME_EMAIL}" ]; then
-            echo "[init-mailcue] [production] ACME email set — certbot will run after Nginx starts."
+            echo "[init-mailcue] [production] ACME email set - certbot will run after Nginx starts."
         else
             echo "[init-mailcue] [production] No TLS cert found. Set MAILCUE_ACME_EMAIL for automatic Let's Encrypt, or provide MAILCUE_TLS_CERT_PATH/MAILCUE_TLS_KEY_PATH."
         fi
