@@ -52,6 +52,8 @@ ENV MAILCUE_MODE=test \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=300000
 
 # Install Nginx mainline repo (nginx >= 1.31.7) and runtime packages without compilers
+# libbrotli1 is pinned to the Debian security fix for CVE-2026-111497 (Brotli
+# decoder out-of-bounds write; Chromium uses it for WOFF2 fonts in rendered mail).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         gnupg \
@@ -86,6 +88,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         chromium \
         dbconfig-no-thanks \
         opendmarc \
+        libbrotli1=1.1.0-2+deb13u1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pre-compiled SQLCipher from builder stage
