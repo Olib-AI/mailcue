@@ -13,7 +13,7 @@ COPY frontend/ .
 RUN npm run build
 
 # -- Stage 2: Build SQLCipher from source ------------------------
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad AS sqlcipher-builder
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS sqlcipher-builder
 ADD https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.6.1.tar.gz /tmp/sqlcipher.tar.gz
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /tmp/sqlcipher* /var/lib/apt/lists/*
 
 # -- Stage 3: Runtime --------------------------------------------
-FROM debian:trixie-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 LABEL org.opencontainers.image.source="https://github.com/Olib-AI/mailcue"
 LABEL org.opencontainers.image.description="Realistic email testing server - Postfix, Dovecot, DKIM, API, Web UI in one container"
